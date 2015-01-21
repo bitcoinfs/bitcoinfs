@@ -8,18 +8,18 @@ module Script
 This module implements an interpreter for the Bitcoin [Script][1] language. The link points to a good documentation
 and I will just mention the main charateristics of this language. For more details, refer to the link.
 
-Bitcoin script is a stack based mainly arithmetic language. There are operators to push data to the stack and
+Bitcoin script is a stack based primary arithmetic language. There are operators to push data to the stack and to
 perform operations on the elements of the stack. The stack is made of arbitrary long binary strings. When used for
-math operations, these byte strings are considered big integers.
+math operations, these byte strings are considered litle endian big integers.
 
 The language has IF/THEN/ELSE but no loops. It is therefore non Turing complete and program execution time is bounded.
-Besides the classic operators, it has specific additions such as hashing operators and signature verification.
+Besides the classic operators, it has cryptographic functions such as hashing operators and signature verification.
 
 When a transaction produces Outputs, they mention a value and a script. The later is similar to a program split in two. To 
-spend the output, one must provide the other half of the program such as the full program executes successfully.
+spend the output, one must provide the other half of the program so that the full program executes successfully.
 Another way to see it is to consider the output as a challenge and the spending transaction as the answer to the challenge.
 
-Most of the transactions use the Pay-To-PubHash script. The script has a 20 byte long hash value and the spending transaction
+Most of the transactions use the Pay-To-PubHash script. The script has a 20 byte long hash value. The spending transaction
 must provide a pub key that hashes to the given value and a signature that matches both the pub key and the transaction content.
 
 However, many other scripts exist even though only a few are considered standard. Standard scripts have been created to 
@@ -88,12 +88,13 @@ let scriptToHash (script: byte[]) =
 (** 
 ## P2SH 
 Pay to Script Hash is specified in [BIP-16][2] and has its own address space. P2SH is quite odd. The script itself is
-half the story. It is first verified normally like any other script but then the evaluator recognizes a special script pattern and does
+half the story. It is first verified normally like any other script but then if the evaluator recognizes a special script pattern and he will do
 something completely different. It is as if the program said `print hello` but then starts calculating pi.
 
 Anyway, the idea is that the signing script gives the signatures but also the pub script that it is signing. Normally, 
 you would have two scripts that once stitched together form a program. P2SH has a script inside a script. That script is provided as data
-pushed into the stack but that data is then poped and evaluated.
+pushed into the stack but then that data is then poped and evaluated. Once again BIP-16 is
+strange and I just scratched the surface. For more information refer to its specification.
 
 [2]: https://github.com/bitcoin/bips/blob/master/bip-0016.mediawiki
 *)
@@ -161,10 +162,10 @@ The signature is applied on a given document. Instead of signing the entire docu
 a hash of the document and signs the hash. Bitcoin has a specific way to create the hash and it depends on 
 a few parameters.
 
-- the signature type. Most of the time, it's SIGHASH_ALL and the complete transaction is hashed. After that, 
-changing a single byte of the transaction invalidates the signature. But it can be SIGHASH_NONE for which all
+- the signature type. Most of the time, it's `SIGHASH_ALL` and the complete transaction is hashed. After that, 
+changing a single byte of the transaction invalidates the signature. But it can be `SIGHASH_NONE` for which all
 the outputs are blanked meaning that the signature will remain valid even if the outputs are changed. It can
-also be SIGHASH_SINGLE. In the last case, all the outputs except the one with the same index as the input signature
+also be `SIGHASH_SINGLE`. In the last case, all the outputs except the one with the same index as the input signature
 are blanked. It means that all the outputs can be changed except one.
 - anyone can pay: Another type of signature where the inputs are blanked giving a signature that remains valid even if more
 inputs are added later.
@@ -308,7 +309,7 @@ type ScriptRuntime(getTxHash: byte[] -> byte -> byte[]) =
 ### Operators on stack elements 
 
 They pull a certain number of elements from the stack, apply a function and then
-push the result back to the stack. The number of arguements and nature of the operation
+push the result back to the stack. The number of arguments and the nature of the operation
 varies with the helper.
 *)
     let unaryOp (f: int -> int) =
@@ -467,7 +468,7 @@ order as the pub keys.
 
 It's the main eval loop using tail recursion. The `eval` function reads one byte from the program and decide
 if it's data or instruction. If it's data, one or more bytes are then read. If it's instruction, it's always a single
-byte. It's an important trick because when the code must be skipped because it is on the wrong side of a If/then/else, 
+byte. It's an important trick. When the code must be skipped because it is on the wrong side of a If/then/else, 
 the function can quickly jump to the next code.
 *)
     let eval (script: byte[]) =

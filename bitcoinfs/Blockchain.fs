@@ -3,34 +3,33 @@
 
 This is now close to the end of the code and it is the highest component in the data model. Bob's job is to identify the best *valid* blockchain
 and keep the UTXO set synchronized to it. Working with the other actors, Bob knows when a peer has a block hash that he doesn't know about and
-can request the recent headers from this peer has. Also, once his satisfied with the block headers, Bob can request for the actual block contents.
+can request the recent headers from this peer. Also, once his satisfied with the block headers, Bob can request for the actual block contents.
 
 Bob is a very cautious man and he will check everything that people tell him, but he's also a forgiving man and he will accept all the blocks that
 are valid even if a peer tries to sneak in a few invalid block here and there.
 
 When he synchronizes (catches up) with a peer, Bob follows the checklist:
 
-- get headers (async). Bob gives his most recent block header (the tip) and asks the peer if he has any blocks after that one
+- get headers (async). Bob gives his most recent block header (the tip) and asks the peer if he has any blocks after that one.
 If the peer says no, Bob is done. If he gets some blocks, Bob will connect them with the ones he knows already. If they can't be connected because he
 never heard the block that supposedly precedes the chain that he received, Bob concludes that the chain is orphaned and not of concern to him. If that chain 
 eventually gets connected, he will be made aware of it when he get the connecting block.
 - extend the new chain if possible. Bob consults his database to see if he has received headers that follows the new chain because, at times, blocks are given out of order
 - compute heights. Now that the block connects somewhere to a known block, Bob can update the heights of all the blocks that he received. Starting from the previous block
-that he knows about, Bob increments the height and sets to the first block of the new chain and so on so forth.
+that he knows about, Bob increments the height and assigns the result to the first block of the new chain and so on so forth.
 - store headers into db. Bob takes these headers and writes them to his database. They will never be removed from there.
-- compare POW. First he finds out the lowest common ancestor between his best chain and the chain he received. If the chain he received extends his current chain, it's the best case because the LCA will be his tip 
-but it doesn't matter to Bob. 
+- compare POW (Proof of Work). First he finds out the lowest common ancestor between his best chain and the chain he received. If the chain he received extends his current chain, it's the best case because the LCA will be his tip 
+but it doesn't matter to Bob. It works the same either way.
 He compares the work from both chains. Knowing that both chains are equal from the LCA to the genesis block, Bob only has to compare the POW between the LCA and both tips. If the new chain
 is no better than the old one, there is no need to continue.
-- (connect with orphans)
-- download blocks (async). Bob looks at the blocks he already has downloaded and says to himself - well no need to download these again! Bob splits the rest evenly in several groups
+- download blocks (async). Bob looks at the blocks he already has downloaded and ignores the one he has downloaded already. Bob splits the rest evenly in several groups
 and asks his peers to download them for him. This task is done in parallel while he sits patiently. During that time, if a download fails the blocks get reassigned to a different peer. 
 So, eventually Bob gets his blocks or the retry limit got reached. In the later case, Bob gives up and will try another time. The catchup fails. 
 - rollback utxo to LCA beween main and new fork. However, if Bob got his blocks he now has to determine how many of these blocks are good. He creates a new in memory UTXO set on top of the existing db
 and rolls back all the blocks back to the LCA. Then he dilligently checks the blocks of the new chain and applies their transactions until the end or the first failure. If he made it to the end, the new chain
 was all good. If not, he has a partially good new chain.
-- compare pow between current chain and new chain. Bob trims the new chain down to the first failure if there was one and compares the POW of the revised chain with his own chain. The new chain was trimmed so
-even if it was better earlier, it may not be as good anymore.
+- compare POW between current chain and new chain. Bob trims the new chain down to the first failure if there was one and compares the POW of the revised chain with his own chain. The new chain was trimmed so
+even if it was better earlier, it may not be good enough anymore.
 - if better, commit tempdb, update tip. Finally, if the new chain is still better than his chain, Bob commits the in memory UTXO to the database and updates his tip. Otherwise, he simply drops the in memory UTXO and
 everything is forgotten.
 
@@ -273,10 +272,10 @@ let catchup (peer: IPeer) =
 
 Bob's commands are:
 
-- Catchup from a given peer
-- GetBlock. A remote node wants to get a block from this client
-- GetHeaders. A remote node wants to get the headers from this client
-- Ping. Ping is here only because it helps with acceptance testing. The system works asynchronously and it makes
+- `Catchup` from a given peer
+- `GetBlock`. A remote node wants to get a block from this client
+- `GetHeaders`. A remote node wants to get the headers from this client
+- `Ping`. Ping is here only because it helps with acceptance testing. The system works asynchronously and that makes it
 difficult to know when catchup completes for an external component. The test driver probes the client node by sending
 pings and then waits for the pong. Originally, ping/pong was directly handled by the peer but then the response was too fast
 and the test driver would proceed before catchup even started. By putting ping here, the request gets queued until Bob is

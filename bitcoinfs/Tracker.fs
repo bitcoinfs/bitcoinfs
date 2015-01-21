@@ -65,7 +65,8 @@ let mutable peerSlots = Map.empty<int, PeerSlot>
 exception InvalidTransition of TrackerPeerState * TrackerPeerState
 
 (**
-Check that the transition is valid. This should never raise an exception
+Check that the transition is valid. This should never raise an exception. It is
+an assertion.
 *)
 let checkTransition oldState newState = 
     match (oldState, newState) with
@@ -122,7 +123,7 @@ let forward (command: TrackerCommand) (message: PeerCommand) =
 ## Employment cycle of a Peer
 
 When Tom hires a new peer, he gives a unique id and a position in his directory.
-When Tom fires a peer, besides removing the peer from his directory, he looks for a replacement. 
+When Tom fires a peer, Tom removes the peer from his directory and looks for a replacement. 
 *)
 let newPeer() = 
     let openSlotId = nextId()
@@ -223,7 +224,8 @@ let startTracker() =
     disposable.Add(Peer.addrTopic.ObserveOn(scheduler).Subscribe(processAddr))
     disposable.Add(broadcastToPeers.ObserveOn(scheduler).Subscribe(processBroadcast))
 
-(** # Server
+(** 
+# Server
 The server binds to the port configured in the app.config file and listens to incoming connection.
 On a connection, it sends a message to Tom. At this time, there is no limit to the number of incoming connections
 *)

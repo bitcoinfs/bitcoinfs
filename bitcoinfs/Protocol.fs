@@ -203,7 +203,7 @@ This section has the parser/serializer code for the basic types of the Protocol.
 they are the non standard scalar types that can be included in messages.
 
 It also has the same code for the messages themselves. The functions are written by hand. There are
-some cases where the exact code is used. For instance when two messages have the same payload. I didn't
+some cases where the exact same code is reused. For instance when two messages have the same payload. I didn't
 try to factorize but instead the code is duplicated. It's mainly to keep the code similar between messages and because
 the gains wouldn't be big anyway.
 *)
@@ -623,7 +623,7 @@ function. It maintains a parsing state that has the type of the current message 
 
 Running the fold gives a sequence of sequence of messages so they need to be flatten to a simple sequence.
 
-If the data is ill-formed, a bad magic value or an invalid checksum for example, the stream will raise
+If the data is ill-formed, because of a bad magic value or an invalid checksum for example, the stream will raise
 an `ParseException` that will be propagated as an Error element through the Observable. This method ensures that 
 exceptions are treated as data and not as control flow.
 *)

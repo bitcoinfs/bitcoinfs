@@ -25,7 +25,7 @@ addresses.
 - The largest amount of data is in the blocks of the blockchain. It represents nearly 30 GB at this time
 (2015) and will continue growing. They are written as binary files so that they can be conveniently trimmed.
 - The unspent transaction outputs are the stashes of bitcoins that haven't been used by a transaction yet. They
-are the application main data. Once blocks are analyzed, the application doesn't need them anymore except during
+are the application main data. Once blocks are analyzed, the application doesn't need them anymore except during a
 reorganization of the blockchain. Instead, the application refers to the UTXO which is a much smaller set of data (~1GB).
 The UTXO are kept in a LevelDB database for better performance.
 - Finally, the metadata is in a SQLite database. The relational database allows advanced querying that LevelDB doesn't
@@ -67,7 +67,7 @@ let updateAddr(addr: AddrEntry) =
 The peerInfo table has the addresses of the peers that were advertised either through seed discovery or through
 peer to peer `addr` messages. I don't do much peer management. Typically, the quality of the information degrades over
 time since peers disconnect and reconnect freely. Therefore, I keep updating the table and the query that returns peers
-orders them from the most recent to the least.
+sorts them from the most recent to the least.
 
 Peers have a state telling whether they are in use but they should also have a badness score. It's not done at the moment.
 The application will disconnect from badly behaved peers but without a score value and a ban period, nothing prevents
@@ -138,7 +138,7 @@ let updateState(peer: IPEndPoint, state: int) =
 
 I keep all the information that I parse from a header. The tx-count is not populated in the `Headers` message
 and will be zero. The column is there for later. The hash isn't part of the header but is in fact the actual hash of the
-header itself. It is calculated and then stored. Finally, the height is also determined by looking up the previous header.
+header itself. It is calculated during parsing and then stored. Finally, the height is also determined by looking up the previous header.
 If the previous header is not present in the database, then the header is skipped and not stored at all. When the missing
 header comes and the block connects, I'll get the header again.
 *)    
@@ -223,9 +223,9 @@ let writeHeaders(header: BlockHeader) =
 (**
 ## UTXO accessor
 
-The UTXO accessor interface is the abstract interface over the UTXO data store. The primary store is the levelDB database. It is where
+The UTXO accessor interface is the abstract interface over the UTXO data store. The primary store is the levelDB database where
 the main chain gets synced up to. However during acceptance of a new block(s), the blockchain validator works with a temporary set of UTXO.
-Being a low level store, LevelDB doesn't have transactions and therefore it has to be added in application. The technique I use is a simple
+Being a low level store, LevelDB doesn't have support for transactions and therefore it has to be done at the application layer. The technique I use is a simple
 versioning in-memory table. Regardless of whether it is talking directly to the on-disk db or through an overlay, the application
 code uses the same interface.
 *)
@@ -238,7 +238,7 @@ type IUTXOAccessor =
 
 (**
 The LevelDB accessor converts keys & values into binary strings and uses the LevelDB-Sharp bridge
-to read or write from the database.
+to read or write to the database.
 *)
 type LevelDBUTXOAccessor(db: DB) =
     let ro = new ReadOptions()
@@ -316,7 +316,7 @@ type IUTXOWriter =
     abstract Write: TxOperation * OutPoint * UTXO -> unit
 
 (** 
-Some helper function for validity checks. It appears early in the code because of the `processUTXO` function which goes through the
+A few helper functions for validity checks. They appear early in the code because of the `processUTXO` function which goes through the
 transactions and calls the UTXO accessor. I take advantage of this traversal to do some basic checks.
 *)
 
@@ -326,13 +326,15 @@ let OP_RETURN = 106uy
 let isRETURN (script: byte[]) = script.Length > 0 && script.[0] = OP_RETURN
 
 (**
-This is the first time that I use the `maybe` computational expression. So it maybe worth spending some time to talk about it.
-It is a builder for the monad `Option` type. Inside the `maybe`
-block, `let!` statements evaluate a `Some` or `None`. If the result is `None`, the rest is not evaluated and the `maybe` block
-returns `None`. It's syntaxic sugar for `bind`, `map`, etc. Sometimes I need to use these functions explicitly but when the `maybe`
+This is the first time that I use the `maybe` computational expression. So it's maybe worth spending some time to talk about it.
+`maybe` is a builder for the monad `Option` type. Inside the `maybe`
+block, `let!` statements evaluate an expression to either `Some` or `None`. If the result is `None`, the rest is not evaluated and the `maybe` block
+returns `None`. It's syntaxic sugar for the [monadic][1] `bind`, `map`, etc. Sometimes I need to use these functions explicitly but when the `maybe`
 builder does the job, the code is easier to read. Even though it looks like a normal loop over tx inputs and outputs, if any of the checks
 fail, evaluation is short circuited and returns `None`. Exceptions could have worked but it is harder to control their propagation and
 monads keep the function pure (except at the db level of course).
+
+[1]: http://en.wikipedia.org/wiki/Monad_%28functional_programming%29
 *)
 let processUTXO (utxoAccessor: IUTXOAccessor) (utxoWriter: IUTXOWriter) (isCoinbase: bool) (height: int) (tx: Tx)  =
     maybe {

@@ -1,11 +1,11 @@
 ﻿(**
 # Peers
 
-This is the first of the tree modules that form the Peer-to-peer layer. It is also the lowest, i.e. the closest to
+This is the first of the two modules that form the Peer-to-peer layer. It is also the lowest, i.e. the closest to
 the network layer and the farthest from the business logic.
 
 A peer is our side of the communication channel with a remote node of the Bitcoin network. It is responsible for
-handling the encoding/decoding and the transmission of messages with a single remote node. A peer is constructed 
+encoding/decoding and the transmission of messages with a single remote node. A peer is constructed 
 with a unique id and bound to single node. If the other side is not responsive or disconnects, the peer gets evicted.
 The tracker Tom fires Peter. Even if Peter comes back with a response later, Tom will disregard it.
 
@@ -40,6 +40,7 @@ A Peer goes through several steps as indicated by `PeerState`. `Closed` is its i
 `Connected` means that it has connected to a remote node but hasn't gone through the handshake (where nodes exchange
 version information). A Peer is `Ready` when it can accept a command from Tom because it is not working already. Peers only
 work on one thing at a time and when they work they switch to `Busy`.
+
 ![peer-states](uml/peer-state.png)
 *)
 type PeerState = Connected | Ready | Busy | Closed
@@ -47,7 +48,7 @@ type PeerState = Connected | Ready | Busy | Closed
 (**
 Tom keeps track of the peers as well but its view is somewhat different. It doesn't care about the details of the inner workings
 of Peter, whether he has shaken hands or not. For Tom, a peer is `Allocated` when he has hired him, `Ready` or `Busy` for the same
-reasons and `Free` when Tom has decided that he no longer needs Peter's services.
+reasons as the Peter and `Free` when Tom has decided that he no longer needs Peter's services.
 
 ![tracker-peer-states](uml/tracker-peer-state.png)
 *)
@@ -55,12 +56,16 @@ type TrackerPeerState = Allocated | Ready | Busy |  Free
 
 (**
 Busy/Ready states control the allocation of resources. Tom does not know exactly how much work is done by Peter. Neither does he know
-the nature of the work. It is controlled by whoever requested the work. Tom's responsibility is limited to finding a peer for Bob after that
-Peter and Bob talk directly. The Busy and Ready state are present in both Tom and Peter. Because they are different actors, there is no guarantee
-that these states will be synchronized. If Tom marks Peter as busy and then sends a message to Peter, Peter is not yet busy since he hasn't 
+the nature of the work. It is controlled by whoever requested the work, usually Bob. Tom's responsibility is limited to finding a peer for Bob after that,
+Peter and Bob talk directly. 
+
+The Busy and Ready state are present in both Tom and Peter. Because they are different actors, there is no guarantee
+that these states will be synchronized. If Tom marks Peter as busy and then sends a message to Peter, Peter is not busy yet since he hasn't 
 received the message yet. It is normal but when Peter finishes his work and becomes available again, the reverse must happen. He must set his
 state to ready before he notifies Tom otherwise Tom could send him work before he becomes ready. Essentially, because work comes from Tom, it is ok
 if Tom thinks that Peter is busy when he is not, but it is bad if Tom thinks Peter is available when he is not.
+
+The interactions between Bob, Tom and Peter can be described by the following sequence diagram.
 
 ![tracker-peer-seq](uml/tracker-peer-seq.png)
 *)
@@ -370,7 +375,7 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             logger.DebugF "Ignoring %A because the peer is not connected" command
             data
 (**
-`processCommand is the handler for normal state. The request can be either
+`processCommand` is the handler for normal state. The request can be either
 
 - For the remote node. In which case, it's simply forwarded.
 - A getheader/getblock. These come from Bob and Bob wants the response directly. The message came with a `TaskCompletionSource` for

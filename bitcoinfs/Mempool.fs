@@ -124,7 +124,7 @@ let nopWriter = new NopUndoWriter()
 
 (**
 Validating a tx in the pool will update the mempool UTXO set that is built on top of the confirmed UTXO. But for
-the mempool, there is nothing to undo and therefore no need for a undo writer.
+the mempool, there is nothing to undo and therefore no need for an undo writer.
 *)
 let validate (tx: Tx) =
     maybe {
@@ -164,10 +164,10 @@ let addTx tx =
 
 The main message loop picks up 
 
-- new inv messages. If the mempool doesn't have it, it will request for the tx data using `getdata`
-- tx data. It gets validated and then put into the pool
-- gettx. When another node ask for the details of a tx it doesn't have
-- mempool. The mempool message that triggers a full dump of the mempool as inv messages
+- new `inv` messages. If the mempool doesn't have it, it will request for the tx data using `getdata`
+- `tx` data. It gets validated and then put into the pool
+- `getdata`. When another node ask for the details of a tx it doesn't have
+- `mempool`. The mempool message that triggers a full dump of the mempool as inv messages
 - revalidate
 *)
 let processCommand (command: MempoolCommand) = 
