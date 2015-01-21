@@ -71,18 +71,18 @@
 <p>This module implements an interpreter for the Bitcoin <a href="https://en.bitcoin.it/wiki/Script">Script</a> language. The link points to a good documentation
 and I will just mention the main charateristics of this language. For more details, refer to the link.</p>
 
-<p>Bitcoin script is a stack based mainly arithmetic language. There are operators to push data to the stack and
+<p>Bitcoin script is a stack based primary arithmetic language. There are operators to push data to the stack and to
 perform operations on the elements of the stack. The stack is made of arbitrary long binary strings. When used for
-math operations, these byte strings are considered big integers.</p>
+math operations, these byte strings are considered litle endian big integers.</p>
 
 <p>The language has IF/THEN/ELSE but no loops. It is therefore non Turing complete and program execution time is bounded.
-Besides the classic operators, it has specific additions such as hashing operators and signature verification.</p>
+Besides the classic operators, it has cryptographic functions such as hashing operators and signature verification.</p>
 
 <p>When a transaction produces Outputs, they mention a value and a script. The later is similar to a program split in two. To 
-spend the output, one must provide the other half of the program such as the full program executes successfully.
+spend the output, one must provide the other half of the program so that the full program executes successfully.
 Another way to see it is to consider the output as a challenge and the spending transaction as the answer to the challenge.</p>
 
-<p>Most of the transactions use the Pay-To-PubHash script. The script has a 20 byte long hash value and the spending transaction
+<p>Most of the transactions use the Pay-To-PubHash script. The script has a 20 byte long hash value. The spending transaction
 must provide a pub key that hashes to the given value and a signature that matches both the pub key and the transaction content.</p>
 
 <p>However, many other scripts exist even though only a few are considered standard. Standard scripts have been created to 
@@ -158,12 +158,13 @@ non standard scripts. This node does not care and will relay anything that valid
 <h2>P2SH</h2>
 
 <p>Pay to Script Hash is specified in <a href="https://github.com/bitcoin/bips/blob/master/bip-0016.mediawiki">BIP-16</a> and has its own address space. P2SH is quite odd. The script itself is
-half the story. It is first verified normally like any other script but then the evaluator recognizes a special script pattern and does
+half the story. It is first verified normally like any other script but then if the evaluator recognizes a special script pattern and he will do
 something completely different. It is as if the program said <code>print hello</code> but then starts calculating pi.</p>
 
 <p>Anyway, the idea is that the signing script gives the signatures but also the pub script that it is signing. Normally, 
 you would have two scripts that once stitched together form a program. P2SH has a script inside a script. That script is provided as data
-pushed into the stack but that data is then poped and evaluated.</p>
+pushed into the stack but then that data is then poped and evaluated. Once again BIP-16 is
+strange and I just scratched the surface. For more information refer to its specification.</p>
 
 <table class="pre"><tr><td class="lines"><pre class="fssnip">
 <span class="l">1: </span>
@@ -271,10 +272,10 @@ a hash of the document and signs the hash. Bitcoin has a specific way to create 
 a few parameters.</p>
 
 <ul>
-<li>the signature type. Most of the time, it's SIGHASH<em>ALL and the complete transaction is hashed. After that, 
-changing a single byte of the transaction invalidates the signature. But it can be SIGHASH</em>NONE for which all
+<li>the signature type. Most of the time, it's <code>SIGHASH_ALL</code> and the complete transaction is hashed. After that, 
+changing a single byte of the transaction invalidates the signature. But it can be <code>SIGHASH_NONE</code> for which all
 the outputs are blanked meaning that the signature will remain valid even if the outputs are changed. It can
-also be SIGHASH_SINGLE. In the last case, all the outputs except the one with the same index as the input signature
+also be <code>SIGHASH_SINGLE</code>. In the last case, all the outputs except the one with the same index as the input signature
 are blanked. It means that all the outputs can be changed except one.</li>
 <li>anyone can pay: Another type of signature where the inputs are blanked giving a signature that remains valid even if more
 inputs are added later.</li>
@@ -555,7 +556,7 @@ of the input matters and will not give the same hash.</p>
 <h3>Operators on stack elements</h3>
 
 <p>They pull a certain number of elements from the stack, apply a function and then
-push the result back to the stack. The number of arguements and nature of the operation
+push the result back to the stack. The number of arguments and the nature of the operation
 varies with the helper.</p>
 
 <table class="pre"><tr><td class="lines"><pre class="fssnip">
@@ -868,7 +869,7 @@ order as the pub keys.</p>
 
 <p>It's the main eval loop using tail recursion. The <code>eval</code> function reads one byte from the program and decide
 if it's data or instruction. If it's data, one or more bytes are then read. If it's instruction, it's always a single
-byte. It's an important trick because when the code must be skipped because it is on the wrong side of a If/then/else, 
+byte. It's an important trick. When the code must be skipped because it is on the wrong side of a If/then/else, 
 the function can quickly jump to the next code.</p>
 
 <table class="pre"><tr><td class="lines"><pre class="fssnip">

@@ -236,7 +236,7 @@ the transactions in the block and the same one from the pool.</p>
 </table>
 
 <p>Validating a tx in the pool will update the mempool UTXO set that is built on top of the confirmed UTXO. But for
-the mempool, there is nothing to undo and therefore no need for a undo writer.</p>
+the mempool, there is nothing to undo and therefore no need for an undo writer.</p>
 
 <table class="pre"><tr><td class="lines"><pre class="fssnip">
 <span class="l">1: </span>
@@ -317,10 +317,10 @@ the mempool, there is nothing to undo and therefore no need for a undo writer.</
 <p>The main message loop picks up</p>
 
 <ul>
-<li>new inv messages. If the mempool doesn't have it, it will request for the tx data using <code>getdata</code></li>
-<li>tx data. It gets validated and then put into the pool</li>
-<li>gettx. When another node ask for the details of a tx it doesn't have</li>
-<li>mempool. The mempool message that triggers a full dump of the mempool as inv messages</li>
+<li>new <code>inv</code> messages. If the mempool doesn't have it, it will request for the tx data using <code>getdata</code></li>
+<li><code>tx</code> data. It gets validated and then put into the pool</li>
+<li><code>getdata</code>. When another node ask for the details of a tx it doesn't have</li>
+<li><code>mempool</code>. The mempool message that triggers a full dump of the mempool as inv messages</li>
 <li>revalidate</li>
 </ul>
 

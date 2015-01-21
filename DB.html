@@ -65,7 +65,7 @@ addresses.</p>
 <li>The largest amount of data is in the blocks of the blockchain. It represents nearly 30 GB at this time
 (2015) and will continue growing. They are written as binary files so that they can be conveniently trimmed.</li>
 <li>The unspent transaction outputs are the stashes of bitcoins that haven't been used by a transaction yet. They
-are the application main data. Once blocks are analyzed, the application doesn't need them anymore except during
+are the application main data. Once blocks are analyzed, the application doesn't need them anymore except during a
 reorganization of the blockchain. Instead, the application refers to the UTXO which is a much smaller set of data (~1GB).
 The UTXO are kept in a LevelDB database for better performance.</li>
 <li>Finally, the metadata is in a SQLite database. The relational database allows advanced querying that LevelDB doesn't
@@ -138,7 +138,7 @@ database layer a straight get and put interface.</p>
 <p>The peerInfo table has the addresses of the peers that were advertised either through seed discovery or through
 peer to peer <code>addr</code> messages. I don't do much peer management. Typically, the quality of the information degrades over
 time since peers disconnect and reconnect freely. Therefore, I keep updating the table and the query that returns peers
-orders them from the most recent to the least.</p>
+sorts them from the most recent to the least.</p>
 
 <p>Peers have a state telling whether they are in use but they should also have a badness score. It's not done at the moment.
 The application will disconnect from badly behaved peers but without a score value and a ban period, nothing prevents
@@ -274,7 +274,7 @@ a peer from reconnecting immediately. This is on the TODO list.</p>
 
 <p>I keep all the information that I parse from a header. The tx-count is not populated in the <code>Headers</code> message
 and will be zero. The column is there for later. The hash isn't part of the header but is in fact the actual hash of the
-header itself. It is calculated and then stored. Finally, the height is also determined by looking up the previous header.
+header itself. It is calculated during parsing and then stored. Finally, the height is also determined by looking up the previous header.
 If the previous header is not present in the database, then the header is skipped and not stored at all. When the missing
 header comes and the block connects, I'll get the header again.</p>
 
@@ -442,9 +442,9 @@ header comes and the block connects, I'll get the header again.</p>
 
 <h2>UTXO accessor</h2>
 
-<p>The UTXO accessor interface is the abstract interface over the UTXO data store. The primary store is the levelDB database. It is where
+<p>The UTXO accessor interface is the abstract interface over the UTXO data store. The primary store is the levelDB database where
 the main chain gets synced up to. However during acceptance of a new block(s), the blockchain validator works with a temporary set of UTXO.
-Being a low level store, LevelDB doesn't have transactions and therefore it has to be added in application. The technique I use is a simple
+Being a low level store, LevelDB doesn't have support for transactions and therefore it has to be done at the application layer. The technique I use is a simple
 versioning in-memory table. Regardless of whether it is talking directly to the on-disk db or through an overlay, the application
 code uses the same interface.</p>
 
@@ -469,7 +469,7 @@ code uses the same interface.</p>
 </table>
 
 <p>The LevelDB accessor converts keys &amp; values into binary strings and uses the LevelDB-Sharp bridge
-to read or write from the database.</p>
+to read or write to the database.</p>
 
 <table class="pre"><tr><td class="lines"><pre class="fssnip">
 <span class="l"> 1: </span>
@@ -621,7 +621,7 @@ available.</p>
 </tr>
 </table>
 
-<p>Some helper function for validity checks. It appears early in the code because of the <code>processUTXO</code> function which goes through the
+<p>A few helper functions for validity checks. They appear early in the code because of the <code>processUTXO</code> function which goes through the
 transactions and calls the UTXO accessor. I take advantage of this traversal to do some basic checks.</p>
 
 <table class="pre"><tr><td class="lines"><pre class="fssnip">
@@ -640,10 +640,10 @@ transactions and calls the UTXO accessor. I take advantage of this traversal to 
 </tr>
 </table>
 
-<p>This is the first time that I use the <code>maybe</code> computational expression. So it maybe worth spending some time to talk about it.
-It is a builder for the monad <code>Option</code> type. Inside the <code>maybe</code>
-block, <code>let!</code> statements evaluate a <code>Some</code> or <code>None</code>. If the result is <code>None</code>, the rest is not evaluated and the <code>maybe</code> block
-returns <code>None</code>. It's syntaxic sugar for <code>bind</code>, <code>map</code>, etc. Sometimes I need to use these functions explicitly but when the <code>maybe</code>
+<p>This is the first time that I use the <code>maybe</code> computational expression. So it's maybe worth spending some time to talk about it.
+<code>maybe</code> is a builder for the monad <code>Option</code> type. Inside the <code>maybe</code>
+block, <code>let!</code> statements evaluate an expression to either <code>Some</code> or <code>None</code>. If the result is <code>None</code>, the rest is not evaluated and the <code>maybe</code> block
+returns <code>None</code>. It's syntaxic sugar for the <a href="http://en.wikipedia.org/wiki/Monad_%28functional_programming%29">monadic</a> <code>bind</code>, <code>map</code>, etc. Sometimes I need to use these functions explicitly but when the <code>maybe</code>
 builder does the job, the code is easier to read. Even though it looks like a normal loop over tx inputs and outputs, if any of the checks
 fail, evaluation is short circuited and returns <code>None</code>. Exceptions could have worked but it is harder to control their propagation and
 monads keep the function pure (except at the db level of course).</p>

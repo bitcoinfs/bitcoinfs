@@ -65,7 +65,7 @@ was generated directly from the code.</p>
 
 <p>This project is under development and currently in alpha stage. Generally speaking, writing
 a fully compliant bitcoin node is extremely hard - some think impossible. The Bitcoin project
-is experimental and never aimed to deliver a 100% accurate specification. The Satoshi client
+is experimental and grew organically. As a result, the Satoshi client
 is the de-factor standard. By far the most used client on the network, it dictates what should
 be accepted and what should be rejected. Even the slighest deviation can cause a fork and potential
 loss of funds. It should go without saying</p>
@@ -96,17 +96,17 @@ the supported features</li>
 <li>Simple and readable code. It is not code golf but it is not paid by the line code either.</li>
 <li>Header first, blocks later. The client downloads the block headers first and checks the validity
 of the chain then it downloads the blocks from multiple peers in parallel. It dramatically improves
-synchronization.</li>
+synchronization speed.</li>
 <li>Easy pruning. Blocks are stored on disk in a normal directory fashion and can be removed by deleting
 files. Other implementations use a database or custom data files.</li>
 <li>I didn't want any wallet spending functionality even if I have included support for BIP32, Armory and Electrum style
 watch-only wallets.</li>
-<li>No JSON API either. I will prefer to extend the core.</li>
+<li>No JSON API either. I prefer to extend the core.</li>
 </ul>
 
 <p>All in all, it is a small but working client that can be used as a relay for transactions since it
 validates inputs and as the base of an online wallet. However, at this point the only wallet
-features are watch-only for BIP-32, Electrum and Armory wallets.</p>
+features are watch-only for HD wallets.</p>
 
 <p>This document follows the structure of the source files.</p>
 
