@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <!-- 
+      The Checks
+ parameters will be replaced with the 
+      document title extracted from the <h1> element or
+      file name, if there is no <h1> heading
+    -->
+    <title>Checks
+</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="http://code.jquery.com/jquery-1.8.0.js"></script>
+    <script src="http://code.jquery.com/ui/1.8.23/jquery-ui.js"></script>
+    <script src="http://netdna.bootstrapcdn.com/twitter-bootstrap/3.3.2/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link href="http://getbootstrap.com/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="content/style.css" />
+    <script src="content/tips.js" type="text/javascript"></script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="index.html">Bitcoin F#</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li><a href="index.html">Intro</a></li>
+            <li><a href="Protocol.html">Protocol</a></li>
+            <li><a href="DB.html">Persistence</a></li>
+            <li><a href="P2P.html">Peer to Peer</a></li>
+            <li><a href="Peer.html">Peer</a></li>
+            <li><a href="Tracker.html">Tracker</a></li>
+            <li><a href="Script.html">Script Interpreter</a></li>
+            <li><a href="Mempool.html">Mempool</a></li>
+            <li><a href="Checks.html">Validation</a></li>
+            <li><a href="Blockchain.html">Blockchain</a></li>
+            <li><a href="Main.html">Main</a></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </nav>
+    <div class="container">
+      <div class="row" style="margin-top:70px">
+        <div class="span1"></div>
+        <div class="span10" id="main">
+          <h1>Checks</h1>
+
+<p>Some of the validation checks are cheap and some are expensive to perform. A block or a transaction passes if it passes all the checks. 
+For performance reasons, it's better to fail fast, i.e if the block fails a cheap test and an expensive one, it is better to check the
+fast one first and avoid doing the expensive check. But alas, it is not always possible to do so. Checks are of several categories:</p>
+
+<ul>
+<li>parsing checks. If the block got here, it already passed these.</li>
+<li>single metadata checks. For instance, the hash must be below the target. It's a check that doesn't involve other blocks</li>
+<li>multi metadata checks. These checks are more expensive because more than one block participate. For example, the previous block hash must
+match, or the timestamp must be no sooner than the median of the previous 11 blocks</li>
+<li>the most expensive of all are the checks that require analyzing the content of a block: double spends, signature checks, scripts, merkle tree root hash, etc.</li>
+</ul>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">module</span> <span onmouseout="hideTip(event, 'fs1', 1)" onmouseover="showTip(event, 'fs1', 1)" class="i">Checks</span></pre>
+</td>
+</tr>
+</table>
+
+<h2>Misc functions</h2>
+
+<p>Create a lazy sequence of block headers backwards from the one given to the genesis block. Because it
+is lazily evaluated, it is very rarely read all the way.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+<span class="l">6: </span>
+<span class="l">7: </span>
+<span class="l">8: </span>
+<span class="l">9: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs24', 34)" onmouseover="showTip(event, 'fs24', 34)" class="i">chainFromTip</span> (<span onmouseout="hideTip(event, 'fs25', 35)" onmouseover="showTip(event, 'fs25', 35)" class="i">tip</span><span class="o">:</span> <span class="i">BlockHeader</span>)<span class="o">:</span> <span onmouseout="hideTip(event, 'fs26', 36)" onmouseover="showTip(event, 'fs26', 36)" class="i">seq</span><span class="o">&lt;</span><span class="i">BlockHeader</span><span class="o">&gt;</span> <span class="o">=</span>
+    <span onmouseout="hideTip(event, 'fs27', 37)" onmouseover="showTip(event, 'fs27', 37)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs28', 38)" onmouseover="showTip(event, 'fs28', 38)" class="i">unfold</span> (
+        <span class="k">fun</span> (<span onmouseout="hideTip(event, 'fs29', 39)" onmouseover="showTip(event, 'fs29', 39)" class="i">header</span><span class="o">:</span> <span class="i">BlockHeader</span>) <span class="k">-&gt;</span> 
+            <span class="k">if</span> <span onmouseout="hideTip(event, 'fs29', 40)" onmouseover="showTip(event, 'fs29', 40)" class="i">header</span><span class="o">.</span><span class="i">Hash</span> <span class="o">=</span> <span class="i">zeroHash</span> <span class="k">then</span>
+                <span onmouseout="hideTip(event, 'fs30', 41)" onmouseover="showTip(event, 'fs30', 41)" class="i">None</span>
+            <span class="k">else</span>
+                <span class="k">let</span> <span onmouseout="hideTip(event, 'fs31', 42)" onmouseover="showTip(event, 'fs31', 42)" class="i">prevHeader</span> <span class="o">=</span> <span class="i">Db</span><span class="o">.</span><span class="i">readHeader</span>(<span onmouseout="hideTip(event, 'fs29', 43)" onmouseover="showTip(event, 'fs29', 43)" class="i">header</span><span class="o">.</span><span class="i">PrevHash</span>)
+                <span onmouseout="hideTip(event, 'fs32', 44)" onmouseover="showTip(event, 'fs32', 44)" class="i">Some</span>(<span onmouseout="hideTip(event, 'fs29', 45)" onmouseover="showTip(event, 'fs29', 45)" class="i">header</span>, <span onmouseout="hideTip(event, 'fs31', 46)" onmouseover="showTip(event, 'fs31', 46)" class="i">prevHeader</span>))
+        (<span onmouseout="hideTip(event, 'fs25', 47)" onmouseover="showTip(event, 'fs25', 47)" class="i">tip</span>) </pre>
+</td>
+</tr>
+</table>
+
+<p>Convert between bits compact representation and target difficulty</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs33', 48)" onmouseover="showTip(event, 'fs33', 48)" class="i">target</span> (<span onmouseout="hideTip(event, 'fs34', 49)" onmouseover="showTip(event, 'fs34', 49)" class="i">bits</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs35', 50)" onmouseover="showTip(event, 'fs35', 50)" class="i">int</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs36', 51)" onmouseover="showTip(event, 'fs36', 51)" class="i">b</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs37', 52)" onmouseover="showTip(event, 'fs37', 52)" class="i">BitConverter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs38', 53)" onmouseover="showTip(event, 'fs38', 53)" class="i">GetBytes</span>(<span onmouseout="hideTip(event, 'fs34', 54)" onmouseover="showTip(event, 'fs34', 54)" class="i">bits</span>)
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs39', 55)" onmouseover="showTip(event, 'fs39', 55)" class="i">exp</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs35', 56)" onmouseover="showTip(event, 'fs35', 56)" class="i">int</span> <span onmouseout="hideTip(event, 'fs36', 57)" onmouseover="showTip(event, 'fs36', 57)" class="i">b</span><span class="o">.</span>[<span class="n">3</span>]
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs40', 58)" onmouseover="showTip(event, 'fs40', 58)" class="i">mantissa</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs36', 59)" onmouseover="showTip(event, 'fs36', 59)" class="i">b</span><span class="o">.</span>[<span class="n">0..</span><span class="n">2</span>]
+    (<span onmouseout="hideTip(event, 'fs41', 60)" onmouseover="showTip(event, 'fs41', 60)" class="i">bigint</span> <span onmouseout="hideTip(event, 'fs40', 61)" onmouseover="showTip(event, 'fs40', 61)" class="i">mantissa</span>) <span class="o">&lt;&lt;&lt;</span> (<span class="n">8</span><span class="o">*</span>(<span onmouseout="hideTip(event, 'fs39', 62)" onmouseover="showTip(event, 'fs39', 62)" class="i">exp</span><span class="o">-</span><span class="n">3</span>))
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs42', 63)" onmouseover="showTip(event, 'fs42', 63)" class="i">bits</span> (<span onmouseout="hideTip(event, 'fs43', 64)" onmouseover="showTip(event, 'fs43', 64)" class="i">target</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs41', 65)" onmouseover="showTip(event, 'fs41', 65)" class="i">bigint</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs44', 66)" onmouseover="showTip(event, 'fs44', 66)" class="i">targetBytes</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs43', 67)" onmouseover="showTip(event, 'fs43', 67)" class="i">target</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs45', 68)" onmouseover="showTip(event, 'fs45', 68)" class="i">ToByteArray</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs40', 69)" onmouseover="showTip(event, 'fs40', 69)" class="i">mantissa</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs44', 70)" onmouseover="showTip(event, 'fs44', 70)" class="i">targetBytes</span><span class="o">.</span><span class="i">TakeLast</span> <span class="n">4</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 71)" onmouseover="showTip(event, 'fs27', 71)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs46', 72)" onmouseover="showTip(event, 'fs46', 72)" class="i">toArray</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs39', 73)" onmouseover="showTip(event, 'fs39', 73)" class="i">exp</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs44', 74)" onmouseover="showTip(event, 'fs44', 74)" class="i">targetBytes</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs47', 75)" onmouseover="showTip(event, 'fs47', 75)" class="i">Length</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs48', 76)" onmouseover="showTip(event, 'fs48', 76)" class="i">p1</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs37', 77)" onmouseover="showTip(event, 'fs37', 77)" class="i">BitConverter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 78)" onmouseover="showTip(event, 'fs49', 78)" class="i">ToInt32</span>(<span onmouseout="hideTip(event, 'fs40', 79)" onmouseover="showTip(event, 'fs40', 79)" class="i">mantissa</span>, <span class="n">0</span>) 
+    (<span onmouseout="hideTip(event, 'fs48', 80)" onmouseover="showTip(event, 'fs48', 80)" class="i">p1</span> <span class="o">&gt;</span><span class="o">&gt;</span><span class="o">&gt;</span> <span class="n">8</span>) <span class="o">|||</span> (<span onmouseout="hideTip(event, 'fs39', 81)" onmouseover="showTip(event, 'fs39', 81)" class="i">exp</span> <span class="o">&lt;&lt;&lt;</span> <span class="n">24</span>)
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs50', 82)" onmouseover="showTip(event, 'fs50', 82)" class="i">maxTarget</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs33', 83)" onmouseover="showTip(event, 'fs33', 83)" class="i">target</span> <span class="n">0x207fFFFF</span> <span class="c">// This is the max target on the main net</span></pre>
+</td>
+</tr>
+</table>
+
+<p>The reward halving schedule</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs51', 84)" onmouseover="showTip(event, 'fs51', 84)" class="i">reward</span> (<span onmouseout="hideTip(event, 'fs52', 85)" onmouseover="showTip(event, 'fs52', 85)" class="i">height</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs35', 86)" onmouseover="showTip(event, 'fs35', 86)" class="i">int</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs53', 87)" onmouseover="showTip(event, 'fs53', 87)" class="i">range</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs52', 88)" onmouseover="showTip(event, 'fs52', 88)" class="i">height</span> <span class="o">/</span> <span class="n">210000</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs54', 89)" onmouseover="showTip(event, 'fs54', 89)" class="i">era</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs55', 90)" onmouseover="showTip(event, 'fs55', 90)" class="i">min</span> <span onmouseout="hideTip(event, 'fs53', 91)" onmouseover="showTip(event, 'fs53', 91)" class="i">range</span> <span class="n">33</span>
+    <span class="n">5000000000L</span> <span class="o">/</span> (<span class="n">1L</span> <span class="o">&lt;&lt;&lt;</span> <span onmouseout="hideTip(event, 'fs54', 92)" onmouseover="showTip(event, 'fs54', 92)" class="i">era</span>)
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs56', 93)" onmouseover="showTip(event, 'fs56', 93)" class="i">maxHash</span> <span class="o">=</span> <span class="n">1I</span> <span class="o">&lt;&lt;&lt;</span> <span class="n">256</span>
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs57', 94)" onmouseover="showTip(event, 'fs57', 94)" class="i">getWork</span> (<span onmouseout="hideTip(event, 'fs58', 95)" onmouseover="showTip(event, 'fs58', 95)" class="i">fork</span><span class="o">:</span> <span class="i">BlockHeader</span> <span onmouseout="hideTip(event, 'fs26', 96)" onmouseover="showTip(event, 'fs26', 96)" class="i">seq</span>) <span class="o">=</span> <span onmouseout="hideTip(event, 'fs58', 97)" onmouseover="showTip(event, 'fs58', 97)" class="i">fork</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 98)" onmouseover="showTip(event, 'fs27', 98)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 99)" onmouseover="showTip(event, 'fs59', 99)" class="i">map</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs60', 100)" onmouseover="showTip(event, 'fs60', 100)" class="i">bh</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs56', 101)" onmouseover="showTip(event, 'fs56', 101)" class="i">maxHash</span> <span class="o">/</span> <span onmouseout="hideTip(event, 'fs33', 102)" onmouseover="showTip(event, 'fs33', 102)" class="i">target</span> <span onmouseout="hideTip(event, 'fs60', 103)" onmouseover="showTip(event, 'fs60', 103)" class="i">bh</span><span class="o">.</span><span class="i">Bits</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 104)" onmouseover="showTip(event, 'fs27', 104)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs61', 105)" onmouseover="showTip(event, 'fs61', 105)" class="i">sum</span>
+
+<span class="c">// The coinbase follow a particular format</span>
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs62', 106)" onmouseover="showTip(event, 'fs62', 106)" class="i">isCoinBase</span> (<span onmouseout="hideTip(event, 'fs63', 107)" onmouseover="showTip(event, 'fs63', 107)" class="i">tx</span><span class="o">:</span> <span class="i">Tx</span>) <span class="o">=</span>
+    <span onmouseout="hideTip(event, 'fs63', 108)" onmouseover="showTip(event, 'fs63', 108)" class="i">tx</span><span class="o">.</span><span class="i">TxIns</span><span class="o">.</span><span class="i">Length</span> <span class="o">=</span> <span class="n">1</span> <span class="o">&amp;&amp;</span> <span class="i">hashCompare</span><span class="o">.</span><span class="i">Equals</span>(<span onmouseout="hideTip(event, 'fs63', 109)" onmouseover="showTip(event, 'fs63', 109)" class="i">tx</span><span class="o">.</span><span class="i">TxIns</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">PrevOutPoint</span><span class="o">.</span><span class="i">Hash</span>, <span class="i">zeroHash</span>) <span class="o">&amp;&amp;</span> <span onmouseout="hideTip(event, 'fs63', 110)" onmouseover="showTip(event, 'fs63', 110)" class="i">tx</span><span class="o">.</span><span class="i">TxIns</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">PrevOutPoint</span><span class="o">.</span><span class="i">Index</span> <span class="o">=</span> <span class="o">-</span><span class="n">1</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Compute the merkle root of a bunch of hashes</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span class="k">rec</span> <span onmouseout="hideTip(event, 'fs64', 111)" onmouseover="showTip(event, 'fs64', 111)" class="i">computeMerkleRoot</span> (<span onmouseout="hideTip(event, 'fs65', 112)" onmouseover="showTip(event, 'fs65', 112)" class="i">hashes</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs66', 113)" onmouseover="showTip(event, 'fs66', 113)" class="i">byte</span>[][]) <span class="o">=</span> 
+    <span class="k">if</span> <span onmouseout="hideTip(event, 'fs65', 114)" onmouseover="showTip(event, 'fs65', 114)" class="i">hashes</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs47', 115)" onmouseover="showTip(event, 'fs47', 115)" class="i">Length</span> <span class="o">=</span> <span class="n">1</span> 
+        <span class="k">then</span> <span onmouseout="hideTip(event, 'fs65', 116)" onmouseover="showTip(event, 'fs65', 116)" class="i">hashes</span><span class="o">.</span>[<span class="n">0</span>]
+    <span class="k">else</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs67', 117)" onmouseover="showTip(event, 'fs67', 117)" class="i">hs</span> <span class="o">=</span> 
+            <span class="k">if</span> <span onmouseout="hideTip(event, 'fs65', 118)" onmouseover="showTip(event, 'fs65', 118)" class="i">hashes</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs47', 119)" onmouseover="showTip(event, 'fs47', 119)" class="i">Length</span> <span class="o">%</span> <span class="n">2</span> <span class="o">=</span> <span class="n">0</span> 
+            <span class="k">then</span> <span onmouseout="hideTip(event, 'fs65', 120)" onmouseover="showTip(event, 'fs65', 120)" class="i">hashes</span>
+            <span class="k">else</span> 
+                [<span onmouseout="hideTip(event, 'fs65', 121)" onmouseover="showTip(event, 'fs65', 121)" class="i">hashes</span>; [|<span onmouseout="hideTip(event, 'fs65', 122)" onmouseover="showTip(event, 'fs65', 122)" class="i">hashes</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs68', 123)" onmouseover="showTip(event, 'fs68', 123)" class="i">Last</span>()|]] <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs69', 124)" onmouseover="showTip(event, 'fs69', 124)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs70', 125)" onmouseover="showTip(event, 'fs70', 125)" class="i">concat</span>
+        <span onmouseout="hideTip(event, 'fs64', 126)" onmouseover="showTip(event, 'fs64', 126)" class="i">computeMerkleRoot</span>
+            (<span onmouseout="hideTip(event, 'fs67', 127)" onmouseover="showTip(event, 'fs67', 127)" class="i">hs</span><span class="o">.</span><span class="i">Batch</span>(<span class="n">2</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 128)" onmouseover="showTip(event, 'fs27', 128)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 129)" onmouseover="showTip(event, 'fs59', 129)" class="i">map</span>(<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs71', 130)" onmouseover="showTip(event, 'fs71', 130)" class="i">x</span> <span class="k">-&gt;</span>
+                <span class="k">let</span> <span onmouseout="hideTip(event, 'fs72', 131)" onmouseover="showTip(event, 'fs72', 131)" class="i">h</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs71', 132)" onmouseover="showTip(event, 'fs71', 132)" class="i">x</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs69', 133)" onmouseover="showTip(event, 'fs69', 133)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs70', 134)" onmouseover="showTip(event, 'fs70', 134)" class="i">concat</span>
+                <span class="i">dsha</span> <span onmouseout="hideTip(event, 'fs72', 135)" onmouseover="showTip(event, 'fs72', 135)" class="i">h</span>
+                ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 136)" onmouseover="showTip(event, 'fs27', 136)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs46', 137)" onmouseover="showTip(event, 'fs46', 137)" class="i">toArray</span>)</pre>
+</td>
+</tr>
+</table>
+
+<p>Calculate the sum of satoshis in and out of a transaction. If there is a problem, the function returns <code>None</code>.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs73', 138)" onmouseover="showTip(event, 'fs73', 138)" class="i">totalIn</span> (<span onmouseout="hideTip(event, 'fs63', 139)" onmouseover="showTip(event, 'fs63', 139)" class="i">tx</span><span class="o">:</span> <span class="i">Tx</span>) <span class="o">=</span>
+    <span onmouseout="hideTip(event, 'fs26', 140)" onmouseover="showTip(event, 'fs26', 140)" class="i">seq</span> {
+        <span class="k">for</span> <span onmouseout="hideTip(event, 'fs74', 141)" onmouseover="showTip(event, 'fs74', 141)" class="i">txIn</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs63', 142)" onmouseover="showTip(event, 'fs63', 142)" class="i">tx</span><span class="o">.</span><span class="i">TxIns</span> <span class="k">do</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs75', 143)" onmouseover="showTip(event, 'fs75', 143)" class="i">utxo</span> <span class="o">=</span> <span class="i">utxoAccessor</span><span class="o">.</span><span class="i">GetUTXO</span> <span onmouseout="hideTip(event, 'fs74', 144)" onmouseover="showTip(event, 'fs74', 144)" class="i">txIn</span><span class="o">.</span><span class="i">PrevOutPoint</span>
+            <span class="k">yield</span> <span onmouseout="hideTip(event, 'fs75', 145)" onmouseover="showTip(event, 'fs75', 145)" class="i">utxo</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs15', 146)" onmouseover="showTip(event, 'fs15', 146)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs76', 147)" onmouseover="showTip(event, 'fs76', 147)" class="i">map</span>(<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs77', 148)" onmouseover="showTip(event, 'fs77', 148)" class="i">utxo</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs77', 149)" onmouseover="showTip(event, 'fs77', 149)" class="i">utxo</span><span class="o">.</span><span class="i">TxOut</span><span class="o">.</span><span class="i">Value</span>)
+        } <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 150)" onmouseover="showTip(event, 'fs27', 150)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs78', 151)" onmouseover="showTip(event, 'fs78', 151)" class="i">toList</span>
+    <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs15', 152)" onmouseover="showTip(event, 'fs15', 152)" class="i">Option</span><span class="o">.</span><span class="i">sequence</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs15', 153)" onmouseover="showTip(event, 'fs15', 153)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs76', 154)" onmouseover="showTip(event, 'fs76', 154)" class="i">map</span> <span onmouseout="hideTip(event, 'fs27', 155)" onmouseover="showTip(event, 'fs27', 155)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs61', 156)" onmouseover="showTip(event, 'fs61', 156)" class="i">sum</span>
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs79', 157)" onmouseover="showTip(event, 'fs79', 157)" class="i">totalOut</span> (<span onmouseout="hideTip(event, 'fs63', 158)" onmouseover="showTip(event, 'fs63', 158)" class="i">tx</span><span class="o">:</span> <span class="i">Tx</span>) <span class="o">=</span> 
+    <span onmouseout="hideTip(event, 'fs26', 159)" onmouseover="showTip(event, 'fs26', 159)" class="i">seq</span> {
+        <span class="k">for</span> <span onmouseout="hideTip(event, 'fs80', 160)" onmouseover="showTip(event, 'fs80', 160)" class="i">txOut</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs63', 161)" onmouseover="showTip(event, 'fs63', 161)" class="i">tx</span><span class="o">.</span><span class="i">TxOuts</span> <span class="k">do</span>
+            <span class="k">yield</span> <span onmouseout="hideTip(event, 'fs80', 162)" onmouseover="showTip(event, 'fs80', 162)" class="i">txOut</span><span class="o">.</span><span class="i">Value</span>
+        } <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 163)" onmouseover="showTip(event, 'fs27', 163)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs61', 164)" onmouseover="showTip(event, 'fs61', 164)" class="i">sum</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Check that the timestamp of the block is in the proper range</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+<span class="l">6: </span>
+<span class="l">7: </span>
+<span class="l">8: </span>
+<span class="l">9: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs81', 165)" onmouseover="showTip(event, 'fs81', 165)" class="i">checkTimestamp</span> (<span onmouseout="hideTip(event, 'fs29', 166)" onmouseover="showTip(event, 'fs29', 166)" class="i">header</span><span class="o">:</span> <span class="i">BlockHeader</span>) <span class="o">=</span> 
+    <span class="i">maybe</span> {
+        <span class="k">let</span> <span class="i">prevBlockTimestamps</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs24', 167)" onmouseover="showTip(event, 'fs24', 167)" class="i">chainFromTip</span> <span onmouseout="hideTip(event, 'fs29', 168)" onmouseover="showTip(event, 'fs29', 168)" class="i">header</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 169)" onmouseover="showTip(event, 'fs27', 169)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs82', 170)" onmouseover="showTip(event, 'fs82', 170)" class="i">skip</span> <span class="n">1</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 171)" onmouseover="showTip(event, 'fs27', 171)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs83', 172)" onmouseover="showTip(event, 'fs83', 172)" class="i">truncate</span> <span onmouseout="hideTip(event, 'fs19', 173)" onmouseover="showTip(event, 'fs19', 173)" class="i">minTimestampBlocks</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 174)" onmouseover="showTip(event, 'fs27', 174)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs46', 175)" onmouseover="showTip(event, 'fs46', 175)" class="i">toArray</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs69', 176)" onmouseover="showTip(event, 'fs69', 176)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs84', 177)" onmouseover="showTip(event, 'fs84', 177)" class="i">sortBy</span> (<span class="k">fun</span> <span class="i">h</span> <span class="k">-&gt;</span> <span class="i">h</span><span class="o">.</span><span class="i">Timestamp</span>)
+        <span class="k">let</span> <span class="i">median</span> <span class="o">=</span> <span class="i">prevBlockTimestamps</span><span class="o">.</span>[<span class="i">prevBlockTimestamps</span><span class="o">.</span><span class="i">Length</span> <span class="o">/</span> <span class="n">2</span>]
+        <span class="k">do!</span> (<span class="i">prevBlockTimestamps</span><span class="o">.</span><span class="i">Length</span> <span class="o">&lt;</span> <span onmouseout="hideTip(event, 'fs19', 178)" onmouseover="showTip(event, 'fs19', 178)" class="i">minTimestampBlocks</span> <span class="o">||</span> <span onmouseout="hideTip(event, 'fs29', 179)" onmouseover="showTip(event, 'fs29', 179)" class="i">header</span><span class="o">.</span><span class="i">Timestamp</span> <span class="o">&gt;</span> <span class="i">median</span><span class="o">.</span><span class="i">Timestamp</span>) <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">timestamp</span><span class="s"> </span><span class="s">is</span><span class="s"> </span><span class="s">too</span><span class="s"> </span><span class="s">far</span><span class="s"> </span><span class="s">back</span><span class="s">&quot;</span>
+        <span class="k">do!</span> <span class="i">Instant</span><span class="o">.</span><span class="i">FromDateTimeUtc</span>(<span onmouseout="hideTip(event, 'fs85', 180)" onmouseover="showTip(event, 'fs85', 180)" class="i">DateTime</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs86', 181)" onmouseover="showTip(event, 'fs86', 181)" class="i">UtcNow</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs87', 182)" onmouseover="showTip(event, 'fs87', 182)" class="i">AddHours</span> <span class="n">2.0</span>) <span class="o">&gt;</span><span class="o">=</span> <span class="i">Instant</span><span class="o">.</span><span class="i">FromSecondsSinceUnixEpoch</span>(<span onmouseout="hideTip(event, 'fs88', 183)" onmouseover="showTip(event, 'fs88', 183)" class="i">int64</span> <span onmouseout="hideTip(event, 'fs29', 184)" onmouseover="showTip(event, 'fs29', 184)" class="i">header</span><span class="o">.</span><span class="i">Timestamp</span>) <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">timestamp</span><span class="s"> </span><span class="s">is</span><span class="s"> </span><span class="s">too</span><span class="s"> </span><span class="s">far</span><span class="s"> </span><span class="s">ahead</span><span class="s">&quot;</span>
+    }
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs89', 185)" onmouseover="showTip(event, 'fs89', 185)" class="i">between</span> <span onmouseout="hideTip(event, 'fs90', 186)" onmouseover="showTip(event, 'fs90', 186)" class="i">x</span> <span onmouseout="hideTip(event, 'fs91', 187)" onmouseover="showTip(event, 'fs91', 187)" class="i">min</span> <span onmouseout="hideTip(event, 'fs92', 188)" onmouseover="showTip(event, 'fs92', 188)" class="i">max</span> <span class="o">=</span> <span class="k">if</span> <span onmouseout="hideTip(event, 'fs90', 189)" onmouseover="showTip(event, 'fs90', 189)" class="i">x</span> <span class="o">&lt;</span> <span onmouseout="hideTip(event, 'fs91', 190)" onmouseover="showTip(event, 'fs91', 190)" class="i">min</span> <span class="k">then</span> <span onmouseout="hideTip(event, 'fs91', 191)" onmouseover="showTip(event, 'fs91', 191)" class="i">min</span> <span class="k">elif</span> <span onmouseout="hideTip(event, 'fs90', 192)" onmouseover="showTip(event, 'fs90', 192)" class="i">x</span> <span class="o">&gt;</span> <span onmouseout="hideTip(event, 'fs92', 193)" onmouseover="showTip(event, 'fs92', 193)" class="i">max</span> <span class="k">then</span> <span onmouseout="hideTip(event, 'fs92', 194)" onmouseover="showTip(event, 'fs92', 194)" class="i">max</span> <span class="k">else</span> <span onmouseout="hideTip(event, 'fs90', 195)" onmouseover="showTip(event, 'fs90', 195)" class="i">x</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Check that the difficulty/target is correct. Either it's the same as the previous block or if it's time to readjust then it must be 
+so that the previous 2016 blocks would have taken 10 minutes in average to produce.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs93', 196)" onmouseover="showTip(event, 'fs93', 196)" class="i">checkBits</span> (<span onmouseout="hideTip(event, 'fs29', 197)" onmouseover="showTip(event, 'fs29', 197)" class="i">header</span><span class="o">:</span> <span class="i">BlockHeader</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs94', 198)" onmouseover="showTip(event, 'fs94', 198)" class="i">testResult</span> <span class="o">=</span> 
+        <span class="k">if</span> <span onmouseout="hideTip(event, 'fs29', 199)" onmouseover="showTip(event, 'fs29', 199)" class="i">header</span><span class="o">.</span><span class="i">Height</span> <span class="o">&gt;</span> <span class="n">0</span> <span class="o">&amp;&amp;</span> <span onmouseout="hideTip(event, 'fs29', 200)" onmouseover="showTip(event, 'fs29', 200)" class="i">header</span><span class="o">.</span><span class="i">Height</span> <span class="o">%</span> <span onmouseout="hideTip(event, 'fs20', 201)" onmouseover="showTip(event, 'fs20', 201)" class="i">difficultyReadjustmentInterval</span> <span class="o">=</span> <span class="n">0</span>
+        <span class="k">then</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs95', 202)" onmouseover="showTip(event, 'fs95', 202)" class="i">blockIntervalAgo</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs24', 203)" onmouseover="showTip(event, 'fs24', 203)" class="i">chainFromTip</span> <span onmouseout="hideTip(event, 'fs29', 204)" onmouseover="showTip(event, 'fs29', 204)" class="i">header</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 205)" onmouseover="showTip(event, 'fs27', 205)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs82', 206)" onmouseover="showTip(event, 'fs82', 206)" class="i">skip</span> <span onmouseout="hideTip(event, 'fs20', 207)" onmouseover="showTip(event, 'fs20', 207)" class="i">difficultyReadjustmentInterval</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 208)" onmouseover="showTip(event, 'fs27', 208)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs96', 209)" onmouseover="showTip(event, 'fs96', 209)" class="i">head</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs97', 210)" onmouseover="showTip(event, 'fs97', 210)" class="i">timeElapsed</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs29', 211)" onmouseover="showTip(event, 'fs29', 211)" class="i">header</span><span class="o">.</span><span class="i">Timestamp</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs95', 212)" onmouseover="showTip(event, 'fs95', 212)" class="i">blockIntervalAgo</span><span class="o">.</span><span class="i">Timestamp</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs98', 213)" onmouseover="showTip(event, 'fs98', 213)" class="i">boundedTimeElapsed</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs89', 214)" onmouseover="showTip(event, 'fs89', 214)" class="i">between</span> <span onmouseout="hideTip(event, 'fs97', 215)" onmouseover="showTip(event, 'fs97', 215)" class="i">timeElapsed</span> (<span onmouseout="hideTip(event, 'fs21', 216)" onmouseover="showTip(event, 'fs21', 216)" class="i">targetElapsed</span><span class="o">/</span><span class="n">4u</span>) (<span onmouseout="hideTip(event, 'fs21', 217)" onmouseover="showTip(event, 'fs21', 217)" class="i">targetElapsed</span><span class="o">*</span><span class="n">4u</span>) <span class="c">// don&#39;t readjust by too much</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs99', 218)" onmouseover="showTip(event, 'fs99', 218)" class="i">readjustedTarget</span> <span class="o">=</span> (<span onmouseout="hideTip(event, 'fs33', 219)" onmouseover="showTip(event, 'fs33', 219)" class="i">target</span> <span onmouseout="hideTip(event, 'fs29', 220)" onmouseover="showTip(event, 'fs29', 220)" class="i">header</span><span class="o">.</span><span class="i">Bits</span><span class="o">*</span><span onmouseout="hideTip(event, 'fs41', 221)" onmouseover="showTip(event, 'fs41', 221)" class="i">bigint</span> <span onmouseout="hideTip(event, 'fs21', 222)" onmouseover="showTip(event, 'fs21', 222)" class="i">targetElapsed</span>)<span class="o">/</span>(<span onmouseout="hideTip(event, 'fs41', 223)" onmouseover="showTip(event, 'fs41', 223)" class="i">bigint</span> <span onmouseout="hideTip(event, 'fs98', 224)" onmouseover="showTip(event, 'fs98', 224)" class="i">boundedTimeElapsed</span>)
+            <span onmouseout="hideTip(event, 'fs42', 225)" onmouseover="showTip(event, 'fs42', 225)" class="i">bits</span> <span onmouseout="hideTip(event, 'fs99', 226)" onmouseover="showTip(event, 'fs99', 226)" class="i">readjustedTarget</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs29', 227)" onmouseover="showTip(event, 'fs29', 227)" class="i">header</span><span class="o">.</span><span class="i">Bits</span>
+        <span class="k">else</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs100', 228)" onmouseover="showTip(event, 'fs100', 228)" class="i">prevBlock</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs24', 229)" onmouseover="showTip(event, 'fs24', 229)" class="i">chainFromTip</span> <span onmouseout="hideTip(event, 'fs29', 230)" onmouseover="showTip(event, 'fs29', 230)" class="i">header</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 231)" onmouseover="showTip(event, 'fs27', 231)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs82', 232)" onmouseover="showTip(event, 'fs82', 232)" class="i">skip</span> <span class="n">1</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 233)" onmouseover="showTip(event, 'fs27', 233)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs96', 234)" onmouseover="showTip(event, 'fs96', 234)" class="i">head</span>
+            <span onmouseout="hideTip(event, 'fs100', 235)" onmouseover="showTip(event, 'fs100', 235)" class="i">prevBlock</span><span class="o">.</span><span class="i">Bits</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs29', 236)" onmouseover="showTip(event, 'fs29', 236)" class="i">header</span><span class="o">.</span><span class="i">Bits</span>
+    <span onmouseout="hideTip(event, 'fs94', 237)" onmouseover="showTip(event, 'fs94', 237)" class="i">testResult</span> <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">difficulty</span><span class="s"> </span><span class="s">is</span><span class="s"> </span><span class="s">invalid</span><span class="s">&quot;</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Check that the content of the blockheader is valid</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs101', 238)" onmouseover="showTip(event, 'fs101', 238)" class="i">checkBlockHeader</span> (<span onmouseout="hideTip(event, 'fs29', 239)" onmouseover="showTip(event, 'fs29', 239)" class="i">header</span><span class="o">:</span> <span class="i">BlockHeader</span>) <span class="o">=</span> 
+    <span class="i">logger</span><span class="o">.</span><span class="i">InfoF</span> <span class="s">&quot;</span><span class="s">Checking</span><span class="s"> </span><span class="s">block</span><span class="s"> </span><span class="s">header</span><span class="s"> </span><span class="s">#</span><span class="s">%</span><span class="s">d</span><span class="s">&quot;</span> (<span onmouseout="hideTip(event, 'fs29', 240)" onmouseover="showTip(event, 'fs29', 240)" class="i">header</span><span class="o">.</span><span class="i">Height</span>)
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs102', 241)" onmouseover="showTip(event, 'fs102', 241)" class="i">hashInt</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs29', 242)" onmouseover="showTip(event, 'fs29', 242)" class="i">header</span><span class="o">.</span><span class="i">Hash</span> <span class="o">|&gt;</span> <span class="k">fun</span> <span onmouseout="hideTip(event, 'fs103', 243)" onmouseover="showTip(event, 'fs103', 243)" class="i">x</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs41', 244)" onmouseover="showTip(event, 'fs41', 244)" class="i">bigint</span> (<span onmouseout="hideTip(event, 'fs69', 245)" onmouseover="showTip(event, 'fs69', 245)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs104', 246)" onmouseover="showTip(event, 'fs104', 246)" class="i">append</span> <span onmouseout="hideTip(event, 'fs103', 247)" onmouseover="showTip(event, 'fs103', 247)" class="i">x</span> [|<span class="n">0uy</span>|]) <span class="c">// append 0 to make sure the result is &gt; 0</span>
+    <span class="i">maybe</span> {
+        <span class="k">let</span> <span class="i">t</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs33', 248)" onmouseover="showTip(event, 'fs33', 248)" class="i">target</span> <span onmouseout="hideTip(event, 'fs29', 249)" onmouseover="showTip(event, 'fs29', 249)" class="i">header</span><span class="o">.</span><span class="i">Bits</span>
+        <span class="k">do!</span> (<span class="i">t</span> <span class="o">&lt;=</span> <span onmouseout="hideTip(event, 'fs50', 250)" onmouseover="showTip(event, 'fs50', 250)" class="i">maxTarget</span> <span class="o">&amp;&amp;</span> <span class="i">t</span> <span class="o">&gt;</span><span class="o">=</span> <span class="n">0I</span>) <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">target</span><span class="s"> </span><span class="s">is</span><span class="s"> </span><span class="s">out</span><span class="s"> </span><span class="s">of</span><span class="s"> </span><span class="s">range</span><span class="s">&quot;</span>
+        <span class="k">do!</span> <span onmouseout="hideTip(event, 'fs93', 251)" onmouseover="showTip(event, 'fs93', 251)" class="i">checkBits</span> <span onmouseout="hideTip(event, 'fs29', 252)" onmouseover="showTip(event, 'fs29', 252)" class="i">header</span>
+        <span class="k">do!</span> <span onmouseout="hideTip(event, 'fs102', 253)" onmouseover="showTip(event, 'fs102', 253)" class="i">hashInt</span> <span class="o">&lt;</span> (<span onmouseout="hideTip(event, 'fs33', 254)" onmouseover="showTip(event, 'fs33', 254)" class="i">target</span> <span onmouseout="hideTip(event, 'fs29', 255)" onmouseover="showTip(event, 'fs29', 255)" class="i">header</span><span class="o">.</span><span class="i">Bits</span>) <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">hash</span><span class="s"> </span><span class="s">is</span><span class="s"> </span><span class="s">above</span><span class="s"> </span><span class="s">target</span><span class="s"> </span><span class="s">difficulty</span><span class="s">&quot;</span>
+        <span class="k">do!</span> <span onmouseout="hideTip(event, 'fs81', 256)" onmouseover="showTip(event, 'fs81', 256)" class="i">checkTimestamp</span> <span onmouseout="hideTip(event, 'fs29', 257)" onmouseover="showTip(event, 'fs29', 257)" class="i">header</span>
+    }</pre>
+</td>
+</tr>
+</table>
+
+<p>Check that the transaction is final</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs105', 258)" onmouseover="showTip(event, 'fs105', 258)" class="i">checkLocktime</span> (<span onmouseout="hideTip(event, 'fs52', 259)" onmouseover="showTip(event, 'fs52', 259)" class="i">height</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs35', 260)" onmouseover="showTip(event, 'fs35', 260)" class="i">int</span>) (<span onmouseout="hideTip(event, 'fs106', 261)" onmouseover="showTip(event, 'fs106', 261)" class="i">timestamp</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs107', 262)" onmouseover="showTip(event, 'fs107', 262)" class="i">uint32</span>) (<span onmouseout="hideTip(event, 'fs63', 263)" onmouseover="showTip(event, 'fs63', 263)" class="i">tx</span><span class="o">:</span> <span class="i">Tx</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs108', 264)" onmouseover="showTip(event, 'fs108', 264)" class="i">sequenceFinal</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs63', 265)" onmouseover="showTip(event, 'fs63', 265)" class="i">tx</span><span class="o">.</span><span class="i">TxIns</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 266)" onmouseover="showTip(event, 'fs27', 266)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 267)" onmouseover="showTip(event, 'fs59', 267)" class="i">map</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs74', 268)" onmouseover="showTip(event, 'fs74', 268)" class="i">txIn</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs74', 269)" onmouseover="showTip(event, 'fs74', 269)" class="i">txIn</span><span class="o">.</span><span class="i">Sequence</span> <span class="o">=</span> <span class="n">0xFFFFFFFF</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 270)" onmouseover="showTip(event, 'fs27', 270)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs109', 271)" onmouseover="showTip(event, 'fs109', 271)" class="i">exists</span> <span onmouseout="hideTip(event, 'fs110', 272)" onmouseover="showTip(event, 'fs110', 272)" class="i">id</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs111', 273)" onmouseover="showTip(event, 'fs111', 273)" class="i">lockTime</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs63', 274)" onmouseover="showTip(event, 'fs63', 274)" class="i">tx</span><span class="o">.</span><span class="i">LockTime</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs112', 275)" onmouseover="showTip(event, 'fs112', 275)" class="i">r</span> <span class="o">=</span> (<span onmouseout="hideTip(event, 'fs108', 276)" onmouseover="showTip(event, 'fs108', 276)" class="i">sequenceFinal</span> <span class="o">||</span> <span onmouseout="hideTip(event, 'fs111', 277)" onmouseover="showTip(event, 'fs111', 277)" class="i">lockTime</span> <span class="o">=</span> <span class="n">0u</span> <span class="o">||</span> (<span onmouseout="hideTip(event, 'fs111', 278)" onmouseover="showTip(event, 'fs111', 278)" class="i">lockTime</span> <span class="o">&lt;</span> <span class="n">500000000u</span> <span class="o">&amp;&amp;</span> (<span onmouseout="hideTip(event, 'fs107', 279)" onmouseover="showTip(event, 'fs107', 279)" class="i">uint32</span>)<span onmouseout="hideTip(event, 'fs52', 280)" onmouseover="showTip(event, 'fs52', 280)" class="i">height</span> <span class="o">&gt;</span><span class="o">=</span> <span onmouseout="hideTip(event, 'fs111', 281)" onmouseover="showTip(event, 'fs111', 281)" class="i">lockTime</span>) <span class="o">||</span> (<span onmouseout="hideTip(event, 'fs111', 282)" onmouseover="showTip(event, 'fs111', 282)" class="i">lockTime</span> <span class="o">&gt;</span> <span class="n">500000000u</span> <span class="o">&amp;&amp;</span> <span onmouseout="hideTip(event, 'fs106', 283)" onmouseover="showTip(event, 'fs106', 283)" class="i">timestamp</span> <span class="o">&gt;</span><span class="o">=</span> <span onmouseout="hideTip(event, 'fs111', 284)" onmouseover="showTip(event, 'fs111', 284)" class="i">lockTime</span>))
+    <span onmouseout="hideTip(event, 'fs112', 285)" onmouseover="showTip(event, 'fs112', 285)" class="i">r</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Check the transactions from a block. These are expensive but they still aren't the worst because they don't access
+the database or require script evaluation.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs113', 286)" onmouseover="showTip(event, 'fs113', 286)" class="i">checkBlockTxs</span> (<span onmouseout="hideTip(event, 'fs114', 287)" onmouseover="showTip(event, 'fs114', 287)" class="i">utxoAccessor</span><span class="o">:</span> <span class="i">IUTXOAccessor</span>) (<span onmouseout="hideTip(event, 'fs115', 288)" onmouseover="showTip(event, 'fs115', 288)" class="i">block</span><span class="o">:</span> <span class="i">Block</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs116', 289)" onmouseover="showTip(event, 'fs116', 289)" class="i">bh</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs115', 290)" onmouseover="showTip(event, 'fs115', 290)" class="i">block</span><span class="o">.</span><span class="i">Header</span>
+    <span class="i">logger</span><span class="o">.</span><span class="i">InfoF</span> <span class="s">&quot;</span><span class="s">Checking</span><span class="s"> </span><span class="s">block</span><span class="s"> </span><span class="s">tx</span><span class="s"> </span><span class="s">#</span><span class="s">%</span><span class="s">d</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> (<span onmouseout="hideTip(event, 'fs116', 291)" onmouseover="showTip(event, 'fs116', 291)" class="i">bh</span><span class="o">.</span><span class="i">Height</span>) (<span onmouseout="hideTip(event, 'fs116', 292)" onmouseover="showTip(event, 'fs116', 292)" class="i">bh</span>)
+    <span class="i">maybe</span> {
+        <span class="c">// checkdup</span>
+        <span class="k">do!</span> <span onmouseout="hideTip(event, 'fs115', 293)" onmouseover="showTip(event, 'fs115', 293)" class="i">block</span><span class="o">.</span><span class="i">Txs</span><span class="o">.</span><span class="i">Any</span>() <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">Must</span><span class="s"> </span><span class="s">have</span><span class="s"> </span><span class="s">at</span><span class="s"> </span><span class="s">least</span><span class="s"> </span><span class="s">one</span><span class="s"> </span><span class="s">transaction</span><span class="s">&quot;</span>
+        <span class="k">do!</span> <span onmouseout="hideTip(event, 'fs115', 294)" onmouseover="showTip(event, 'fs115', 294)" class="i">block</span><span class="o">.</span><span class="i">Txs</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 295)" onmouseover="showTip(event, 'fs27', 295)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs117', 296)" onmouseover="showTip(event, 'fs117', 296)" class="i">mapi</span> (<span class="k">fun</span> <span class="i">i</span> <span class="i">tx</span> <span class="k">-&gt;</span> <span class="k">if</span> <span class="i">i</span> <span class="o">=</span> <span class="n">0</span> <span class="k">then</span> <span onmouseout="hideTip(event, 'fs62', 297)" onmouseover="showTip(event, 'fs62', 297)" class="i">isCoinBase</span> <span class="i">tx</span> <span class="k">else</span> <span onmouseout="hideTip(event, 'fs118', 298)" onmouseover="showTip(event, 'fs118', 298)" class="i">not</span> (<span onmouseout="hideTip(event, 'fs62', 299)" onmouseover="showTip(event, 'fs62', 299)" class="i">isCoinBase</span> <span class="i">tx</span>)) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 300)" onmouseover="showTip(event, 'fs27', 300)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs119', 301)" onmouseover="showTip(event, 'fs119', 301)" class="i">forall</span> <span onmouseout="hideTip(event, 'fs110', 302)" onmouseover="showTip(event, 'fs110', 302)" class="i">id</span> <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">coinbase</span><span class="s"> </span><span class="s">must</span><span class="s"> </span><span class="s">be</span><span class="s"> </span><span class="s">the</span><span class="s"> </span><span class="s">first</span><span class="s"> </span><span class="s">transaction</span><span class="s">&quot;</span>
+        <span class="k">do!</span> <span onmouseout="hideTip(event, 'fs115', 303)" onmouseover="showTip(event, 'fs115', 303)" class="i">block</span><span class="o">.</span><span class="i">Txs</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 304)" onmouseover="showTip(event, 'fs27', 304)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 305)" onmouseover="showTip(event, 'fs59', 305)" class="i">map</span> (<span class="k">fun</span> <span class="i">tx</span> <span class="k">-&gt;</span> (<span onmouseout="hideTip(event, 'fs114', 306)" onmouseover="showTip(event, 'fs114', 306)" class="i">utxoAccessor</span><span class="o">.</span><span class="i">GetCount</span> <span class="i">tx</span><span class="o">.</span><span class="i">Hash</span>) <span class="o">=</span> <span class="n">0</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 307)" onmouseover="showTip(event, 'fs27', 307)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs119', 308)" onmouseover="showTip(event, 'fs119', 308)" class="i">forall</span> <span onmouseout="hideTip(event, 'fs110', 309)" onmouseover="showTip(event, 'fs110', 309)" class="i">id</span> <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">duplicate</span><span class="s"> </span><span class="s">tx</span><span class="s">&quot;</span>
+        <span class="k">do!</span> <span onmouseout="hideTip(event, 'fs115', 310)" onmouseover="showTip(event, 'fs115', 310)" class="i">block</span><span class="o">.</span><span class="i">Txs</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 311)" onmouseover="showTip(event, 'fs27', 311)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 312)" onmouseover="showTip(event, 'fs59', 312)" class="i">map</span> (<span onmouseout="hideTip(event, 'fs105', 313)" onmouseover="showTip(event, 'fs105', 313)" class="i">checkLocktime</span> <span onmouseout="hideTip(event, 'fs116', 314)" onmouseover="showTip(event, 'fs116', 314)" class="i">bh</span><span class="o">.</span><span class="i">Height</span> <span onmouseout="hideTip(event, 'fs116', 315)" onmouseover="showTip(event, 'fs116', 315)" class="i">bh</span><span class="o">.</span><span class="i">Timestamp</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 316)" onmouseover="showTip(event, 'fs27', 316)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs119', 317)" onmouseover="showTip(event, 'fs119', 317)" class="i">forall</span> <span onmouseout="hideTip(event, 'fs110', 318)" onmouseover="showTip(event, 'fs110', 318)" class="i">id</span> <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">has</span><span class="s"> </span><span class="s">non</span><span class="s"> </span><span class="s">final</span><span class="s"> </span><span class="s">tx</span><span class="s">&quot;</span>
+        <span class="k">let</span> <span class="i">coinBaseScriptlen</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs115', 319)" onmouseover="showTip(event, 'fs115', 319)" class="i">block</span><span class="o">.</span><span class="i">Txs</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">TxIns</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">Script</span><span class="o">.</span><span class="i">Length</span>
+        <span class="k">do!</span> (<span class="i">coinBaseScriptlen</span> <span class="o">&gt;</span><span class="o">=</span> <span class="n">2</span> <span class="o">&amp;&amp;</span> <span class="i">coinBaseScriptlen</span> <span class="o">&lt;=</span> <span class="n">100</span>) <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">coinbase</span><span class="s"> </span><span class="s">script</span><span class="s"> </span><span class="s">must</span><span class="s"> </span><span class="s">be</span><span class="s"> </span><span class="s">between</span><span class="s"> </span><span class="s">2</span><span class="s"> </span><span class="s">and</span><span class="s"> </span><span class="s">100</span><span class="s"> </span><span class="s">bytes</span><span class="s">&quot;</span>
+
+        <span class="k">let</span> <span class="i">scriptRuntime</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Script</span><span class="o">.</span><span class="i">ScriptRuntime</span>(<span class="k">fun</span> <span class="i">a</span> _ <span class="k">-&gt;</span> <span class="i">a</span>)
+        <span class="k">let</span> <span class="i">checkSigOpsCount</span> <span class="o">=</span> 
+            <span onmouseout="hideTip(event, 'fs115', 320)" onmouseover="showTip(event, 'fs115', 320)" class="i">block</span><span class="o">.</span><span class="i">Txs</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 321)" onmouseover="showTip(event, 'fs27', 321)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs117', 322)" onmouseover="showTip(event, 'fs117', 322)" class="i">mapi</span> (<span class="k">fun</span> <span class="i">i</span> <span class="i">tx</span> <span class="k">-&gt;</span>
+                <span class="k">let</span> <span class="i">inputScripts</span> <span class="o">=</span> 
+                    <span class="k">if</span> <span class="i">i</span> <span class="o">&lt;&gt;</span> <span class="n">0</span> 
+                    <span class="k">then</span> 
+                        <span class="i">tx</span><span class="o">.</span><span class="i">TxIns</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 323)" onmouseover="showTip(event, 'fs27', 323)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 324)" onmouseover="showTip(event, 'fs59', 324)" class="i">map</span> (<span class="k">fun</span> <span class="i">txIn</span> <span class="k">-&gt;</span>
+                            <span class="k">let</span> <span class="i">utxo</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs114', 325)" onmouseover="showTip(event, 'fs114', 325)" class="i">utxoAccessor</span><span class="o">.</span><span class="i">GetUTXO</span> <span class="i">txIn</span><span class="o">.</span><span class="i">PrevOutPoint</span>
+                            <span class="i">utxo</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs15', 326)" onmouseover="showTip(event, 'fs15', 326)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs120', 327)" onmouseover="showTip(event, 'fs120', 327)" class="i">bind</span>(<span class="k">fun</span> <span class="i">utxo</span> <span class="k">-&gt;</span>
+                                <span class="k">let</span> <span class="i">pubScript</span> <span class="o">=</span> <span class="i">utxo</span><span class="o">.</span><span class="i">TxOut</span><span class="o">.</span><span class="i">Script</span>
+                                <span class="k">if</span> <span class="i">Script</span><span class="o">.</span><span class="i">isP2SH</span> <span class="i">pubScript</span> <span class="c">// For P2SH, also count the signature checks from the redeem script</span>
+                                <span class="k">then</span> <span onmouseout="hideTip(event, 'fs32', 328)" onmouseover="showTip(event, 'fs32', 328)" class="i">Some</span>(<span class="i">scriptRuntime</span><span class="o">.</span><span class="i">RedeemScript</span> <span class="i">txIn</span><span class="o">.</span><span class="i">Script</span>)
+                                <span class="k">else</span> <span onmouseout="hideTip(event, 'fs30', 329)" onmouseover="showTip(event, 'fs30', 329)" class="i">None</span>
+                                ) <span class="o">|?|</span> <span class="i">txIn</span><span class="o">.</span><span class="i">Script</span>
+                            ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 330)" onmouseover="showTip(event, 'fs27', 330)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs46', 331)" onmouseover="showTip(event, 'fs46', 331)" class="i">toArray</span>
+                    <span class="k">else</span> <span onmouseout="hideTip(event, 'fs69', 332)" onmouseover="showTip(event, 'fs69', 332)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs121', 333)" onmouseover="showTip(event, 'fs121', 333)" class="i">empty</span>
+                <span class="k">let</span> <span class="i">outputScripts</span> <span class="o">=</span> <span class="i">tx</span><span class="o">.</span><span class="i">TxOuts</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs69', 334)" onmouseover="showTip(event, 'fs69', 334)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs122', 335)" onmouseover="showTip(event, 'fs122', 335)" class="i">map</span> (<span class="k">fun</span> <span class="i">x</span> <span class="k">-&gt;</span> <span class="i">x</span><span class="o">.</span><span class="i">Script</span>)
+                [<span class="i">inputScripts</span>; <span class="i">outputScripts</span>] 
+                    <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs69', 336)" onmouseover="showTip(event, 'fs69', 336)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs70', 337)" onmouseover="showTip(event, 'fs70', 337)" class="i">concat</span>
+                    <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 338)" onmouseover="showTip(event, 'fs27', 338)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 339)" onmouseover="showTip(event, 'fs59', 339)" class="i">map</span> (<span class="k">fun</span> <span class="i">script</span> <span class="k">-&gt;</span> <span class="i">scriptRuntime</span><span class="o">.</span><span class="i">CheckSigCount</span> <span class="i">script</span>)
+                    <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 340)" onmouseover="showTip(event, 'fs27', 340)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs61', 341)" onmouseover="showTip(event, 'fs61', 341)" class="i">sum</span>
+            ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 342)" onmouseover="showTip(event, 'fs27', 342)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs61', 343)" onmouseover="showTip(event, 'fs61', 343)" class="i">sum</span>
+        <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">CheckSig</span><span class="s"> </span><span class="s">count</span><span class="s"> </span><span class="s">%</span><span class="s">d</span><span class="s">&quot;</span> <span class="i">checkSigOpsCount</span>
+        <span class="k">do!</span> <span class="i">checkSigOpsCount</span> <span class="o">&lt;=</span> <span onmouseout="hideTip(event, 'fs22', 344)" onmouseover="showTip(event, 'fs22', 344)" class="i">maxCheckSigOpsCount</span> <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> (<span onmouseout="hideTip(event, 'fs123', 345)" onmouseover="showTip(event, 'fs123', 345)" class="i">sprintf</span> <span class="s">&quot;</span><span class="s">checkSig</span><span class="s"> </span><span class="s">ops</span><span class="s"> </span><span class="s">cannot</span><span class="s"> </span><span class="s">occur</span><span class="s"> </span><span class="s">more</span><span class="s"> </span><span class="s">than</span><span class="s"> </span><span class="s">%</span><span class="s">d</span><span class="s"> </span><span class="s">times</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs22', 346)" onmouseover="showTip(event, 'fs22', 346)" class="i">maxCheckSigOpsCount</span>)
+        <span class="k">let</span> <span class="i">merkleRoot</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs115', 347)" onmouseover="showTip(event, 'fs115', 347)" class="i">block</span><span class="o">.</span><span class="i">Txs</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs69', 348)" onmouseover="showTip(event, 'fs69', 348)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs122', 349)" onmouseover="showTip(event, 'fs122', 349)" class="i">map</span> (<span class="k">fun</span> <span class="i">tx</span> <span class="k">-&gt;</span> <span class="i">tx</span><span class="o">.</span><span class="i">Hash</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs64', 350)" onmouseover="showTip(event, 'fs64', 350)" class="i">computeMerkleRoot</span>
+        <span class="k">do!</span> <span onmouseout="hideTip(event, 'fs115', 351)" onmouseover="showTip(event, 'fs115', 351)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">MerkleRoot</span> <span class="o">=</span> <span class="i">merkleRoot</span> <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">merkle</span><span class="s"> </span><span class="s">root</span><span class="s"> </span><span class="s">does</span><span class="s"> </span><span class="s">not</span><span class="s"> </span><span class="s">match</span><span class="s"> </span><span class="s">with</span><span class="s"> </span><span class="s">header</span><span class="s">&quot;</span>
+    }</pre>
+</td>
+</tr>
+</table>
+
+<p>Check the tx and update the UTXO set. These are the worst and also the very last checks.</p>
+
+<p>I must use a temporary UTXO accessor for this because if any transaction of the block fails then the entire 
+block is rejected and all the modification of the UTXO set must be rolled back.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs124', 352)" onmouseover="showTip(event, 'fs124', 352)" class="i">updateBlockUTXO</span> (<span onmouseout="hideTip(event, 'fs114', 353)" onmouseover="showTip(event, 'fs114', 353)" class="i">utxoAccessor</span><span class="o">:</span> <span class="i">IUTXOAccessor</span>) (<span onmouseout="hideTip(event, 'fs115', 354)" onmouseover="showTip(event, 'fs115', 354)" class="i">block</span><span class="o">:</span> <span class="i">Block</span>) <span class="o">=</span>
+    <span class="i">logger</span><span class="o">.</span><span class="i">InfoF</span> <span class="s">&quot;</span><span class="s">Processing</span><span class="s"> </span><span class="s">block</span><span class="s"> </span><span class="s">#</span><span class="s">%</span><span class="s">d</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs115', 355)" onmouseover="showTip(event, 'fs115', 355)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Height</span>
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs125', 356)" onmouseover="showTip(event, 'fs125', 356)" class="i">undoWriter</span> <span class="o">=</span> <span class="i">storeUndoBlock</span> <span onmouseout="hideTip(event, 'fs115', 357)" onmouseover="showTip(event, 'fs115', 357)" class="i">block</span>
+
+    <span class="i">maybe</span> {
+        <span class="k">let</span> <span class="i">processUTXO</span> <span class="o">=</span> <span class="i">processUTXO</span> <span onmouseout="hideTip(event, 'fs114', 358)" onmouseover="showTip(event, 'fs114', 358)" class="i">utxoAccessor</span> <span onmouseout="hideTip(event, 'fs125', 359)" onmouseover="showTip(event, 'fs125', 359)" class="i">undoWriter</span>
+        <span class="k">let!</span> <span class="i">fees</span> <span class="o">=</span> 
+            <span onmouseout="hideTip(event, 'fs115', 360)" onmouseover="showTip(event, 'fs115', 360)" class="i">block</span><span class="o">.</span><span class="i">Txs</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs69', 361)" onmouseover="showTip(event, 'fs69', 361)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs126', 362)" onmouseover="showTip(event, 'fs126', 362)" class="i">mapi</span> (<span class="k">fun</span> <span class="i">i</span> <span class="i">tx</span> <span class="k">-&gt;</span>
+                <span class="k">if</span> <span class="i">i</span> <span class="o">&lt;&gt;</span> <span class="n">0</span> 
+                    <span class="k">then</span> <span class="i">checkScript</span> <span onmouseout="hideTip(event, 'fs114', 363)" onmouseover="showTip(event, 'fs114', 363)" class="i">utxoAccessor</span> <span class="i">tx</span>
+                    <span class="k">else</span> <span onmouseout="hideTip(event, 'fs32', 364)" onmouseover="showTip(event, 'fs32', 364)" class="i">Some</span>()
+                <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs15', 365)" onmouseover="showTip(event, 'fs15', 365)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs120', 366)" onmouseover="showTip(event, 'fs120', 366)" class="i">bind</span>(<span class="k">fun</span> _ <span class="k">-&gt;</span> <span class="i">processUTXO</span> (<span class="i">i</span><span class="o">=</span><span class="n">0</span>) <span onmouseout="hideTip(event, 'fs115', 367)" onmouseover="showTip(event, 'fs115', 367)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Height</span> <span class="i">tx</span>)
+            ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs27', 368)" onmouseover="showTip(event, 'fs27', 368)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs78', 369)" onmouseover="showTip(event, 'fs78', 369)" class="i">toList</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs15', 370)" onmouseover="showTip(event, 'fs15', 370)" class="i">Option</span><span class="o">.</span><span class="i">sequence</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs15', 371)" onmouseover="showTip(event, 'fs15', 371)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs76', 372)" onmouseover="showTip(event, 'fs76', 372)" class="i">map</span> <span onmouseout="hideTip(event, 'fs27', 373)" onmouseover="showTip(event, 'fs27', 373)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs61', 374)" onmouseover="showTip(event, 'fs61', 374)" class="i">sum</span>
+        <span class="k">let</span> <span class="i">coinbase</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs79', 375)" onmouseover="showTip(event, 'fs79', 375)" class="i">totalOut</span> <span onmouseout="hideTip(event, 'fs115', 376)" onmouseover="showTip(event, 'fs115', 376)" class="i">block</span><span class="o">.</span><span class="i">Txs</span><span class="o">.</span>[<span class="n">0</span>]
+        <span class="k">let</span> <span class="i">totalReward</span> <span class="o">=</span> <span class="i">fees</span> <span class="o">+</span> <span onmouseout="hideTip(event, 'fs51', 377)" onmouseover="showTip(event, 'fs51', 377)" class="i">reward</span> <span onmouseout="hideTip(event, 'fs115', 378)" onmouseover="showTip(event, 'fs115', 378)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Height</span>
+        <span class="k">do!</span> <span class="i">coinbase</span> <span class="o">&lt;=</span> <span class="i">totalReward</span> <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">coinbase</span><span class="s"> </span><span class="s">payout</span><span class="s"> </span><span class="s">exceeds</span><span class="s"> </span><span class="s">fees</span><span class="s"> </span><span class="s">+</span><span class="s"> </span><span class="s">reward</span><span class="s">&quot;</span>
+        }</pre>
+</td>
+</tr>
+</table>
+
+          <div class="tip" id="fs1">module Checks</div>
+<div class="tip" id="fs2">namespace System</div>
+<div class="tip" id="fs3">namespace System.Collections</div>
+<div class="tip" id="fs4">namespace System.Collections.Generic</div>
+<div class="tip" id="fs5">namespace System.Linq</div>
+<div class="tip" id="fs6">namespace System.IO</div>
+<div class="tip" id="fs7">namespace System.Text</div>
+<div class="tip" id="fs8">Multiple items<br />namespace System.Linq<br /><br />--------------------<br />namespace Microsoft.FSharp.Linq</div>
+<div class="tip" id="fs9">namespace System.Threading</div>
+<div class="tip" id="fs10">namespace System.Threading.Tasks</div>
+<div class="tip" id="fs11">namespace Microsoft.FSharp.Control</div>
+<div class="tip" id="fs12">module Observable<br /><br />from Microsoft.FSharp.Control</div>
+<div class="tip" id="fs13">Multiple items<br />namespace System.Collections<br /><br />--------------------<br />namespace Microsoft.FSharp.Collections</div>
+<div class="tip" id="fs14">Multiple items<br />type Choice&lt;&#39;T1,&#39;T2&gt; =<br />&#160;&#160;| Choice1Of2 of &#39;T1<br />&#160;&#160;| Choice2Of2 of &#39;T2<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3&gt; =<br />&#160;&#160;| Choice1Of3 of &#39;T1<br />&#160;&#160;| Choice2Of3 of &#39;T2<br />&#160;&#160;| Choice3Of3 of &#39;T3<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4&gt; =<br />&#160;&#160;| Choice1Of4 of &#39;T1<br />&#160;&#160;| Choice2Of4 of &#39;T2<br />&#160;&#160;| Choice3Of4 of &#39;T3<br />&#160;&#160;| Choice4Of4 of &#39;T4<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5&gt; =<br />&#160;&#160;| Choice1Of5 of &#39;T1<br />&#160;&#160;| Choice2Of5 of &#39;T2<br />&#160;&#160;| Choice3Of5 of &#39;T3<br />&#160;&#160;| Choice4Of5 of &#39;T4<br />&#160;&#160;| Choice5Of5 of &#39;T5<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6&gt; =<br />&#160;&#160;| Choice1Of6 of &#39;T1<br />&#160;&#160;| Choice2Of6 of &#39;T2<br />&#160;&#160;| Choice3Of6 of &#39;T3<br />&#160;&#160;| Choice4Of6 of &#39;T4<br />&#160;&#160;| Choice5Of6 of &#39;T5<br />&#160;&#160;| Choice6Of6 of &#39;T6<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7&gt; =<br />&#160;&#160;| Choice1Of7 of &#39;T1<br />&#160;&#160;| Choice2Of7 of &#39;T2<br />&#160;&#160;| Choice3Of7 of &#39;T3<br />&#160;&#160;| Choice4Of7 of &#39;T4<br />&#160;&#160;| Choice5Of7 of &#39;T5<br />&#160;&#160;| Choice6Of7 of &#39;T6<br />&#160;&#160;| Choice7Of7 of &#39;T7<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_,_,_,_&gt;</div>
+<div class="tip" id="fs15">module Option<br /><br />from Microsoft.FSharp.Core</div>
+<div class="tip" id="fs16">type BlockHeaderList = obj<br /><br />Full name: Checks.BlockHeaderList</div>
+<div class="tip" id="fs17">type &#39;T list = List&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.list&lt;_&gt;</div>
+<div class="tip" id="fs18">type BlockChainFragment = obj<br /><br />Full name: Checks.BlockChainFragment</div>
+<div class="tip" id="fs19">val minTimestampBlocks : int<br /><br />Full name: Checks.minTimestampBlocks</div>
+<div class="tip" id="fs20">val difficultyReadjustmentInterval : int<br /><br />Full name: Checks.difficultyReadjustmentInterval</div>
+<div class="tip" id="fs21">val targetElapsed : uint32<br /><br />Full name: Checks.targetElapsed</div>
+<div class="tip" id="fs22">val maxCheckSigOpsCount : int<br /><br />Full name: Checks.maxCheckSigOpsCount</div>
+<div class="tip" id="fs23">val genesisHash : obj<br /><br />Full name: Checks.genesisHash</div>
+<div class="tip" id="fs24">val chainFromTip : tip:&#39;a -&gt; seq&lt;&#39;a&gt;<br /><br />Full name: Checks.chainFromTip</div>
+<div class="tip" id="fs25">val tip : &#39;a</div>
+<div class="tip" id="fs26">Multiple items<br />val seq : sequence:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Core.Operators.seq<br /><br />--------------------<br />type seq&lt;&#39;T&gt; = IEnumerable&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.seq&lt;_&gt;</div>
+<div class="tip" id="fs27">module Seq<br /><br />from Microsoft.FSharp.Collections</div>
+<div class="tip" id="fs28">val unfold : generator:(&#39;State -&gt; (&#39;T * &#39;State) option) -&gt; state:&#39;State -&gt; seq&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.unfold</div>
+<div class="tip" id="fs29">val header : &#39;a</div>
+<div class="tip" id="fs30">union case Option.None: Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs31">val prevHeader : &#39;a</div>
+<div class="tip" id="fs32">union case Option.Some: Value: &#39;T -&gt; Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs33">val target : bits:int -&gt; Numerics.BigInteger<br /><br />Full name: Checks.target</div>
+<div class="tip" id="fs34">val bits : int</div>
+<div class="tip" id="fs35">Multiple items<br />val int : value:&#39;T -&gt; int (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.int<br /><br />--------------------<br />type int = int32<br /><br />Full name: Microsoft.FSharp.Core.int<br /><br />--------------------<br />type int&lt;&#39;Measure&gt; = int<br /><br />Full name: Microsoft.FSharp.Core.int&lt;_&gt;</div>
+<div class="tip" id="fs36">val b : byte []</div>
+<div class="tip" id="fs37">type BitConverter =<br />&#160;&#160;static val IsLittleEndian : bool<br />&#160;&#160;static member DoubleToInt64Bits : value:float -&gt; int64<br />&#160;&#160;static member GetBytes : value:bool -&gt; byte[] + 9 overloads<br />&#160;&#160;static member Int64BitsToDouble : value:int64 -&gt; float<br />&#160;&#160;static member ToBoolean : value:byte[] * startIndex:int -&gt; bool<br />&#160;&#160;static member ToChar : value:byte[] * startIndex:int -&gt; char<br />&#160;&#160;static member ToDouble : value:byte[] * startIndex:int -&gt; float<br />&#160;&#160;static member ToInt16 : value:byte[] * startIndex:int -&gt; int16<br />&#160;&#160;static member ToInt32 : value:byte[] * startIndex:int -&gt; int<br />&#160;&#160;static member ToInt64 : value:byte[] * startIndex:int -&gt; int64<br />&#160;&#160;...<br /><br />Full name: System.BitConverter</div>
+<div class="tip" id="fs38">BitConverter.GetBytes(value: float) : byte []<br />BitConverter.GetBytes(value: float32) : byte []<br />BitConverter.GetBytes(value: uint64) : byte []<br />BitConverter.GetBytes(value: uint32) : byte []<br />BitConverter.GetBytes(value: uint16) : byte []<br />BitConverter.GetBytes(value: int64) : byte []<br />BitConverter.GetBytes(value: int) : byte []<br />BitConverter.GetBytes(value: int16) : byte []<br />BitConverter.GetBytes(value: char) : byte []<br />BitConverter.GetBytes(value: bool) : byte []</div>
+<div class="tip" id="fs39">val exp : int</div>
+<div class="tip" id="fs40">val mantissa : byte []</div>
+<div class="tip" id="fs41">type bigint = Numerics.BigInteger<br /><br />Full name: Microsoft.FSharp.Core.bigint</div>
+<div class="tip" id="fs42">val bits : target:bigint -&gt; int<br /><br />Full name: Checks.bits</div>
+<div class="tip" id="fs43">val target : bigint</div>
+<div class="tip" id="fs44">val targetBytes : byte []</div>
+<div class="tip" id="fs45">Numerics.BigInteger.ToByteArray() : byte []</div>
+<div class="tip" id="fs46">val toArray : source:seq&lt;&#39;T&gt; -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Seq.toArray</div>
+<div class="tip" id="fs47">property Array.Length: int</div>
+<div class="tip" id="fs48">val p1 : int</div>
+<div class="tip" id="fs49">BitConverter.ToInt32(value: byte [], startIndex: int) : int</div>
+<div class="tip" id="fs50">val maxTarget : Numerics.BigInteger<br /><br />Full name: Checks.maxTarget</div>
+<div class="tip" id="fs51">val reward : height:int -&gt; int64<br /><br />Full name: Checks.reward</div>
+<div class="tip" id="fs52">val height : int</div>
+<div class="tip" id="fs53">val range : int</div>
+<div class="tip" id="fs54">val era : int</div>
+<div class="tip" id="fs55">val min : e1:&#39;T -&gt; e2:&#39;T -&gt; &#39;T (requires comparison)<br /><br />Full name: Microsoft.FSharp.Core.Operators.min</div>
+<div class="tip" id="fs56">val maxHash : Numerics.BigInteger<br /><br />Full name: Checks.maxHash</div>
+<div class="tip" id="fs57">val getWork : fork:seq&lt;&#39;a&gt; -&gt; Numerics.BigInteger<br /><br />Full name: Checks.getWork</div>
+<div class="tip" id="fs58">val fork : seq&lt;&#39;a&gt;</div>
+<div class="tip" id="fs59">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;U&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.map</div>
+<div class="tip" id="fs60">val bh : &#39;a</div>
+<div class="tip" id="fs61">val sum : source:seq&lt;&#39;T&gt; -&gt; &#39;T (requires member ( + ) and member get_Zero)<br /><br />Full name: Microsoft.FSharp.Collections.Seq.sum</div>
+<div class="tip" id="fs62">val isCoinBase : tx:&#39;a -&gt; bool<br /><br />Full name: Checks.isCoinBase</div>
+<div class="tip" id="fs63">val tx : &#39;a</div>
+<div class="tip" id="fs64">val computeMerkleRoot : hashes:byte [] [] -&gt; byte []<br /><br />Full name: Checks.computeMerkleRoot</div>
+<div class="tip" id="fs65">val hashes : byte [] []</div>
+<div class="tip" id="fs66">Multiple items<br />val byte : value:&#39;T -&gt; byte (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.byte<br /><br />--------------------<br />type byte = Byte<br /><br />Full name: Microsoft.FSharp.Core.byte</div>
+<div class="tip" id="fs67">val hs : byte [] []</div>
+<div class="tip" id="fs68">(extension) IEnumerable.Last&lt;&#39;TSource&gt;() : &#39;TSource<br />(extension) IEnumerable.Last&lt;&#39;TSource&gt;(predicate: Func&lt;&#39;TSource,bool&gt;) : &#39;TSource</div>
+<div class="tip" id="fs69">type Array =<br />&#160;&#160;member Clone : unit -&gt; obj<br />&#160;&#160;member CopyTo : array:Array * index:int -&gt; unit + 1 overload<br />&#160;&#160;member GetEnumerator : unit -&gt; IEnumerator<br />&#160;&#160;member GetLength : dimension:int -&gt; int<br />&#160;&#160;member GetLongLength : dimension:int -&gt; int64<br />&#160;&#160;member GetLowerBound : dimension:int -&gt; int<br />&#160;&#160;member GetUpperBound : dimension:int -&gt; int<br />&#160;&#160;member GetValue : params indices:int[] -&gt; obj + 7 overloads<br />&#160;&#160;member Initialize : unit -&gt; unit<br />&#160;&#160;member IsFixedSize : bool<br />&#160;&#160;...<br /><br />Full name: System.Array</div>
+<div class="tip" id="fs70">val concat : arrays:seq&lt;&#39;T []&gt; -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Array.concat</div>
+<div class="tip" id="fs71">val x : seq&lt;obj []&gt;</div>
+<div class="tip" id="fs72">val h : obj []</div>
+<div class="tip" id="fs73">val totalIn : tx:&#39;a -&gt; obj option<br /><br />Full name: Checks.totalIn</div>
+<div class="tip" id="fs74">val txIn : obj</div>
+<div class="tip" id="fs75">val utxo : obj option</div>
+<div class="tip" id="fs76">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; option:&#39;T option -&gt; &#39;U option<br /><br />Full name: Microsoft.FSharp.Core.Option.map</div>
+<div class="tip" id="fs77">val utxo : obj</div>
+<div class="tip" id="fs78">val toList : source:seq&lt;&#39;T&gt; -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.Seq.toList</div>
+<div class="tip" id="fs79">val totalOut : tx:&#39;a -&gt; obj<br /><br />Full name: Checks.totalOut</div>
+<div class="tip" id="fs80">val txOut : obj</div>
+<div class="tip" id="fs81">val checkTimestamp : header:&#39;a -&gt; &#39;b<br /><br />Full name: Checks.checkTimestamp</div>
+<div class="tip" id="fs82">val skip : count:int -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.skip</div>
+<div class="tip" id="fs83">val truncate : count:int -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.truncate</div>
+<div class="tip" id="fs84">val sortBy : projection:(&#39;T -&gt; &#39;Key) -&gt; array:&#39;T [] -&gt; &#39;T [] (requires comparison)<br /><br />Full name: Microsoft.FSharp.Collections.Array.sortBy</div>
+<div class="tip" id="fs85">Multiple items<br />type DateTime =<br />&#160;&#160;struct<br />&#160;&#160;&#160;&#160;new : ticks:int64 -&gt; DateTime + 10 overloads<br />&#160;&#160;&#160;&#160;member Add : value:TimeSpan -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddDays : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddHours : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddMilliseconds : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddMinutes : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddMonths : months:int -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddSeconds : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddTicks : value:int64 -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddYears : value:int -&gt; DateTime<br />&#160;&#160;&#160;&#160;...<br />&#160;&#160;end<br /><br />Full name: System.DateTime<br /><br />--------------------<br />DateTime()<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(ticks: int64) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(ticks: int64, kind: DateTimeKind) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, calendar: Globalization.Calendar) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int, kind: DateTimeKind) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int, calendar: Globalization.Calendar) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, kind: DateTimeKind) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em></div>
+<div class="tip" id="fs86">property DateTime.UtcNow: DateTime</div>
+<div class="tip" id="fs87">DateTime.AddHours(value: float) : DateTime</div>
+<div class="tip" id="fs88">Multiple items<br />val int64 : value:&#39;T -&gt; int64 (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.int64<br /><br />--------------------<br />type int64 = Int64<br /><br />Full name: Microsoft.FSharp.Core.int64<br /><br />--------------------<br />type int64&lt;&#39;Measure&gt; = int64<br /><br />Full name: Microsoft.FSharp.Core.int64&lt;_&gt;</div>
+<div class="tip" id="fs89">val between : x:&#39;a -&gt; min:&#39;a -&gt; max:&#39;a -&gt; &#39;a (requires comparison)<br /><br />Full name: Checks.between</div>
+<div class="tip" id="fs90">val x : &#39;a (requires comparison)</div>
+<div class="tip" id="fs91">val min : &#39;a (requires comparison)</div>
+<div class="tip" id="fs92">val max : &#39;a (requires comparison)</div>
+<div class="tip" id="fs93">val checkBits : header:&#39;a -&gt; &#39;b<br /><br />Full name: Checks.checkBits</div>
+<div class="tip" id="fs94">val testResult : bool</div>
+<div class="tip" id="fs95">val blockIntervalAgo : &#39;a</div>
+<div class="tip" id="fs96">val head : source:seq&lt;&#39;T&gt; -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Collections.Seq.head</div>
+<div class="tip" id="fs97">val timeElapsed : uint32</div>
+<div class="tip" id="fs98">val boundedTimeElapsed : uint32</div>
+<div class="tip" id="fs99">val readjustedTarget : Numerics.BigInteger</div>
+<div class="tip" id="fs100">val prevBlock : &#39;a</div>
+<div class="tip" id="fs101">val checkBlockHeader : header:&#39;a -&gt; &#39;b<br /><br />Full name: Checks.checkBlockHeader</div>
+<div class="tip" id="fs102">val hashInt : Numerics.BigInteger</div>
+<div class="tip" id="fs103">val x : byte []</div>
+<div class="tip" id="fs104">val append : array1:&#39;T [] -&gt; array2:&#39;T [] -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Array.append</div>
+<div class="tip" id="fs105">val checkLocktime : height:int -&gt; timestamp:uint32 -&gt; tx:&#39;a -&gt; bool<br /><br />Full name: Checks.checkLocktime</div>
+<div class="tip" id="fs106">val timestamp : uint32</div>
+<div class="tip" id="fs107">Multiple items<br />val uint32 : value:&#39;T -&gt; uint32 (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.uint32<br /><br />--------------------<br />type uint32 = UInt32<br /><br />Full name: Microsoft.FSharp.Core.uint32</div>
+<div class="tip" id="fs108">val sequenceFinal : bool</div>
+<div class="tip" id="fs109">val exists : predicate:(&#39;T -&gt; bool) -&gt; source:seq&lt;&#39;T&gt; -&gt; bool<br /><br />Full name: Microsoft.FSharp.Collections.Seq.exists</div>
+<div class="tip" id="fs110">val id : x:&#39;T -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.Operators.id</div>
+<div class="tip" id="fs111">val lockTime : uint32</div>
+<div class="tip" id="fs112">val r : bool</div>
+<div class="tip" id="fs113">val checkBlockTxs : utxoAccessor:&#39;a -&gt; block:&#39;b -&gt; &#39;c<br /><br />Full name: Checks.checkBlockTxs</div>
+<div class="tip" id="fs114">val utxoAccessor : &#39;a</div>
+<div class="tip" id="fs115">val block : &#39;b</div>
+<div class="tip" id="fs116">val bh : obj</div>
+<div class="tip" id="fs117">val mapi : mapping:(int -&gt; &#39;T -&gt; &#39;U) -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;U&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.mapi</div>
+<div class="tip" id="fs118">val not : value:bool -&gt; bool<br /><br />Full name: Microsoft.FSharp.Core.Operators.not</div>
+<div class="tip" id="fs119">val forall : predicate:(&#39;T -&gt; bool) -&gt; source:seq&lt;&#39;T&gt; -&gt; bool<br /><br />Full name: Microsoft.FSharp.Collections.Seq.forall</div>
+<div class="tip" id="fs120">val bind : binder:(&#39;T -&gt; &#39;U option) -&gt; option:&#39;T option -&gt; &#39;U option<br /><br />Full name: Microsoft.FSharp.Core.Option.bind</div>
+<div class="tip" id="fs121">val empty&lt;&#39;T&gt; : &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Array.empty</div>
+<div class="tip" id="fs122">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; array:&#39;T [] -&gt; &#39;U []<br /><br />Full name: Microsoft.FSharp.Collections.Array.map</div>
+<div class="tip" id="fs123">val sprintf : format:Printf.StringFormat&lt;&#39;T&gt; -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.ExtraTopLevelOperators.sprintf</div>
+<div class="tip" id="fs124">val updateBlockUTXO : utxoAccessor:&#39;a -&gt; block:&#39;b -&gt; &#39;c<br /><br />Full name: Checks.updateBlockUTXO</div>
+<div class="tip" id="fs125">val undoWriter : IDisposable</div>
+<div class="tip" id="fs126">val mapi : mapping:(int -&gt; &#39;T -&gt; &#39;U) -&gt; array:&#39;T [] -&gt; &#39;U []<br /><br />Full name: Microsoft.FSharp.Collections.Array.mapi</div>
+          
+        </div>
+        <div class="span1"></div>
+      </div>
+    </div>
+  </body>
+</html>

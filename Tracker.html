@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <!-- 
+      The The Tracker
+ parameters will be replaced with the 
+      document title extracted from the <h1> element or
+      file name, if there is no <h1> heading
+    -->
+    <title>The Tracker
+</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="http://code.jquery.com/jquery-1.8.0.js"></script>
+    <script src="http://code.jquery.com/ui/1.8.23/jquery-ui.js"></script>
+    <script src="http://netdna.bootstrapcdn.com/twitter-bootstrap/3.3.2/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link href="http://getbootstrap.com/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="content/style.css" />
+    <script src="content/tips.js" type="text/javascript"></script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="index.html">Bitcoin F#</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li><a href="index.html">Intro</a></li>
+            <li><a href="Protocol.html">Protocol</a></li>
+            <li><a href="DB.html">Persistence</a></li>
+            <li><a href="P2P.html">Peer to Peer</a></li>
+            <li><a href="Peer.html">Peer</a></li>
+            <li><a href="Tracker.html">Tracker</a></li>
+            <li><a href="Script.html">Script Interpreter</a></li>
+            <li><a href="Mempool.html">Mempool</a></li>
+            <li><a href="Checks.html">Validation</a></li>
+            <li><a href="Blockchain.html">Blockchain</a></li>
+            <li><a href="Main.html">Main</a></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </nav>
+    <div class="container">
+      <div class="row" style="margin-top:70px">
+        <div class="span1"></div>
+        <div class="span10" id="main">
+          <h1>The Tracker</h1>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">module</span> <span onmouseout="hideTip(event, 'fs1', 1)" onmouseover="showTip(event, 'fs1', 1)" class="i">Tracker</span></pre>
+</td>
+</tr>
+</table>
+
+<h2>State</h2>
+
+<p>Tom the Tracker keeps a dictionary of Peers as his active workers. Every worker is identified by a
+unique id that he assigns himself. A peer is never reused. Even if he is reconnecting to the same
+remote node, a new peer will be used.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs13', 26)" onmouseover="showTip(event, 'fs13', 26)" class="i">PeerSlot</span> <span class="o">=</span> {
+    <span onmouseout="hideTip(event, 'fs14', 27)" onmouseover="showTip(event, 'fs14', 27)" class="i">Id</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs15', 28)" onmouseover="showTip(event, 'fs15', 28)" class="i">int</span>
+    <span onmouseout="hideTip(event, 'fs16', 29)" onmouseover="showTip(event, 'fs16', 29)" class="i">Peer</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs16', 30)" onmouseover="showTip(event, 'fs16', 30)" class="i">Peer</span>
+    <span class="k">mutable</span> <span onmouseout="hideTip(event, 'fs17', 31)" onmouseover="showTip(event, 'fs17', 31)" class="i">State</span><span class="o">:</span> <span class="i">TrackerPeerState</span>
+    }
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs18', 32)" onmouseover="showTip(event, 'fs18', 32)" class="i">maxSlots</span> <span class="o">=</span> <span class="i">settings</span><span class="o">.</span><span class="i">MaxPeers</span>
+
+<span class="k">let</span> <span class="k">mutable</span> <span onmouseout="hideTip(event, 'fs19', 33)" onmouseover="showTip(event, 'fs19', 33)" class="i">connectionCount</span> <span class="o">=</span> <span class="n">0</span> <span class="c">// how many peers are in the connected state</span>
+<span class="k">let</span> <span class="k">mutable</span> <span onmouseout="hideTip(event, 'fs20', 34)" onmouseover="showTip(event, 'fs20', 34)" class="i">seqId</span> <span class="o">=</span> <span class="n">0</span> <span class="c">// current sequence id</span></pre>
+</td>
+</tr>
+</table>
+
+<h2>The queues</h2>
+
+<ul>
+<li>incoming requests</li>
+<li>messages to send to every peer</li>
+<li>requests that were received but couldn't be assigned to a peer because they were all busy at the time</li>
+</ul>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs23', 37)" onmouseover="showTip(event, 'fs23', 37)" class="i">incomingMessage</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Subject</span><span class="o">&lt;</span><span class="i">BitcoinMessage</span><span class="o">&gt;</span>()
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs24', 38)" onmouseover="showTip(event, 'fs24', 38)" class="i">broadcastToPeers</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Subject</span><span class="o">&lt;</span><span class="i">BitcoinMessage</span><span class="o">&gt;</span>()
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs25', 39)" onmouseover="showTip(event, 'fs25', 39)" class="i">pendingMessages</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs26', 40)" onmouseover="showTip(event, 'fs26', 40)" class="i">Queue</span><span class="o">&lt;</span><span class="i">TrackerCommand</span><span class="o">&gt;</span>()</pre>
+</td>
+</tr>
+</table>
+
+<p>A crude unique sequence generator</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs27', 41)" onmouseover="showTip(event, 'fs27', 41)" class="i">nextId</span>() <span class="o">=</span> 
+    <span onmouseout="hideTip(event, 'fs20', 42)" onmouseover="showTip(event, 'fs20', 42)" class="i">seqId</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs20', 43)" onmouseover="showTip(event, 'fs20', 43)" class="i">seqId</span> <span class="o">+</span> <span class="n">1</span>
+    <span onmouseout="hideTip(event, 'fs20', 44)" onmouseover="showTip(event, 'fs20', 44)" class="i">seqId</span></pre>
+</td>
+</tr>
+</table>
+
+<p>The employee directory. The Map is persistent and thread-safe and the reassignment to <code>peerSlots</code> only happens
+in a handler.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span class="k">mutable</span> <span onmouseout="hideTip(event, 'fs28', 45)" onmouseover="showTip(event, 'fs28', 45)" class="i">peerSlots</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs29', 46)" onmouseover="showTip(event, 'fs29', 46)" class="i">Map</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs30', 47)" onmouseover="showTip(event, 'fs30', 47)" class="i">empty</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs15', 48)" onmouseover="showTip(event, 'fs15', 48)" class="i">int</span>, <span onmouseout="hideTip(event, 'fs13', 49)" onmouseover="showTip(event, 'fs13', 49)" class="i">PeerSlot</span><span class="o">&gt;</span>
+
+<span class="k">exception</span> <span onmouseout="hideTip(event, 'fs31', 50)" onmouseover="showTip(event, 'fs31', 50)" class="i">InvalidTransition</span> <span class="k">of</span> <span class="i">TrackerPeerState</span> <span class="o">*</span> <span class="i">TrackerPeerState</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Check that the transition is valid. This should never raise an exception</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs32', 51)" onmouseover="showTip(event, 'fs32', 51)" class="i">checkTransition</span> <span onmouseout="hideTip(event, 'fs33', 52)" onmouseover="showTip(event, 'fs33', 52)" class="i">oldState</span> <span onmouseout="hideTip(event, 'fs34', 53)" onmouseover="showTip(event, 'fs34', 53)" class="i">newState</span> <span class="o">=</span> 
+    <span class="k">match</span> (<span onmouseout="hideTip(event, 'fs33', 54)" onmouseover="showTip(event, 'fs33', 54)" class="i">oldState</span>, <span onmouseout="hideTip(event, 'fs34', 55)" onmouseover="showTip(event, 'fs34', 55)" class="i">newState</span>) <span class="k">with</span>
+    | (<span class="i">Allocated</span>, <span class="i">Ready</span>) |
+        (_, <span class="i">Free</span>) |
+        (<span class="i">Ready</span>, <span class="i">Busy</span>) |
+        (<span class="i">Busy</span>, <span class="i">Ready</span>) <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs35', 56)" onmouseover="showTip(event, 'fs35', 56)" class="i">ignore</span>()
+    | <span class="i">other</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs36', 57)" onmouseover="showTip(event, 'fs36', 57)" class="i">raise</span> (<span onmouseout="hideTip(event, 'fs31', 58)" onmouseover="showTip(event, 'fs31', 58)" class="i">InvalidTransition</span> <span class="i">other</span>)
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs37', 59)" onmouseover="showTip(event, 'fs37', 59)" class="i">changeState</span> <span onmouseout="hideTip(event, 'fs38', 60)" onmouseover="showTip(event, 'fs38', 60)" class="i">id</span> <span onmouseout="hideTip(event, 'fs39', 61)" onmouseover="showTip(event, 'fs39', 61)" class="i">newState</span> <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs40', 62)" onmouseover="showTip(event, 'fs40', 62)" class="i">oldState</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs28', 63)" onmouseover="showTip(event, 'fs28', 63)" class="i">peerSlots</span><span class="o">.</span>[<span onmouseout="hideTip(event, 'fs38', 64)" onmouseover="showTip(event, 'fs38', 64)" class="i">id</span>]<span class="o">.</span><span class="i">State</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs41', 65)" onmouseover="showTip(event, 'fs41', 65)" class="i">peer</span><span class="o">:</span> <span class="i">IPeer</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs28', 66)" onmouseover="showTip(event, 'fs28', 66)" class="i">peerSlots</span><span class="o">.</span>[<span onmouseout="hideTip(event, 'fs38', 67)" onmouseover="showTip(event, 'fs38', 67)" class="i">id</span>]<span class="o">.</span><span class="i">Peer</span> <span class="o">:&gt;</span> <span class="i">IPeer</span>
+    <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">State</span><span class="s"> </span><span class="s">transition</span><span class="s"> </span><span class="s">of</span><span class="s"> </span><span class="s">peer</span><span class="s">(</span><span class="s">%</span><span class="s">d</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">)</span><span class="s">:</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">-</span><span class="s">&gt;</span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs38', 68)" onmouseover="showTip(event, 'fs38', 68)" class="i">id</span> <span onmouseout="hideTip(event, 'fs41', 69)" onmouseover="showTip(event, 'fs41', 69)" class="i">peer</span><span class="o">.</span><span class="i">Target</span> <span onmouseout="hideTip(event, 'fs40', 70)" onmouseover="showTip(event, 'fs40', 70)" class="i">oldState</span> <span onmouseout="hideTip(event, 'fs39', 71)" onmouseover="showTip(event, 'fs39', 71)" class="i">newState</span>
+    <span onmouseout="hideTip(event, 'fs32', 72)" onmouseover="showTip(event, 'fs32', 72)" class="i">checkTransition</span> <span onmouseout="hideTip(event, 'fs40', 73)" onmouseover="showTip(event, 'fs40', 73)" class="i">oldState</span> <span onmouseout="hideTip(event, 'fs39', 74)" onmouseover="showTip(event, 'fs39', 74)" class="i">newState</span>
+    <span onmouseout="hideTip(event, 'fs28', 75)" onmouseover="showTip(event, 'fs28', 75)" class="i">peerSlots</span><span class="o">.</span>[<span onmouseout="hideTip(event, 'fs38', 76)" onmouseover="showTip(event, 'fs38', 76)" class="i">id</span>]<span class="o">.</span><span class="i">State</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs39', 77)" onmouseover="showTip(event, 'fs39', 77)" class="i">newState</span>
+    <span onmouseout="hideTip(event, 'fs40', 78)" onmouseover="showTip(event, 'fs40', 78)" class="i">oldState</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Once a peer becomes available, call this to grab a message that was put on the back burner</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+<span class="l">6: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs42', 79)" onmouseover="showTip(event, 'fs42', 79)" class="i">dequeuePendingMessage</span>() <span class="o">=</span> 
+    <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Dequeue</span><span class="s"> </span><span class="s">Msgs</span><span class="s">&quot;</span>
+    <span class="k">if</span> <span onmouseout="hideTip(event, 'fs25', 80)" onmouseover="showTip(event, 'fs25', 80)" class="i">pendingMessages</span><span class="o">.</span><span class="i">Count</span> <span class="o">&lt;&gt;</span> <span class="n">0</span> <span class="k">then</span>
+        <span class="i">trackerIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs25', 81)" onmouseover="showTip(event, 'fs25', 81)" class="i">pendingMessages</span><span class="o">.</span><span class="i">Dequeue</span>())
+    <span class="k">else</span>
+        <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Empty</span><span class="s"> </span><span class="s">Queue</span><span class="s">&quot;</span></pre>
+</td>
+</tr>
+</table>
+
+<h2>Route a message</h2>
+
+<p>Every command besides <code>GetHeader</code> is treated the same way. Tom looks for an available peer and assigns
+the work to him. <code>GetHeader</code> is the exception because it should stick to a given peer because Bob who initiated
+the call, wants to catchup from a given node.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs43', 82)" onmouseover="showTip(event, 'fs43', 82)" class="i">assign</span> <span onmouseout="hideTip(event, 'fs44', 83)" onmouseover="showTip(event, 'fs44', 83)" class="i">message</span> <span onmouseout="hideTip(event, 'fs45', 84)" onmouseover="showTip(event, 'fs45', 84)" class="i">ps</span> <span class="o">=</span> 
+    <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Assigning</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s"> </span><span class="s">to</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs44', 85)" onmouseover="showTip(event, 'fs44', 85)" class="i">message</span> (<span onmouseout="hideTip(event, 'fs45', 86)" onmouseover="showTip(event, 'fs45', 86)" class="i">ps</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs16', 87)" onmouseover="showTip(event, 'fs16', 87)" class="i">Peer</span> <span class="o">:&gt;</span> <span class="i">IPeer</span>)<span class="o">.</span><span class="i">Target</span>
+    <span onmouseout="hideTip(event, 'fs37', 88)" onmouseover="showTip(event, 'fs37', 88)" class="i">changeState</span> <span onmouseout="hideTip(event, 'fs45', 89)" onmouseover="showTip(event, 'fs45', 89)" class="i">ps</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs14', 90)" onmouseover="showTip(event, 'fs14', 90)" class="i">Id</span> <span class="i">Busy</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs35', 91)" onmouseover="showTip(event, 'fs35', 91)" class="i">ignore</span>
+    <span onmouseout="hideTip(event, 'fs45', 92)" onmouseover="showTip(event, 'fs45', 92)" class="i">ps</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs16', 93)" onmouseover="showTip(event, 'fs16', 93)" class="i">Peer</span><span class="o">.</span><span class="i">Incoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs44', 94)" onmouseover="showTip(event, 'fs44', 94)" class="i">message</span>)
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs46', 95)" onmouseover="showTip(event, 'fs46', 95)" class="i">forward</span> (<span onmouseout="hideTip(event, 'fs47', 96)" onmouseover="showTip(event, 'fs47', 96)" class="i">command</span><span class="o">:</span> <span class="i">TrackerCommand</span>) (<span onmouseout="hideTip(event, 'fs48', 97)" onmouseover="showTip(event, 'fs48', 97)" class="i">message</span><span class="o">:</span> <span class="i">PeerCommand</span>) <span class="o">=</span>
+    <span class="k">match</span> <span onmouseout="hideTip(event, 'fs48', 98)" onmouseover="showTip(event, 'fs48', 98)" class="i">message</span> <span class="k">with</span>
+        | <span class="i">PeerCommand</span><span class="o">.</span><span class="i">GetHeaders</span>(_, <span class="i">ts</span>, <span class="i">peer</span>) <span class="k">-&gt;</span> 
+            <span onmouseout="hideTip(event, 'fs28', 99)" onmouseover="showTip(event, 'fs28', 99)" class="i">peerSlots</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs29', 100)" onmouseover="showTip(event, 'fs29', 100)" class="i">Map</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 101)" onmouseover="showTip(event, 'fs49', 101)" class="i">tryFind</span> <span class="i">peer</span><span class="o">.</span><span class="i">Id</span>
+            <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs12', 102)" onmouseover="showTip(event, 'fs12', 102)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs50', 103)" onmouseover="showTip(event, 'fs50', 103)" class="i">map</span> (<span class="k">fun</span> <span class="i">ps</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs43', 104)" onmouseover="showTip(event, 'fs43', 104)" class="i">assign</span> <span onmouseout="hideTip(event, 'fs48', 105)" onmouseover="showTip(event, 'fs48', 105)" class="i">message</span> <span class="i">ps</span>)
+            <span class="o">|&gt;</span> <span class="i">getOrElseF</span> (<span class="k">fun</span> () <span class="k">-&gt;</span> <span class="i">ts</span><span class="o">.</span><span class="i">SetResult</span>(<span onmouseout="hideTip(event, 'fs51', 106)" onmouseover="showTip(event, 'fs51', 106)" class="i">Observable</span><span class="o">.</span><span class="i">Throw</span>(<span onmouseout="hideTip(event, 'fs52', 107)" onmouseover="showTip(event, 'fs52', 107)" class="i">ArgumentException</span>(<span class="s">&quot;</span><span class="s">Peer</span><span class="s"> </span><span class="s">busy</span><span class="s"> </span><span class="s">-</span><span class="s"> </span><span class="s">cannot</span><span class="s"> </span><span class="s">handle</span><span class="s"> </span><span class="s">command</span><span class="s">&quot;</span>))))
+        | _ <span class="k">-&gt;</span> 
+            <span onmouseout="hideTip(event, 'fs28', 108)" onmouseover="showTip(event, 'fs28', 108)" class="i">peerSlots</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs29', 109)" onmouseover="showTip(event, 'fs29', 109)" class="i">Map</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs53', 110)" onmouseover="showTip(event, 'fs53', 110)" class="i">tryPick</span>(<span class="k">fun</span> _ <span class="i">ps</span> <span class="k">-&gt;</span> <span class="k">if</span> <span class="i">ps</span><span class="o">.</span><span class="i">State</span> <span class="o">=</span> <span class="i">Ready</span> <span class="k">then</span> <span onmouseout="hideTip(event, 'fs54', 111)" onmouseover="showTip(event, 'fs54', 111)" class="i">Some</span>(<span class="i">ps</span>) <span class="k">else</span> <span onmouseout="hideTip(event, 'fs55', 112)" onmouseover="showTip(event, 'fs55', 112)" class="i">None</span>)
+            <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs12', 113)" onmouseover="showTip(event, 'fs12', 113)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs50', 114)" onmouseover="showTip(event, 'fs50', 114)" class="i">map</span> (<span class="k">fun</span> <span class="i">ps</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs43', 115)" onmouseover="showTip(event, 'fs43', 115)" class="i">assign</span> <span onmouseout="hideTip(event, 'fs48', 116)" onmouseover="showTip(event, 'fs48', 116)" class="i">message</span> <span class="i">ps</span>)
+            <span class="o">|&gt;</span> <span class="i">getOrElseF</span> (<span class="k">fun</span> () <span class="k">-&gt;</span>
+                <span class="k">let</span> <span class="i">freePeers</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs28', 117)" onmouseover="showTip(event, 'fs28', 117)" class="i">peerSlots</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs56', 118)" onmouseover="showTip(event, 'fs56', 118)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs57', 119)" onmouseover="showTip(event, 'fs57', 119)" class="i">filter</span>(<span class="k">fun</span> <span class="i">ps</span> <span class="k">-&gt;</span> <span class="i">ps</span><span class="o">.</span><span class="i">Value</span><span class="o">.</span><span class="i">State</span> <span class="o">=</span> <span class="i">Free</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs56', 120)" onmouseover="showTip(event, 'fs56', 120)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs58', 121)" onmouseover="showTip(event, 'fs58', 121)" class="i">length</span>
+                <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">No</span><span class="s"> </span><span class="s">peer</span><span class="s"> </span><span class="s">available</span><span class="s"> </span><span class="s">-</span><span class="s"> </span><span class="s">%</span><span class="s">d</span><span class="s"> </span><span class="s">dead</span><span class="s"> </span><span class="s">peers</span><span class="s">&quot;</span> <span class="i">freePeers</span>
+                <span onmouseout="hideTip(event, 'fs25', 122)" onmouseover="showTip(event, 'fs25', 122)" class="i">pendingMessages</span><span class="o">.</span><span class="i">Enqueue</span> <span onmouseout="hideTip(event, 'fs47', 123)" onmouseover="showTip(event, 'fs47', 123)" class="i">command</span> <span class="c">// park the command for now</span>
+                )</pre>
+</td>
+</tr>
+</table>
+
+<h2>Employment cycle of a Peer</h2>
+
+<p>When Tom hires a new peer, he gives a unique id and a position in his directory.
+When Tom fires a peer, besides removing the peer from his directory, he looks for a replacement.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs59', 124)" onmouseover="showTip(event, 'fs59', 124)" class="i">newPeer</span>() <span class="o">=</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs60', 125)" onmouseover="showTip(event, 'fs60', 125)" class="i">openSlotId</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs27', 126)" onmouseover="showTip(event, 'fs27', 126)" class="i">nextId</span>()
+    <span onmouseout="hideTip(event, 'fs28', 127)" onmouseover="showTip(event, 'fs28', 127)" class="i">peerSlots</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs28', 128)" onmouseover="showTip(event, 'fs28', 128)" class="i">peerSlots</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs61', 129)" onmouseover="showTip(event, 'fs61', 129)" class="i">Add</span>(<span onmouseout="hideTip(event, 'fs60', 130)" onmouseover="showTip(event, 'fs60', 130)" class="i">openSlotId</span>, { <span class="i">Id</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs60', 131)" onmouseover="showTip(event, 'fs60', 131)" class="i">openSlotId</span>; <span class="i">Peer</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Peer</span>(<span onmouseout="hideTip(event, 'fs60', 132)" onmouseover="showTip(event, 'fs60', 132)" class="i">openSlotId</span>); <span class="i">State</span> <span class="o">=</span> <span class="i">Allocated</span> })
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs41', 133)" onmouseover="showTip(event, 'fs41', 133)" class="i">peer</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs28', 134)" onmouseover="showTip(event, 'fs28', 134)" class="i">peerSlots</span><span class="o">.</span>[<span onmouseout="hideTip(event, 'fs60', 135)" onmouseover="showTip(event, 'fs60', 135)" class="i">openSlotId</span>]<span class="o">.</span><span class="i">Peer</span>
+    <span onmouseout="hideTip(event, 'fs19', 136)" onmouseover="showTip(event, 'fs19', 136)" class="i">connectionCount</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs19', 137)" onmouseover="showTip(event, 'fs19', 137)" class="i">connectionCount</span> <span class="o">+</span> <span class="n">1</span>
+    <span onmouseout="hideTip(event, 'fs41', 138)" onmouseover="showTip(event, 'fs41', 138)" class="i">peer</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs62', 139)" onmouseover="showTip(event, 'fs62', 139)" class="i">freePeer</span> (<span onmouseout="hideTip(event, 'fs38', 140)" onmouseover="showTip(event, 'fs38', 140)" class="i">id</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs15', 141)" onmouseover="showTip(event, 'fs15', 141)" class="i">int</span>) <span class="o">=</span>
+    <span onmouseout="hideTip(event, 'fs28', 142)" onmouseover="showTip(event, 'fs28', 142)" class="i">peerSlots</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs29', 143)" onmouseover="showTip(event, 'fs29', 143)" class="i">Map</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 144)" onmouseover="showTip(event, 'fs49', 144)" class="i">tryFind</span> <span onmouseout="hideTip(event, 'fs38', 145)" onmouseover="showTip(event, 'fs38', 145)" class="i">id</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs12', 146)" onmouseover="showTip(event, 'fs12', 146)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs63', 147)" onmouseover="showTip(event, 'fs63', 147)" class="i">iter</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs45', 148)" onmouseover="showTip(event, 'fs45', 148)" class="i">ps</span> <span class="k">-&gt;</span> 
+        <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Freeing</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> (<span onmouseout="hideTip(event, 'fs28', 149)" onmouseover="showTip(event, 'fs28', 149)" class="i">peerSlots</span><span class="o">.</span>[<span onmouseout="hideTip(event, 'fs38', 150)" onmouseover="showTip(event, 'fs38', 150)" class="i">id</span>]<span class="o">.</span><span class="i">Peer</span> <span class="o">:&gt;</span> <span class="i">IPeer</span>)<span class="o">.</span><span class="i">Target</span>
+        <span onmouseout="hideTip(event, 'fs37', 151)" onmouseover="showTip(event, 'fs37', 151)" class="i">changeState</span> <span onmouseout="hideTip(event, 'fs38', 152)" onmouseover="showTip(event, 'fs38', 152)" class="i">id</span> <span class="i">Free</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs35', 153)" onmouseover="showTip(event, 'fs35', 153)" class="i">ignore</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs41', 154)" onmouseover="showTip(event, 'fs41', 154)" class="i">peer</span> <span class="o">=</span>  <span onmouseout="hideTip(event, 'fs45', 155)" onmouseover="showTip(event, 'fs45', 155)" class="i">ps</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs16', 156)" onmouseover="showTip(event, 'fs16', 156)" class="i">Peer</span>
+        <span onmouseout="hideTip(event, 'fs19', 157)" onmouseover="showTip(event, 'fs19', 157)" class="i">connectionCount</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs19', 158)" onmouseover="showTip(event, 'fs19', 158)" class="i">connectionCount</span> <span class="o">-</span> <span class="n">1</span>
+        <span class="i">Db</span><span class="o">.</span><span class="i">updateState</span>((<span onmouseout="hideTip(event, 'fs41', 159)" onmouseover="showTip(event, 'fs41', 159)" class="i">peer</span> <span class="o">:&gt;</span> <span class="i">IPeer</span>)<span class="o">.</span><span class="i">Target</span>, <span class="o">-</span><span class="n">1</span>) <span class="c">// blackball this peer</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs64', 160)" onmouseover="showTip(event, 'fs64', 160)" class="i">newPeer</span> <span class="o">=</span> <span class="i">Db</span><span class="o">.</span><span class="i">getPeer</span>() <span class="c">// find a new peer</span>
+        <span onmouseout="hideTip(event, 'fs64', 161)" onmouseover="showTip(event, 'fs64', 161)" class="i">newPeer</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs12', 162)" onmouseover="showTip(event, 'fs12', 162)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs63', 163)" onmouseover="showTip(event, 'fs63', 163)" class="i">iter</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs65', 164)" onmouseover="showTip(event, 'fs65', 164)" class="i">p</span> <span class="k">-&gt;</span> 
+            <span class="i">Db</span><span class="o">.</span><span class="i">updateState</span>(<span onmouseout="hideTip(event, 'fs65', 165)" onmouseover="showTip(event, 'fs65', 165)" class="i">p</span>, <span class="n">1</span>)
+            <span class="i">trackerIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span class="i">Connect</span> <span onmouseout="hideTip(event, 'fs65', 166)" onmouseover="showTip(event, 'fs65', 166)" class="i">p</span>))
+        <span onmouseout="hideTip(event, 'fs28', 167)" onmouseover="showTip(event, 'fs28', 167)" class="i">peerSlots</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs28', 168)" onmouseover="showTip(event, 'fs28', 168)" class="i">peerSlots</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs66', 169)" onmouseover="showTip(event, 'fs66', 169)" class="i">Remove</span> <span onmouseout="hideTip(event, 'fs38', 170)" onmouseover="showTip(event, 'fs38', 170)" class="i">id</span>
+        <span onmouseout="hideTip(event, 'fs41', 171)" onmouseover="showTip(event, 'fs41', 171)" class="i">peer</span><span class="o">.</span><span class="i">Incoming</span><span class="o">.</span><span class="i">OnNext</span> <span class="i">Closed</span> <span class="c">// tell the old peer to take a hike</span>
+    )</pre>
+</td>
+</tr>
+</table>
+
+<h2>Handling a command</h2>
+
+<p><code>processCommand</code> handles 3 types of commands:</p>
+
+<ul>
+<li>connection requests. Either outgoing from this application or incoming</li>
+<li>related to the state of the peer like SetReady, Close</li>
+<li>commands. The last category is forwarded to a peer based on the 'amazing' routing algorithm - 
+pick the first one who can do it</li>
+</ul>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span class="k">mutable</span> <span onmouseout="hideTip(event, 'fs67', 172)" onmouseover="showTip(event, 'fs67', 172)" class="i">tip</span> <span class="o">=</span> <span class="i">Db</span><span class="o">.</span><span class="i">readHeader</span> (<span class="i">Db</span><span class="o">.</span><span class="i">readTip</span>())
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs68', 173)" onmouseover="showTip(event, 'fs68', 173)" class="i">processCommand</span>(<span onmouseout="hideTip(event, 'fs47', 174)" onmouseover="showTip(event, 'fs47', 174)" class="i">command</span><span class="o">:</span> <span class="i">TrackerCommand</span>) <span class="o">=</span>
+    <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">TrackerCommand</span><span class="s">&gt;</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs47', 175)" onmouseover="showTip(event, 'fs47', 175)" class="i">command</span>
+    <span class="k">match</span> <span onmouseout="hideTip(event, 'fs47', 176)" onmouseover="showTip(event, 'fs47', 176)" class="i">command</span> <span class="k">with</span>
+    | <span class="i">SetTip</span> <span class="i">t</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs67', 177)" onmouseover="showTip(event, 'fs67', 177)" class="i">tip</span> <span class="o">&lt;-</span> <span class="i">t</span>
+    | <span class="i">GetPeers</span> <span class="k">-&gt;</span> 
+        <span class="k">let</span> <span class="i">peers</span> <span class="o">=</span> <span class="i">Db</span><span class="o">.</span><span class="i">getPeers</span>()
+        <span class="k">let</span> <span class="i">cFreeSlots</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs18', 178)" onmouseover="showTip(event, 'fs18', 178)" class="i">maxSlots</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs28', 179)" onmouseover="showTip(event, 'fs28', 179)" class="i">peerSlots</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs69', 180)" onmouseover="showTip(event, 'fs69', 180)" class="i">Count</span>
+        <span class="k">for</span> <span class="i">peer</span> <span class="k">in</span> <span class="i">peers</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs56', 181)" onmouseover="showTip(event, 'fs56', 181)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs70', 182)" onmouseover="showTip(event, 'fs70', 182)" class="i">truncate</span> <span class="i">cFreeSlots</span> <span class="k">do</span>
+            <span class="i">Db</span><span class="o">.</span><span class="i">updateState</span>(<span class="i">peer</span>, <span class="n">1</span>)
+            <span class="i">trackerIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span class="i">Connect</span> <span class="i">peer</span>)
+    | <span class="i">Connect</span> <span class="i">target</span> <span class="k">-&gt;</span>
+        <span class="k">let</span> <span class="i">peer</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs59', 183)" onmouseover="showTip(event, 'fs59', 183)" class="i">newPeer</span>()
+        <span class="i">peer</span><span class="o">.</span><span class="i">Incoming</span><span class="o">.</span><span class="i">OnNext</span>(<span class="i">Open</span>(<span class="i">target</span>, <span onmouseout="hideTip(event, 'fs67', 184)" onmouseover="showTip(event, 'fs67', 184)" class="i">tip</span>))
+    | <span class="i">IncomingConnection</span> (<span class="i">stream</span>, <span class="i">target</span>) <span class="k">-&gt;</span>
+        <span class="k">let</span> <span class="i">peer</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs59', 185)" onmouseover="showTip(event, 'fs59', 185)" class="i">newPeer</span>()
+        <span class="i">peer</span><span class="o">.</span><span class="i">Incoming</span><span class="o">.</span><span class="i">OnNext</span>(<span class="i">OpenStream</span>(<span class="i">stream</span>, <span class="i">target</span>, <span onmouseout="hideTip(event, 'fs67', 186)" onmouseover="showTip(event, 'fs67', 186)" class="i">tip</span>))
+    | <span class="i">SetReady</span> <span onmouseout="hideTip(event, 'fs71', 187)" onmouseover="showTip(event, 'fs71', 187)" class="i">id</span> <span class="k">-&gt;</span>
+        <span onmouseout="hideTip(event, 'fs28', 188)" onmouseover="showTip(event, 'fs28', 188)" class="i">peerSlots</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs72', 189)" onmouseover="showTip(event, 'fs72', 189)" class="i">TryFind</span> <span onmouseout="hideTip(event, 'fs71', 190)" onmouseover="showTip(event, 'fs71', 190)" class="i">id</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs12', 191)" onmouseover="showTip(event, 'fs12', 191)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs63', 192)" onmouseover="showTip(event, 'fs63', 192)" class="i">iter</span>(<span class="k">fun</span> <span class="i">ps</span> <span class="k">-&gt;</span>
+            <span class="k">let</span> <span class="i">peer</span> <span class="o">=</span> <span class="i">ps</span><span class="o">.</span><span class="i">Peer</span>
+            <span class="k">let</span> <span class="i">oldState</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs37', 193)" onmouseover="showTip(event, 'fs37', 193)" class="i">changeState</span> <span onmouseout="hideTip(event, 'fs71', 194)" onmouseover="showTip(event, 'fs71', 194)" class="i">id</span> <span class="i">Ready</span>
+            <span class="c">// if oldState = Allocated then blockchainIncoming.OnNext(Catchup(peer, null)) // Disable if you want no catchup on connect</span>
+            <span onmouseout="hideTip(event, 'fs42', 195)" onmouseover="showTip(event, 'fs42', 195)" class="i">dequeuePendingMessage</span>()
+            )
+    | <span class="i">Close</span> <span onmouseout="hideTip(event, 'fs71', 196)" onmouseover="showTip(event, 'fs71', 196)" class="i">id</span> <span class="k">-&gt;</span> 
+        <span onmouseout="hideTip(event, 'fs62', 197)" onmouseover="showTip(event, 'fs62', 197)" class="i">freePeer</span> <span onmouseout="hideTip(event, 'fs71', 198)" onmouseover="showTip(event, 'fs71', 198)" class="i">id</span>
+        <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Connection</span><span class="s"> </span><span class="s">count</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">%</span><span class="s">d</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs19', 199)" onmouseover="showTip(event, 'fs19', 199)" class="i">connectionCount</span>
+    | <span class="i">BitcoinMessage</span> <span class="i">message</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs46', 200)" onmouseover="showTip(event, 'fs46', 200)" class="i">forward</span> <span onmouseout="hideTip(event, 'fs47', 201)" onmouseover="showTip(event, 'fs47', 201)" class="i">command</span> (<span class="i">Execute</span> <span class="i">message</span>)
+    | <span class="i">Command</span> <span class="i">peerCommand</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs46', 202)" onmouseover="showTip(event, 'fs46', 202)" class="i">forward</span> <span onmouseout="hideTip(event, 'fs47', 203)" onmouseover="showTip(event, 'fs47', 203)" class="i">command</span> <span class="i">peerCommand</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs73', 204)" onmouseover="showTip(event, 'fs73', 204)" class="i">processAddr</span> (<span onmouseout="hideTip(event, 'fs74', 205)" onmouseover="showTip(event, 'fs74', 205)" class="i">addr</span><span class="o">:</span> <span class="i">Addr</span>) <span class="o">=</span>
+    <span class="k">for</span> <span onmouseout="hideTip(event, 'fs75', 206)" onmouseover="showTip(event, 'fs75', 206)" class="i">a</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs74', 207)" onmouseover="showTip(event, 'fs74', 207)" class="i">addr</span><span class="o">.</span><span class="i">Addrs</span> <span class="k">do</span> <span class="i">Db</span><span class="o">.</span><span class="i">updateAddr</span>(<span onmouseout="hideTip(event, 'fs75', 208)" onmouseover="showTip(event, 'fs75', 208)" class="i">a</span>)</pre>
+</td>
+</tr>
+</table>
+
+<p>Helper functions that are called by other components. They are thread-safe and will
+enqueue messages for Tom</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs76', 209)" onmouseover="showTip(event, 'fs76', 209)" class="i">getHeaders</span>(<span onmouseout="hideTip(event, 'fs77', 210)" onmouseover="showTip(event, 'fs77', 210)" class="i">gh</span><span class="o">:</span> <span class="i">GetHeaders</span>, <span onmouseout="hideTip(event, 'fs78', 211)" onmouseover="showTip(event, 'fs78', 211)" class="i">peer</span><span class="o">:</span> <span class="i">IPeer</span>)<span class="o">:</span> <span onmouseout="hideTip(event, 'fs79', 212)" onmouseover="showTip(event, 'fs79', 212)" class="i">Task</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs80', 213)" onmouseover="showTip(event, 'fs80', 213)" class="i">IObservable</span><span class="o">&lt;</span><span class="i">Headers</span><span class="o">&gt;</span><span class="o">&gt;</span> <span class="o">=</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs81', 214)" onmouseover="showTip(event, 'fs81', 214)" class="i">ts</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs82', 215)" onmouseover="showTip(event, 'fs82', 215)" class="i">TaskCompletionSource</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs80', 216)" onmouseover="showTip(event, 'fs80', 216)" class="i">IObservable</span><span class="o">&lt;</span><span class="i">Headers</span><span class="o">&gt;</span><span class="o">&gt;</span>()
+    <span class="i">trackerIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span class="i">Command</span> (<span class="i">PeerCommand</span><span class="o">.</span><span class="i">GetHeaders</span> (<span onmouseout="hideTip(event, 'fs77', 217)" onmouseover="showTip(event, 'fs77', 217)" class="i">gh</span>, <span onmouseout="hideTip(event, 'fs81', 218)" onmouseover="showTip(event, 'fs81', 218)" class="i">ts</span>, <span onmouseout="hideTip(event, 'fs78', 219)" onmouseover="showTip(event, 'fs78', 219)" class="i">peer</span>)))
+    <span onmouseout="hideTip(event, 'fs81', 220)" onmouseover="showTip(event, 'fs81', 220)" class="i">ts</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs79', 221)" onmouseover="showTip(event, 'fs79', 221)" class="i">Task</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs83', 222)" onmouseover="showTip(event, 'fs83', 222)" class="i">getBlocks</span>(<span onmouseout="hideTip(event, 'fs84', 223)" onmouseover="showTip(event, 'fs84', 223)" class="i">blockHashes</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs85', 224)" onmouseover="showTip(event, 'fs85', 224)" class="i">seq</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs86', 225)" onmouseover="showTip(event, 'fs86', 225)" class="i">byte</span>[]<span class="o">&gt;</span>)<span class="o">:</span> <span onmouseout="hideTip(event, 'fs79', 226)" onmouseover="showTip(event, 'fs79', 226)" class="i">Task</span><span class="o">&lt;</span><span class="i">IPeer</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs80', 227)" onmouseover="showTip(event, 'fs80', 227)" class="i">IObservable</span><span class="o">&lt;</span><span class="i">Block</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs86', 228)" onmouseover="showTip(event, 'fs86', 228)" class="i">byte</span>[]<span class="o">&gt;</span><span class="o">&gt;</span> <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs87', 229)" onmouseover="showTip(event, 'fs87', 229)" class="i">invHashes</span> <span class="o">=</span> 
+        <span onmouseout="hideTip(event, 'fs85', 230)" onmouseover="showTip(event, 'fs85', 230)" class="i">seq</span> { 
+            <span class="k">for</span> <span onmouseout="hideTip(event, 'fs88', 231)" onmouseover="showTip(event, 'fs88', 231)" class="i">h</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs84', 232)" onmouseover="showTip(event, 'fs84', 232)" class="i">blockHashes</span> <span class="k">do</span>
+                <span class="k">yield</span> <span class="k">new</span> <span class="i">InvEntry</span>(<span class="i">blockInvType</span>, <span onmouseout="hideTip(event, 'fs88', 233)" onmouseover="showTip(event, 'fs88', 233)" class="i">h</span>) }
+        <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs56', 234)" onmouseover="showTip(event, 'fs56', 234)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs89', 235)" onmouseover="showTip(event, 'fs89', 235)" class="i">toList</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs90', 236)" onmouseover="showTip(event, 'fs90', 236)" class="i">gd</span> <span class="o">=</span> <span class="k">new</span> <span class="i">GetData</span>(<span onmouseout="hideTip(event, 'fs87', 237)" onmouseover="showTip(event, 'fs87', 237)" class="i">invHashes</span>)
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs91', 238)" onmouseover="showTip(event, 'fs91', 238)" class="i">ts</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs82', 239)" onmouseover="showTip(event, 'fs82', 239)" class="i">TaskCompletionSource</span><span class="o">&lt;</span><span class="i">IPeer</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs80', 240)" onmouseover="showTip(event, 'fs80', 240)" class="i">IObservable</span><span class="o">&lt;</span><span class="i">Block</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs86', 241)" onmouseover="showTip(event, 'fs86', 241)" class="i">byte</span>[]<span class="o">&gt;</span><span class="o">&gt;</span>()
+    <span class="i">trackerIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span class="i">Command</span> (<span class="i">GetBlocks</span> (<span onmouseout="hideTip(event, 'fs90', 242)" onmouseover="showTip(event, 'fs90', 242)" class="i">gd</span>, <span onmouseout="hideTip(event, 'fs91', 243)" onmouseover="showTip(event, 'fs91', 243)" class="i">ts</span>)))
+    <span onmouseout="hideTip(event, 'fs91', 244)" onmouseover="showTip(event, 'fs91', 244)" class="i">ts</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs92', 245)" onmouseover="showTip(event, 'fs92', 245)" class="i">Task</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Send a message to every peer that is not busy</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs93', 246)" onmouseover="showTip(event, 'fs93', 246)" class="i">processBroadcast</span> (<span onmouseout="hideTip(event, 'fs94', 247)" onmouseover="showTip(event, 'fs94', 247)" class="i">m</span><span class="o">:</span> <span class="i">BitcoinMessage</span>) <span class="o">=</span> 
+    <span class="k">for</span> <span onmouseout="hideTip(event, 'fs95', 248)" onmouseover="showTip(event, 'fs95', 248)" class="i">peerSlot</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs28', 249)" onmouseover="showTip(event, 'fs28', 249)" class="i">peerSlots</span> <span class="k">do</span>
+        <span class="k">if</span> <span onmouseout="hideTip(event, 'fs95', 250)" onmouseover="showTip(event, 'fs95', 250)" class="i">peerSlot</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs96', 251)" onmouseover="showTip(event, 'fs96', 251)" class="i">Value</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs17', 252)" onmouseover="showTip(event, 'fs17', 252)" class="i">State</span> <span class="o">=</span> <span class="i">Ready</span> <span class="k">then</span>
+            <span onmouseout="hideTip(event, 'fs95', 253)" onmouseover="showTip(event, 'fs95', 253)" class="i">peerSlot</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs96', 254)" onmouseover="showTip(event, 'fs96', 254)" class="i">Value</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs16', 255)" onmouseover="showTip(event, 'fs16', 255)" class="i">Peer</span><span class="o">.</span><span class="i">Incoming</span><span class="o">.</span><span class="i">OnNext</span>(<span class="i">Execute</span> <span onmouseout="hideTip(event, 'fs94', 256)" onmouseover="showTip(event, 'fs94', 256)" class="i">m</span>)</pre>
+</td>
+</tr>
+</table>
+
+<p># Server
+The server binds to the port configured in the app.config file and listens to incoming connection.
+On a connection, it sends a message to Tom. At this time, there is no limit to the number of incoming connections</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs98', 270)" onmouseover="showTip(event, 'fs98', 270)" class="i">port</span> <span class="o">=</span> <span class="i">settings</span><span class="o">.</span><span class="i">ServerPort</span>
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs99', 271)" onmouseover="showTip(event, 'fs99', 271)" class="i">ipAddress</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs100', 272)" onmouseover="showTip(event, 'fs100', 272)" class="i">IPAddress</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs101', 273)" onmouseover="showTip(event, 'fs101', 273)" class="i">Any</span>
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs102', 274)" onmouseover="showTip(event, 'fs102', 274)" class="i">endpoint</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs103', 275)" onmouseover="showTip(event, 'fs103', 275)" class="i">IPEndPoint</span>(<span onmouseout="hideTip(event, 'fs99', 276)" onmouseover="showTip(event, 'fs99', 276)" class="i">ipAddress</span>, <span onmouseout="hideTip(event, 'fs98', 277)" onmouseover="showTip(event, 'fs98', 277)" class="i">port</span>)
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs104', 278)" onmouseover="showTip(event, 'fs104', 278)" class="i">cts</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs105', 279)" onmouseover="showTip(event, 'fs105', 279)" class="i">CancellationTokenSource</span>()
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs106', 280)" onmouseover="showTip(event, 'fs106', 280)" class="i">listener</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs107', 281)" onmouseover="showTip(event, 'fs107', 281)" class="i">Socket</span>(<span onmouseout="hideTip(event, 'fs108', 282)" onmouseover="showTip(event, 'fs108', 282)" class="i">AddressFamily</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs109', 283)" onmouseover="showTip(event, 'fs109', 283)" class="i">InterNetwork</span>, <span onmouseout="hideTip(event, 'fs110', 284)" onmouseover="showTip(event, 'fs110', 284)" class="i">SocketType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs111', 285)" onmouseover="showTip(event, 'fs111', 285)" class="i">Stream</span>, <span onmouseout="hideTip(event, 'fs112', 286)" onmouseover="showTip(event, 'fs112', 286)" class="i">ProtocolType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs113', 287)" onmouseover="showTip(event, 'fs113', 287)" class="i">Tcp</span>)
+<span onmouseout="hideTip(event, 'fs106', 288)" onmouseover="showTip(event, 'fs106', 288)" class="i">listener</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs114', 289)" onmouseover="showTip(event, 'fs114', 289)" class="i">Bind</span>(<span onmouseout="hideTip(event, 'fs102', 290)" onmouseover="showTip(event, 'fs102', 290)" class="i">endpoint</span>)
+<span onmouseout="hideTip(event, 'fs106', 291)" onmouseover="showTip(event, 'fs106', 291)" class="i">listener</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs115', 292)" onmouseover="showTip(event, 'fs115', 292)" class="i">Listen</span>(<span onmouseout="hideTip(event, 'fs15', 293)" onmouseover="showTip(event, 'fs15', 293)" class="i">int</span> <span onmouseout="hideTip(event, 'fs116', 294)" onmouseover="showTip(event, 'fs116', 294)" class="i">SocketOptionName</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs117', 295)" onmouseover="showTip(event, 'fs117', 295)" class="i">MaxConnections</span>)
+
+<span class="k">let</span> <span class="k">rec</span> <span onmouseout="hideTip(event, 'fs118', 296)" onmouseover="showTip(event, 'fs118', 296)" class="i">connectLoop</span>() <span class="o">=</span> 
+    <span onmouseout="hideTip(event, 'fs119', 297)" onmouseover="showTip(event, 'fs119', 297)" class="i">async</span> {
+      <span class="k">let!</span> <span onmouseout="hideTip(event, 'fs120', 298)" onmouseover="showTip(event, 'fs120', 298)" class="i">socket</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs121', 299)" onmouseover="showTip(event, 'fs121', 299)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs122', 300)" onmouseover="showTip(event, 'fs122', 300)" class="i">FromBeginEnd</span>(<span onmouseout="hideTip(event, 'fs106', 301)" onmouseover="showTip(event, 'fs106', 301)" class="i">listener</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs123', 302)" onmouseover="showTip(event, 'fs123', 302)" class="i">BeginAccept</span>, <span onmouseout="hideTip(event, 'fs106', 303)" onmouseover="showTip(event, 'fs106', 303)" class="i">listener</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs124', 304)" onmouseover="showTip(event, 'fs124', 304)" class="i">EndAccept</span>)
+      <span class="c">// Setting ownsSocket to false allows us to later re-use a socket.</span>
+      <span class="k">let</span> <span onmouseout="hideTip(event, 'fs125', 305)" onmouseover="showTip(event, 'fs125', 305)" class="i">stream</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs126', 306)" onmouseover="showTip(event, 'fs126', 306)" class="i">NetworkStream</span>(<span onmouseout="hideTip(event, 'fs120', 307)" onmouseover="showTip(event, 'fs120', 307)" class="i">socket</span>, <span class="k">false</span>)
+      <span class="i">trackerIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span class="i">TrackerCommand</span><span class="o">.</span><span class="i">IncomingConnection</span>(<span onmouseout="hideTip(event, 'fs125', 308)" onmouseover="showTip(event, 'fs125', 308)" class="i">stream</span>, <span onmouseout="hideTip(event, 'fs120', 309)" onmouseover="showTip(event, 'fs120', 309)" class="i">socket</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs127', 310)" onmouseover="showTip(event, 'fs127', 310)" class="i">RemoteEndPoint</span> <span class="o">:?&gt;</span> <span onmouseout="hideTip(event, 'fs103', 311)" onmouseover="showTip(event, 'fs103', 311)" class="i">IPEndPoint</span>))
+      <span class="k">return!</span> <span onmouseout="hideTip(event, 'fs118', 312)" onmouseover="showTip(event, 'fs118', 312)" class="i">connectLoop</span>()
+    }
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs128', 313)" onmouseover="showTip(event, 'fs128', 313)" class="i">startServer</span>() <span class="o">=</span> 
+    <span class="i">logger</span><span class="o">.</span><span class="i">InfoF</span> <span class="s">&quot;</span><span class="s">Started</span><span class="s"> </span><span class="s">listening</span><span class="s"> </span><span class="s">on</span><span class="s"> </span><span class="s">port</span><span class="s"> </span><span class="s">%</span><span class="s">d</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs98', 314)" onmouseover="showTip(event, 'fs98', 314)" class="i">port</span>
+    <span onmouseout="hideTip(event, 'fs121', 315)" onmouseover="showTip(event, 'fs121', 315)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs129', 316)" onmouseover="showTip(event, 'fs129', 316)" class="i">Start</span>(<span onmouseout="hideTip(event, 'fs118', 317)" onmouseover="showTip(event, 'fs118', 317)" class="i">connectLoop</span>(), <span onmouseout="hideTip(event, 'fs104', 318)" onmouseover="showTip(event, 'fs104', 318)" class="i">cts</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs130', 319)" onmouseover="showTip(event, 'fs130', 319)" class="i">Token</span>)</pre>
+</td>
+</tr>
+</table>
+
+          <div class="tip" id="fs1">module Tracker</div>
+<div class="tip" id="fs2">namespace System</div>
+<div class="tip" id="fs3">namespace System.Net</div>
+<div class="tip" id="fs4">namespace System.Net.Sockets</div>
+<div class="tip" id="fs5">namespace System.Collections</div>
+<div class="tip" id="fs6">namespace System.Collections.Generic</div>
+<div class="tip" id="fs7">namespace System.IO</div>
+<div class="tip" id="fs8">namespace System.Text</div>
+<div class="tip" id="fs9">namespace System.Threading</div>
+<div class="tip" id="fs10">Multiple items<br />namespace System.Linq<br /><br />--------------------<br />namespace Microsoft.FSharp.Linq</div>
+<div class="tip" id="fs11">namespace System.Threading.Tasks</div>
+<div class="tip" id="fs12">module Option<br /><br />from Microsoft.FSharp.Core</div>
+<div class="tip" id="fs13">type PeerSlot =<br />&#160;&#160;{Id: int;<br />&#160;&#160;&#160;Peer: obj;<br />&#160;&#160;&#160;mutable State: obj;}<br /><br />Full name: Tracker.PeerSlot</div>
+<div class="tip" id="fs14">PeerSlot.Id: int</div>
+<div class="tip" id="fs15">Multiple items<br />val int : value:&#39;T -&gt; int (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.int<br /><br />--------------------<br />type int = int32<br /><br />Full name: Microsoft.FSharp.Core.int<br /><br />--------------------<br />type int&lt;&#39;Measure&gt; = int<br /><br />Full name: Microsoft.FSharp.Core.int&lt;_&gt;</div>
+<div class="tip" id="fs16">PeerSlot.Peer: obj</div>
+<div class="tip" id="fs17">PeerSlot.State: obj</div>
+<div class="tip" id="fs18">val maxSlots : obj<br /><br />Full name: Tracker.maxSlots</div>
+<div class="tip" id="fs19">val mutable connectionCount : int<br /><br />Full name: Tracker.connectionCount</div>
+<div class="tip" id="fs20">val mutable seqId : int<br /><br />Full name: Tracker.seqId</div>
+<div class="tip" id="fs21">val disposable : obj<br /><br />Full name: Tracker.disposable</div>
+<div class="tip" id="fs22">val scheduler : obj<br /><br />Full name: Tracker.scheduler</div>
+<div class="tip" id="fs23">val incomingMessage : obj<br /><br />Full name: Tracker.incomingMessage</div>
+<div class="tip" id="fs24">val broadcastToPeers : obj<br /><br />Full name: Tracker.broadcastToPeers</div>
+<div class="tip" id="fs25">val pendingMessages : obj<br /><br />Full name: Tracker.pendingMessages</div>
+<div class="tip" id="fs26">Multiple items<br />type Queue&lt;&#39;T&gt; =<br />&#160;&#160;new : unit -&gt; Queue&lt;&#39;T&gt; + 2 overloads<br />&#160;&#160;member Clear : unit -&gt; unit<br />&#160;&#160;member Contains : item:&#39;T -&gt; bool<br />&#160;&#160;member CopyTo : array:&#39;T[] * arrayIndex:int -&gt; unit<br />&#160;&#160;member Count : int<br />&#160;&#160;member Dequeue : unit -&gt; &#39;T<br />&#160;&#160;member Enqueue : item:&#39;T -&gt; unit<br />&#160;&#160;member GetEnumerator : unit -&gt; Enumerator&lt;&#39;T&gt;<br />&#160;&#160;member Peek : unit -&gt; &#39;T<br />&#160;&#160;member ToArray : unit -&gt; &#39;T[]<br />&#160;&#160;...<br />&#160;&#160;nested type Enumerator<br /><br />Full name: System.Collections.Generic.Queue&lt;_&gt;<br /><br />--------------------<br />Queue() : unit<br />Queue(capacity: int) : unit<br />Queue(collection: IEnumerable&lt;&#39;T&gt;) : unit</div>
+<div class="tip" id="fs27">val nextId : unit -&gt; int<br /><br />Full name: Tracker.nextId</div>
+<div class="tip" id="fs28">val mutable peerSlots : Map&lt;int,PeerSlot&gt;<br /><br />Full name: Tracker.peerSlots</div>
+<div class="tip" id="fs29">Multiple items<br />module Map<br /><br />from Microsoft.FSharp.Collections<br /><br />--------------------<br />type Map&lt;&#39;Key,&#39;Value (requires comparison)&gt; =<br />&#160;&#160;interface IEnumerable<br />&#160;&#160;interface IComparable<br />&#160;&#160;interface IEnumerable&lt;KeyValuePair&lt;&#39;Key,&#39;Value&gt;&gt;<br />&#160;&#160;interface ICollection&lt;KeyValuePair&lt;&#39;Key,&#39;Value&gt;&gt;<br />&#160;&#160;interface IDictionary&lt;&#39;Key,&#39;Value&gt;<br />&#160;&#160;new : elements:seq&lt;&#39;Key * &#39;Value&gt; -&gt; Map&lt;&#39;Key,&#39;Value&gt;<br />&#160;&#160;member Add : key:&#39;Key * value:&#39;Value -&gt; Map&lt;&#39;Key,&#39;Value&gt;<br />&#160;&#160;member ContainsKey : key:&#39;Key -&gt; bool<br />&#160;&#160;override Equals : obj -&gt; bool<br />&#160;&#160;member Remove : key:&#39;Key -&gt; Map&lt;&#39;Key,&#39;Value&gt;<br />&#160;&#160;...<br /><br />Full name: Microsoft.FSharp.Collections.Map&lt;_,_&gt;<br /><br />--------------------<br />new : elements:seq&lt;&#39;Key * &#39;Value&gt; -&gt; Map&lt;&#39;Key,&#39;Value&gt;</div>
+<div class="tip" id="fs30">val empty&lt;&#39;Key,&#39;T (requires comparison)&gt; : Map&lt;&#39;Key,&#39;T&gt; (requires comparison)<br /><br />Full name: Microsoft.FSharp.Collections.Map.empty</div>
+<div class="tip" id="fs31">exception InvalidTransition of obj * obj<br /><br />Full name: Tracker.InvalidTransition</div>
+<div class="tip" id="fs32">val checkTransition : oldState:&#39;a -&gt; newState:&#39;b -&gt; &#39;c<br /><br />Full name: Tracker.checkTransition</div>
+<div class="tip" id="fs33">val oldState : &#39;a</div>
+<div class="tip" id="fs34">val newState : &#39;b</div>
+<div class="tip" id="fs35">val ignore : value:&#39;T -&gt; unit<br /><br />Full name: Microsoft.FSharp.Core.Operators.ignore</div>
+<div class="tip" id="fs36">val raise : exn:Exception -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.Operators.raise</div>
+<div class="tip" id="fs37">val changeState : id:int -&gt; newState:&#39;a -&gt; obj<br /><br />Full name: Tracker.changeState</div>
+<div class="tip" id="fs38">val id : int</div>
+<div class="tip" id="fs39">val newState : &#39;a</div>
+<div class="tip" id="fs40">val oldState : obj</div>
+<div class="tip" id="fs41">val peer : obj</div>
+<div class="tip" id="fs42">val dequeuePendingMessage : unit -&gt; &#39;a<br /><br />Full name: Tracker.dequeuePendingMessage</div>
+<div class="tip" id="fs43">val assign : message:&#39;a -&gt; ps:PeerSlot -&gt; &#39;b<br /><br />Full name: Tracker.assign</div>
+<div class="tip" id="fs44">val message : &#39;a</div>
+<div class="tip" id="fs45">val ps : PeerSlot</div>
+<div class="tip" id="fs46">val forward : command:&#39;a -&gt; message:&#39;b -&gt; &#39;c<br /><br />Full name: Tracker.forward</div>
+<div class="tip" id="fs47">val command : &#39;a</div>
+<div class="tip" id="fs48">val message : &#39;b</div>
+<div class="tip" id="fs49">val tryFind : key:&#39;Key -&gt; table:Map&lt;&#39;Key,&#39;T&gt; -&gt; &#39;T option (requires comparison)<br /><br />Full name: Microsoft.FSharp.Collections.Map.tryFind</div>
+<div class="tip" id="fs50">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; option:&#39;T option -&gt; &#39;U option<br /><br />Full name: Microsoft.FSharp.Core.Option.map</div>
+<div class="tip" id="fs51">module Observable<br /><br />from Microsoft.FSharp.Control</div>
+<div class="tip" id="fs52">Multiple items<br />type ArgumentException =<br />&#160;&#160;inherit SystemException<br />&#160;&#160;new : unit -&gt; ArgumentException + 4 overloads<br />&#160;&#160;member GetObjectData : info:SerializationInfo * context:StreamingContext -&gt; unit<br />&#160;&#160;member Message : string<br />&#160;&#160;member ParamName : string<br /><br />Full name: System.ArgumentException<br /><br />--------------------<br />ArgumentException() : unit<br />ArgumentException(message: string) : unit<br />ArgumentException(message: string, innerException: exn) : unit<br />ArgumentException(message: string, paramName: string) : unit<br />ArgumentException(message: string, paramName: string, innerException: exn) : unit</div>
+<div class="tip" id="fs53">val tryPick : chooser:(&#39;Key -&gt; &#39;T -&gt; &#39;U option) -&gt; table:Map&lt;&#39;Key,&#39;T&gt; -&gt; &#39;U option (requires comparison)<br /><br />Full name: Microsoft.FSharp.Collections.Map.tryPick</div>
+<div class="tip" id="fs54">union case Option.Some: Value: &#39;T -&gt; Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs55">union case Option.None: Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs56">module Seq<br /><br />from Microsoft.FSharp.Collections</div>
+<div class="tip" id="fs57">val filter : predicate:(&#39;T -&gt; bool) -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.filter</div>
+<div class="tip" id="fs58">val length : source:seq&lt;&#39;T&gt; -&gt; int<br /><br />Full name: Microsoft.FSharp.Collections.Seq.length</div>
+<div class="tip" id="fs59">val newPeer : unit -&gt; obj<br /><br />Full name: Tracker.newPeer</div>
+<div class="tip" id="fs60">val openSlotId : int</div>
+<div class="tip" id="fs61">member Map.Add : key:&#39;Key * value:&#39;Value -&gt; Map&lt;&#39;Key,&#39;Value&gt;</div>
+<div class="tip" id="fs62">val freePeer : id:int -&gt; unit<br /><br />Full name: Tracker.freePeer</div>
+<div class="tip" id="fs63">val iter : action:(&#39;T -&gt; unit) -&gt; option:&#39;T option -&gt; unit<br /><br />Full name: Microsoft.FSharp.Core.Option.iter</div>
+<div class="tip" id="fs64">val newPeer : obj option</div>
+<div class="tip" id="fs65">val p : obj</div>
+<div class="tip" id="fs66">member Map.Remove : key:&#39;Key -&gt; Map&lt;&#39;Key,&#39;Value&gt;</div>
+<div class="tip" id="fs67">val mutable tip : obj<br /><br />Full name: Tracker.tip</div>
+<div class="tip" id="fs68">val processCommand : command:&#39;a -&gt; &#39;b<br /><br />Full name: Tracker.processCommand</div>
+<div class="tip" id="fs69">property Map.Count: int</div>
+<div class="tip" id="fs70">val truncate : count:int -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.truncate</div>
+<div class="tip" id="fs71">val id : x:&#39;T -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.Operators.id</div>
+<div class="tip" id="fs72">member Map.TryFind : key:&#39;Key -&gt; &#39;Value option</div>
+<div class="tip" id="fs73">val processAddr : addr:&#39;a -&gt; unit<br /><br />Full name: Tracker.processAddr</div>
+<div class="tip" id="fs74">val addr : &#39;a</div>
+<div class="tip" id="fs75">val a : obj</div>
+<div class="tip" id="fs76">val getHeaders : gh:&#39;a * peer:&#39;b -&gt; &#39;c<br /><br />Full name: Tracker.getHeaders</div>
+<div class="tip" id="fs77">val gh : &#39;a</div>
+<div class="tip" id="fs78">val peer : &#39;b</div>
+<div class="tip" id="fs79">Multiple items<br />type Task =<br />&#160;&#160;new : action:Action -&gt; Task + 7 overloads<br />&#160;&#160;member AsyncState : obj<br />&#160;&#160;member ContinueWith : continuationAction:Action&lt;Task&gt; -&gt; Task + 9 overloads<br />&#160;&#160;member CreationOptions : TaskCreationOptions<br />&#160;&#160;member Dispose : unit -&gt; unit<br />&#160;&#160;member Exception : AggregateException<br />&#160;&#160;member Id : int<br />&#160;&#160;member IsCanceled : bool<br />&#160;&#160;member IsCompleted : bool<br />&#160;&#160;member IsFaulted : bool<br />&#160;&#160;...<br /><br />Full name: System.Threading.Tasks.Task<br /><br />--------------------<br />type Task&lt;&#39;TResult&gt; =<br />&#160;&#160;inherit Task<br />&#160;&#160;new : function:Func&lt;&#39;TResult&gt; -&gt; Task&lt;&#39;TResult&gt; + 7 overloads<br />&#160;&#160;member ContinueWith : continuationAction:Action&lt;Task&lt;&#39;TResult&gt;&gt; -&gt; Task + 9 overloads<br />&#160;&#160;member Result : &#39;TResult with get, set<br />&#160;&#160;static member Factory : TaskFactory&lt;&#39;TResult&gt;<br /><br />Full name: System.Threading.Tasks.Task&lt;_&gt;<br /><br />--------------------<br />Task(action: Action) : unit<br />Task(action: Action, cancellationToken: CancellationToken) : unit<br />Task(action: Action, creationOptions: TaskCreationOptions) : unit<br />Task(action: Action&lt;obj&gt;, state: obj) : unit<br />Task(action: Action, cancellationToken: CancellationToken, creationOptions: TaskCreationOptions) : unit<br />Task(action: Action&lt;obj&gt;, state: obj, cancellationToken: CancellationToken) : unit<br />Task(action: Action&lt;obj&gt;, state: obj, creationOptions: TaskCreationOptions) : unit<br />Task(action: Action&lt;obj&gt;, state: obj, cancellationToken: CancellationToken, creationOptions: TaskCreationOptions) : unit<br /><br />--------------------<br />Task(function: Func&lt;&#39;TResult&gt;) : unit<br />Task(function: Func&lt;&#39;TResult&gt;, cancellationToken: CancellationToken) : unit<br />Task(function: Func&lt;&#39;TResult&gt;, creationOptions: TaskCreationOptions) : unit<br />Task(function: Func&lt;obj,&#39;TResult&gt;, state: obj) : unit<br />Task(function: Func&lt;&#39;TResult&gt;, cancellationToken: CancellationToken, creationOptions: TaskCreationOptions) : unit<br />Task(function: Func&lt;obj,&#39;TResult&gt;, state: obj, cancellationToken: CancellationToken) : unit<br />Task(function: Func&lt;obj,&#39;TResult&gt;, state: obj, creationOptions: TaskCreationOptions) : unit<br />Task(function: Func&lt;obj,&#39;TResult&gt;, state: obj, cancellationToken: CancellationToken, creationOptions: TaskCreationOptions) : unit</div>
+<div class="tip" id="fs80">type IObservable&lt;&#39;T&gt; =<br />&#160;&#160;member Subscribe : observer:IObserver&lt;&#39;T&gt; -&gt; IDisposable<br /><br />Full name: System.IObservable&lt;_&gt;</div>
+<div class="tip" id="fs81">val ts : obj</div>
+<div class="tip" id="fs82">Multiple items<br />type TaskCompletionSource&lt;&#39;TResult&gt; =<br />&#160;&#160;new : unit -&gt; TaskCompletionSource&lt;&#39;TResult&gt; + 3 overloads<br />&#160;&#160;member SetCanceled : unit -&gt; unit<br />&#160;&#160;member SetException : exception:Exception -&gt; unit + 1 overload<br />&#160;&#160;member SetResult : result:&#39;TResult -&gt; unit<br />&#160;&#160;member Task : Task&lt;&#39;TResult&gt;<br />&#160;&#160;member TrySetCanceled : unit -&gt; bool<br />&#160;&#160;member TrySetException : exception:Exception -&gt; bool + 1 overload<br />&#160;&#160;member TrySetResult : result:&#39;TResult -&gt; bool<br /><br />Full name: System.Threading.Tasks.TaskCompletionSource&lt;_&gt;<br /><br />--------------------<br />TaskCompletionSource() : unit<br />TaskCompletionSource(creationOptions: TaskCreationOptions) : unit<br />TaskCompletionSource(state: obj) : unit<br />TaskCompletionSource(state: obj, creationOptions: TaskCreationOptions) : unit</div>
+<div class="tip" id="fs83">val getBlocks : blockHashes:seq&lt;byte []&gt; -&gt; Task&lt;&#39;a * IObservable&lt;&#39;b * byte []&gt;&gt;<br /><br />Full name: Tracker.getBlocks</div>
+<div class="tip" id="fs84">val blockHashes : seq&lt;byte []&gt;</div>
+<div class="tip" id="fs85">Multiple items<br />val seq : sequence:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Core.Operators.seq<br /><br />--------------------<br />type seq&lt;&#39;T&gt; = IEnumerable&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.seq&lt;_&gt;</div>
+<div class="tip" id="fs86">Multiple items<br />val byte : value:&#39;T -&gt; byte (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.byte<br /><br />--------------------<br />type byte = Byte<br /><br />Full name: Microsoft.FSharp.Core.byte</div>
+<div class="tip" id="fs87">val invHashes : obj list</div>
+<div class="tip" id="fs88">val h : byte []</div>
+<div class="tip" id="fs89">val toList : source:seq&lt;&#39;T&gt; -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.Seq.toList</div>
+<div class="tip" id="fs90">val gd : obj</div>
+<div class="tip" id="fs91">val ts : TaskCompletionSource&lt;&#39;a * IObservable&lt;&#39;b * byte []&gt;&gt;</div>
+<div class="tip" id="fs92">property TaskCompletionSource.Task: Task&lt;&#39;a * IObservable&lt;&#39;b * byte []&gt;&gt;</div>
+<div class="tip" id="fs93">val processBroadcast : m:&#39;a -&gt; unit<br /><br />Full name: Tracker.processBroadcast</div>
+<div class="tip" id="fs94">val m : &#39;a</div>
+<div class="tip" id="fs95">val peerSlot : KeyValuePair&lt;int,PeerSlot&gt;</div>
+<div class="tip" id="fs96">property KeyValuePair.Value: PeerSlot</div>
+<div class="tip" id="fs97">val startTracker : unit -&gt; &#39;a<br /><br />Full name: Tracker.startTracker</div>
+<div class="tip" id="fs98">val port : int<br /><br />Full name: Tracker.port</div>
+<div class="tip" id="fs99">val ipAddress : IPAddress<br /><br />Full name: Tracker.ipAddress</div>
+<div class="tip" id="fs100">Multiple items<br />type IPAddress =<br />&#160;&#160;new : newAddress:int64 -&gt; IPAddress + 2 overloads<br />&#160;&#160;member Address : int64 with get, set<br />&#160;&#160;member AddressFamily : AddressFamily<br />&#160;&#160;member Equals : comparand:obj -&gt; bool<br />&#160;&#160;member GetAddressBytes : unit -&gt; byte[]<br />&#160;&#160;member GetHashCode : unit -&gt; int<br />&#160;&#160;member IsIPv6LinkLocal : bool<br />&#160;&#160;member IsIPv6Multicast : bool<br />&#160;&#160;member IsIPv6SiteLocal : bool<br />&#160;&#160;member IsIPv6Teredo : bool<br />&#160;&#160;...<br /><br />Full name: System.Net.IPAddress<br /><br />--------------------<br />IPAddress(newAddress: int64) : unit<br />IPAddress(address: byte []) : unit<br />IPAddress(address: byte [], scopeid: int64) : unit</div>
+<div class="tip" id="fs101">field IPAddress.Any</div>
+<div class="tip" id="fs102">val endpoint : IPEndPoint<br /><br />Full name: Tracker.endpoint</div>
+<div class="tip" id="fs103">Multiple items<br />type IPEndPoint =<br />&#160;&#160;inherit EndPoint<br />&#160;&#160;new : address:int64 * port:int -&gt; IPEndPoint + 1 overload<br />&#160;&#160;member Address : IPAddress with get, set<br />&#160;&#160;member AddressFamily : AddressFamily<br />&#160;&#160;member Create : socketAddress:SocketAddress -&gt; EndPoint<br />&#160;&#160;member Equals : comparand:obj -&gt; bool<br />&#160;&#160;member GetHashCode : unit -&gt; int<br />&#160;&#160;member Port : int with get, set<br />&#160;&#160;member Serialize : unit -&gt; SocketAddress<br />&#160;&#160;member ToString : unit -&gt; string<br />&#160;&#160;static val MinPort : int<br />&#160;&#160;...<br /><br />Full name: System.Net.IPEndPoint<br /><br />--------------------<br />IPEndPoint(address: int64, port: int) : unit<br />IPEndPoint(address: IPAddress, port: int) : unit</div>
+<div class="tip" id="fs104">val cts : CancellationTokenSource<br /><br />Full name: Tracker.cts</div>
+<div class="tip" id="fs105">Multiple items<br />type CancellationTokenSource =<br />&#160;&#160;new : unit -&gt; CancellationTokenSource<br />&#160;&#160;member Cancel : unit -&gt; unit + 1 overload<br />&#160;&#160;member Dispose : unit -&gt; unit<br />&#160;&#160;member IsCancellationRequested : bool<br />&#160;&#160;member Token : CancellationToken<br />&#160;&#160;static member CreateLinkedTokenSource : params tokens:CancellationToken[] -&gt; CancellationTokenSource + 1 overload<br /><br />Full name: System.Threading.CancellationTokenSource<br /><br />--------------------<br />CancellationTokenSource() : unit</div>
+<div class="tip" id="fs106">val listener : Socket<br /><br />Full name: Tracker.listener</div>
+<div class="tip" id="fs107">Multiple items<br />type Socket =<br />&#160;&#160;new : socketInformation:SocketInformation -&gt; Socket + 1 overload<br />&#160;&#160;member Accept : unit -&gt; Socket<br />&#160;&#160;member AcceptAsync : e:SocketAsyncEventArgs -&gt; bool<br />&#160;&#160;member AddressFamily : AddressFamily<br />&#160;&#160;member Available : int<br />&#160;&#160;member BeginAccept : callback:AsyncCallback * state:obj -&gt; IAsyncResult + 2 overloads<br />&#160;&#160;member BeginConnect : remoteEP:EndPoint * callback:AsyncCallback * state:obj -&gt; IAsyncResult + 3 overloads<br />&#160;&#160;member BeginDisconnect : reuseSocket:bool * callback:AsyncCallback * state:obj -&gt; IAsyncResult<br />&#160;&#160;member BeginReceive : buffers:IList&lt;ArraySegment&lt;byte&gt;&gt; * socketFlags:SocketFlags * callback:AsyncCallback * state:obj -&gt; IAsyncResult + 3 overloads<br />&#160;&#160;member BeginReceiveFrom : buffer:byte[] * offset:int * size:int * socketFlags:SocketFlags * remoteEP:EndPoint * callback:AsyncCallback * state:obj -&gt; IAsyncResult<br />&#160;&#160;...<br /><br />Full name: System.Net.Sockets.Socket<br /><br />--------------------<br />Socket(socketInformation: SocketInformation) : unit<br />Socket(addressFamily: AddressFamily, socketType: SocketType, protocolType: ProtocolType) : unit</div>
+<div class="tip" id="fs108">type AddressFamily =<br />&#160;&#160;| Unknown = -1<br />&#160;&#160;| Unspecified = 0<br />&#160;&#160;| Unix = 1<br />&#160;&#160;| InterNetwork = 2<br />&#160;&#160;| ImpLink = 3<br />&#160;&#160;| Pup = 4<br />&#160;&#160;| Chaos = 5<br />&#160;&#160;| NS = 6<br />&#160;&#160;| Ipx = 6<br />&#160;&#160;| Iso = 7<br />&#160;&#160;...<br /><br />Full name: System.Net.Sockets.AddressFamily</div>
+<div class="tip" id="fs109">field AddressFamily.InterNetwork = 2</div>
+<div class="tip" id="fs110">type SocketType =<br />&#160;&#160;| Stream = 1<br />&#160;&#160;| Dgram = 2<br />&#160;&#160;| Raw = 3<br />&#160;&#160;| Rdm = 4<br />&#160;&#160;| Seqpacket = 5<br />&#160;&#160;| Unknown = -1<br /><br />Full name: System.Net.Sockets.SocketType</div>
+<div class="tip" id="fs111">field SocketType.Stream = 1</div>
+<div class="tip" id="fs112">type ProtocolType =<br />&#160;&#160;| IP = 0<br />&#160;&#160;| IPv6HopByHopOptions = 0<br />&#160;&#160;| Icmp = 1<br />&#160;&#160;| Igmp = 2<br />&#160;&#160;| Ggp = 3<br />&#160;&#160;| IPv4 = 4<br />&#160;&#160;| Tcp = 6<br />&#160;&#160;| Pup = 12<br />&#160;&#160;| Udp = 17<br />&#160;&#160;| Idp = 22<br />&#160;&#160;...<br /><br />Full name: System.Net.Sockets.ProtocolType</div>
+<div class="tip" id="fs113">field ProtocolType.Tcp = 6</div>
+<div class="tip" id="fs114">Socket.Bind(localEP: EndPoint) : unit</div>
+<div class="tip" id="fs115">Socket.Listen(backlog: int) : unit</div>
+<div class="tip" id="fs116">type SocketOptionName =<br />&#160;&#160;| Debug = 1<br />&#160;&#160;| AcceptConnection = 2<br />&#160;&#160;| ReuseAddress = 4<br />&#160;&#160;| KeepAlive = 8<br />&#160;&#160;| DontRoute = 16<br />&#160;&#160;| Broadcast = 32<br />&#160;&#160;| UseLoopback = 64<br />&#160;&#160;| Linger = 128<br />&#160;&#160;| OutOfBandInline = 256<br />&#160;&#160;| DontLinger = -129<br />&#160;&#160;...<br /><br />Full name: System.Net.Sockets.SocketOptionName</div>
+<div class="tip" id="fs117">field SocketOptionName.MaxConnections = 2147483647</div>
+<div class="tip" id="fs118">val connectLoop : unit -&gt; Async&lt;&#39;a&gt;<br /><br />Full name: Tracker.connectLoop</div>
+<div class="tip" id="fs119">val async : AsyncBuilder<br /><br />Full name: Microsoft.FSharp.Core.ExtraTopLevelOperators.async</div>
+<div class="tip" id="fs120">val socket : Socket</div>
+<div class="tip" id="fs121">Multiple items<br />type Async<br />static member AsBeginEnd : computation:(&#39;Arg -&gt; Async&lt;&#39;T&gt;) -&gt; (&#39;Arg * AsyncCallback * obj -&gt; IAsyncResult) * (IAsyncResult -&gt; &#39;T) * (IAsyncResult -&gt; unit)<br />static member AwaitEvent : event:IEvent&lt;&#39;Del,&#39;T&gt; * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt; (requires delegate and &#39;Del :&gt; Delegate)<br />static member AwaitIAsyncResult : iar:IAsyncResult * ?millisecondsTimeout:int -&gt; Async&lt;bool&gt;<br />static member AwaitTask : task:Task&lt;&#39;T&gt; -&gt; Async&lt;&#39;T&gt;<br />static member AwaitWaitHandle : waitHandle:WaitHandle * ?millisecondsTimeout:int -&gt; Async&lt;bool&gt;<br />static member CancelDefaultToken : unit -&gt; unit<br />static member Catch : computation:Async&lt;&#39;T&gt; -&gt; Async&lt;Choice&lt;&#39;T,exn&gt;&gt;<br />static member FromBeginEnd : beginAction:(AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member FromBeginEnd : arg:&#39;Arg1 * beginAction:(&#39;Arg1 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member FromBeginEnd : arg1:&#39;Arg1 * arg2:&#39;Arg2 * beginAction:(&#39;Arg1 * &#39;Arg2 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member FromBeginEnd : arg1:&#39;Arg1 * arg2:&#39;Arg2 * arg3:&#39;Arg3 * beginAction:(&#39;Arg1 * &#39;Arg2 * &#39;Arg3 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member FromContinuations : callback:((&#39;T -&gt; unit) * (exn -&gt; unit) * (OperationCanceledException -&gt; unit) -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member Ignore : computation:Async&lt;&#39;T&gt; -&gt; Async&lt;unit&gt;<br />static member OnCancel : interruption:(unit -&gt; unit) -&gt; Async&lt;IDisposable&gt;<br />static member Parallel : computations:seq&lt;Async&lt;&#39;T&gt;&gt; -&gt; Async&lt;&#39;T []&gt;<br />static member RunSynchronously : computation:Async&lt;&#39;T&gt; * ?timeout:int * ?cancellationToken:CancellationToken -&gt; &#39;T<br />static member Sleep : millisecondsDueTime:int -&gt; Async&lt;unit&gt;<br />static member Start : computation:Async&lt;unit&gt; * ?cancellationToken:CancellationToken -&gt; unit<br />static member StartAsTask : computation:Async&lt;&#39;T&gt; * ?taskCreationOptions:TaskCreationOptions * ?cancellationToken:CancellationToken -&gt; Task&lt;&#39;T&gt;<br />static member StartChild : computation:Async&lt;&#39;T&gt; * ?millisecondsTimeout:int -&gt; Async&lt;Async&lt;&#39;T&gt;&gt;<br />static member StartChildAsTask : computation:Async&lt;&#39;T&gt; * ?taskCreationOptions:TaskCreationOptions -&gt; Async&lt;Task&lt;&#39;T&gt;&gt;<br />static member StartImmediate : computation:Async&lt;unit&gt; * ?cancellationToken:CancellationToken -&gt; unit<br />static member StartWithContinuations : computation:Async&lt;&#39;T&gt; * continuation:(&#39;T -&gt; unit) * exceptionContinuation:(exn -&gt; unit) * cancellationContinuation:(OperationCanceledException -&gt; unit) * ?cancellationToken:CancellationToken -&gt; unit<br />static member SwitchToContext : syncContext:SynchronizationContext -&gt; Async&lt;unit&gt;<br />static member SwitchToNewThread : unit -&gt; Async&lt;unit&gt;<br />static member SwitchToThreadPool : unit -&gt; Async&lt;unit&gt;<br />static member TryCancelled : computation:Async&lt;&#39;T&gt; * compensation:(OperationCanceledException -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member CancellationToken : Async&lt;CancellationToken&gt;<br />static member DefaultCancellationToken : CancellationToken<br /><br />Full name: Microsoft.FSharp.Control.Async<br /><br />--------------------<br />type Async&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Control.Async&lt;_&gt;</div>
+<div class="tip" id="fs122">static member Async.FromBeginEnd : beginAction:(AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member Async.FromBeginEnd : arg:&#39;Arg1 * beginAction:(&#39;Arg1 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member Async.FromBeginEnd : arg1:&#39;Arg1 * arg2:&#39;Arg2 * beginAction:(&#39;Arg1 * &#39;Arg2 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member Async.FromBeginEnd : arg1:&#39;Arg1 * arg2:&#39;Arg2 * arg3:&#39;Arg3 * beginAction:(&#39;Arg1 * &#39;Arg2 * &#39;Arg3 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;</div>
+<div class="tip" id="fs123">Socket.BeginAccept(callback: AsyncCallback, state: obj) : IAsyncResult<br />Socket.BeginAccept(receiveSize: int, callback: AsyncCallback, state: obj) : IAsyncResult<br />Socket.BeginAccept(acceptSocket: Socket, receiveSize: int, callback: AsyncCallback, state: obj) : IAsyncResult</div>
+<div class="tip" id="fs124">Socket.EndAccept(asyncResult: IAsyncResult) : Socket<br />Socket.EndAccept(buffer: byref&lt;byte []&gt;, asyncResult: IAsyncResult) : Socket<br />Socket.EndAccept(buffer: byref&lt;byte []&gt;, bytesTransferred: byref&lt;int&gt;, asyncResult: IAsyncResult) : Socket</div>
+<div class="tip" id="fs125">val stream : NetworkStream</div>
+<div class="tip" id="fs126">Multiple items<br />type NetworkStream =<br />&#160;&#160;inherit Stream<br />&#160;&#160;new : socket:Socket -&gt; NetworkStream + 3 overloads<br />&#160;&#160;member BeginRead : buffer:byte[] * offset:int * size:int * callback:AsyncCallback * state:obj -&gt; IAsyncResult<br />&#160;&#160;member BeginWrite : buffer:byte[] * offset:int * size:int * callback:AsyncCallback * state:obj -&gt; IAsyncResult<br />&#160;&#160;member CanRead : bool<br />&#160;&#160;member CanSeek : bool<br />&#160;&#160;member CanTimeout : bool<br />&#160;&#160;member CanWrite : bool<br />&#160;&#160;member Close : timeout:int -&gt; unit<br />&#160;&#160;member DataAvailable : bool<br />&#160;&#160;member EndRead : asyncResult:IAsyncResult -&gt; int<br />&#160;&#160;...<br /><br />Full name: System.Net.Sockets.NetworkStream<br /><br />--------------------<br />NetworkStream(socket: Socket) : unit<br />NetworkStream(socket: Socket, ownsSocket: bool) : unit<br />NetworkStream(socket: Socket, access: FileAccess) : unit<br />NetworkStream(socket: Socket, access: FileAccess, ownsSocket: bool) : unit</div>
+<div class="tip" id="fs127">property Socket.RemoteEndPoint: EndPoint</div>
+<div class="tip" id="fs128">val startServer : unit -&gt; unit<br /><br />Full name: Tracker.startServer</div>
+<div class="tip" id="fs129">static member Async.Start : computation:Async&lt;unit&gt; * ?cancellationToken:CancellationToken -&gt; unit</div>
+<div class="tip" id="fs130">property CancellationTokenSource.Token: CancellationToken</div>
+          
+        </div>
+        <div class="span1"></div>
+      </div>
+    </div>
+  </body>
+</html>

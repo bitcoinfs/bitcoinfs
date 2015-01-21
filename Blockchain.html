@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <!-- 
+      The Bob the Blockchain
+ parameters will be replaced with the 
+      document title extracted from the <h1> element or
+      file name, if there is no <h1> heading
+    -->
+    <title>Bob the Blockchain
+</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="http://code.jquery.com/jquery-1.8.0.js"></script>
+    <script src="http://code.jquery.com/ui/1.8.23/jquery-ui.js"></script>
+    <script src="http://netdna.bootstrapcdn.com/twitter-bootstrap/3.3.2/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link href="http://getbootstrap.com/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="content/style.css" />
+    <script src="content/tips.js" type="text/javascript"></script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="index.html">Bitcoin F#</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li><a href="index.html">Intro</a></li>
+            <li><a href="Protocol.html">Protocol</a></li>
+            <li><a href="DB.html">Persistence</a></li>
+            <li><a href="P2P.html">Peer to Peer</a></li>
+            <li><a href="Peer.html">Peer</a></li>
+            <li><a href="Tracker.html">Tracker</a></li>
+            <li><a href="Script.html">Script Interpreter</a></li>
+            <li><a href="Mempool.html">Mempool</a></li>
+            <li><a href="Checks.html">Validation</a></li>
+            <li><a href="Blockchain.html">Blockchain</a></li>
+            <li><a href="Main.html">Main</a></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </nav>
+    <div class="container">
+      <div class="row" style="margin-top:70px">
+        <div class="span1"></div>
+        <div class="span10" id="main">
+          <h1>Bob the Blockchain</h1>
+
+<p>This is now close to the end of the code and it is the highest component in the data model. Bob's job is to identify the best <em>valid</em> blockchain
+and keep the UTXO set synchronized to it. Working with the other actors, Bob knows when a peer has a block hash that he doesn't know about and
+can request the recent headers from this peer has. Also, once his satisfied with the block headers, Bob can request for the actual block contents.</p>
+
+<p>Bob is a very cautious man and he will check everything that people tell him, but he's also a forgiving man and he will accept all the blocks that
+are valid even if a peer tries to sneak in a few invalid block here and there.</p>
+
+<p>When he synchronizes (catches up) with a peer, Bob follows the checklist:</p>
+
+<ul>
+<li>get headers (async). Bob gives his most recent block header (the tip) and asks the peer if he has any blocks after that one
+If the peer says no, Bob is done. If he gets some blocks, Bob will connect them with the ones he knows already. If they can't be connected because he
+never heard the block that supposedly precedes the chain that he received, Bob concludes that the chain is orphaned and not of concern to him. If that chain
+eventually gets connected, he will be made aware of it when he get the connecting block.</li>
+<li>extend the new chain if possible. Bob consults his database to see if he has received headers that follows the new chain because, at times, blocks are given out of order</li>
+<li>compute heights. Now that the block connects somewhere to a known block, Bob can update the heights of all the blocks that he received. Starting from the previous block
+that he knows about, Bob increments the height and sets to the first block of the new chain and so on so forth.</li>
+<li>store headers into db. Bob takes these headers and writes them to his database. They will never be removed from there.</li>
+<li>compare POW. First he finds out the lowest common ancestor between his best chain and the chain he received. If the chain he received extends his current chain, it's the best case because the LCA will be his tip 
+but it doesn't matter to Bob.
+He compares the work from both chains. Knowing that both chains are equal from the LCA to the genesis block, Bob only has to compare the POW between the LCA and both tips. If the new chain
+is no better than the old one, there is no need to continue.</li>
+<li>(connect with orphans)</li>
+<li>download blocks (async). Bob looks at the blocks he already has downloaded and says to himself - well no need to download these again! Bob splits the rest evenly in several groups
+and asks his peers to download them for him. This task is done in parallel while he sits patiently. During that time, if a download fails the blocks get reassigned to a different peer.
+So, eventually Bob gets his blocks or the retry limit got reached. In the later case, Bob gives up and will try another time. The catchup fails.</li>
+<li>rollback utxo to LCA beween main and new fork. However, if Bob got his blocks he now has to determine how many of these blocks are good. He creates a new in memory UTXO set on top of the existing db
+and rolls back all the blocks back to the LCA. Then he dilligently checks the blocks of the new chain and applies their transactions until the end or the first failure. If he made it to the end, the new chain
+was all good. If not, he has a partially good new chain.</li>
+<li>compare pow between current chain and new chain. Bob trims the new chain down to the first failure if there was one and compares the POW of the revised chain with his own chain. The new chain was trimmed so
+even if it was better earlier, it may not be as good anymore.</li>
+<li>if better, commit tempdb, update tip. Finally, if the new chain is still better than his chain, Bob commits the in memory UTXO to the database and updates his tip. Otherwise, he simply drops the in memory UTXO and
+everything is forgotten.</li>
+</ul>
+
+<p>Here's a big flowchart</p>
+
+<p><img src="uml/blockchain.png" alt="blockchain" /></p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">module</span> <span onmouseout="hideTip(event, 'fs1', 1)" onmouseover="showTip(event, 'fs1', 1)" class="i">Blockchain</span></pre>
+</td>
+</tr>
+</table>
+
+<p>And in code:</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs21', 39)" onmouseover="showTip(event, 'fs21', 39)" class="i">calculateChainHeights</span>(<span onmouseout="hideTip(event, 'fs22', 40)" onmouseover="showTip(event, 'fs22', 40)" class="i">newHeaders</span><span class="o">:</span> <span class="i">BlockHeaderList</span>)<span class="o">:</span> <span class="i">BlockChainFragment</span> <span onmouseout="hideTip(event, 'fs23', 41)" onmouseover="showTip(event, 'fs23', 41)" class="i">option</span> <span class="o">=</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs24', 42)" onmouseover="showTip(event, 'fs24', 42)" class="i">blockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs20', 43)" onmouseover="showTip(event, 'fs20', 43)" class="i">fnBlockchain</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs25', 44)" onmouseover="showTip(event, 'fs25', 44)" class="i">hashOfPrevNewHeader</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs26', 45)" onmouseover="showTip(event, 'fs26', 45)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs27', 46)" onmouseover="showTip(event, 'fs27', 46)" class="i">tryPick</span> <span onmouseout="hideTip(event, 'fs28', 47)" onmouseover="showTip(event, 'fs28', 47)" class="i">Some</span> <span onmouseout="hideTip(event, 'fs22', 48)" onmouseover="showTip(event, 'fs22', 48)" class="i">newHeaders</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 49)" onmouseover="showTip(event, 'fs17', 49)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs29', 50)" onmouseover="showTip(event, 'fs29', 50)" class="i">map</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs30', 51)" onmouseover="showTip(event, 'fs30', 51)" class="i">bh</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs30', 52)" onmouseover="showTip(event, 'fs30', 52)" class="i">bh</span><span class="o">.</span><span class="i">PrevHash</span>) <span class="o">|?|</span> <span onmouseout="hideTip(event, 'fs19', 53)" onmouseover="showTip(event, 'fs19', 53)" class="i">tip</span><span class="o">.</span><span class="i">Hash</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs31', 54)" onmouseover="showTip(event, 'fs31', 54)" class="i">prevNewHeader</span> <span class="o">=</span> <span class="i">Db</span><span class="o">.</span><span class="i">readHeader</span> <span onmouseout="hideTip(event, 'fs25', 55)" onmouseover="showTip(event, 'fs25', 55)" class="i">hashOfPrevNewHeader</span>
+    <span class="k">if</span> <span onmouseout="hideTip(event, 'fs31', 56)" onmouseover="showTip(event, 'fs31', 56)" class="i">prevNewHeader</span><span class="o">.</span><span class="i">Hash</span> <span class="o">=</span> <span class="i">zeroHash</span>
+    <span class="k">then</span> 
+        <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Orphaned</span><span class="s"> </span><span class="s">branch</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs22', 57)" onmouseover="showTip(event, 'fs22', 57)" class="i">newHeaders</span>
+        <span onmouseout="hideTip(event, 'fs32', 58)" onmouseover="showTip(event, 'fs32', 58)" class="i">None</span>
+    <span class="k">else</span> 
+        <span onmouseout="hideTip(event, 'fs22', 59)" onmouseover="showTip(event, 'fs22', 59)" class="i">newHeaders</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 60)" onmouseover="showTip(event, 'fs26', 60)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs33', 61)" onmouseover="showTip(event, 'fs33', 61)" class="i">iteri</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs34', 62)" onmouseover="showTip(event, 'fs34', 62)" class="i">i</span> <span onmouseout="hideTip(event, 'fs35', 63)" onmouseover="showTip(event, 'fs35', 63)" class="i">newHeader</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs35', 64)" onmouseover="showTip(event, 'fs35', 64)" class="i">newHeader</span><span class="o">.</span><span class="i">Height</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs31', 65)" onmouseover="showTip(event, 'fs31', 65)" class="i">prevNewHeader</span><span class="o">.</span><span class="i">Height</span> <span class="o">+</span> <span onmouseout="hideTip(event, 'fs34', 66)" onmouseover="showTip(event, 'fs34', 66)" class="i">i</span> <span class="o">+</span> <span class="n">1</span>)
+        (<span onmouseout="hideTip(event, 'fs31', 67)" onmouseover="showTip(event, 'fs31', 67)" class="i">prevNewHeader</span> <span class="o">::</span> <span onmouseout="hideTip(event, 'fs22', 68)" onmouseover="showTip(event, 'fs22', 68)" class="i">newHeaders</span> ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 69)" onmouseover="showTip(event, 'fs36', 69)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs37', 70)" onmouseover="showTip(event, 'fs37', 70)" class="i">rev</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs28', 71)" onmouseover="showTip(event, 'fs28', 71)" class="i">Some</span></pre>
+</td>
+</tr>
+</table>
+
+<p>To calculate the lowest common ancestor, I use the fact that I know the height of the nodes. It makes
+the determination much simpler. I find the minimum height between the two nodes and move from the deeper
+node up until I reach a node that has the same height. Now I'm working with two nodes that are at the same height
+but potentially in different branches of the tree. I compare the two nodes and move up from both nodes simultaneously 
+until I reach the same ancestor.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+<span class="l">6: </span>
+<span class="l">7: </span>
+<span class="l">8: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs38', 72)" onmouseover="showTip(event, 'fs38', 72)" class="i">calculateLowestCommonAncestor</span> (<span onmouseout="hideTip(event, 'fs39', 73)" onmouseover="showTip(event, 'fs39', 73)" class="i">newChain</span><span class="o">:</span> <span class="i">BlockChainFragment</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs40', 74)" onmouseover="showTip(event, 'fs40', 74)" class="i">blockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs20', 75)" onmouseover="showTip(event, 'fs20', 75)" class="i">fnBlockchain</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs41', 76)" onmouseover="showTip(event, 'fs41', 76)" class="i">newTip</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs39', 77)" onmouseover="showTip(event, 'fs39', 77)" class="i">newChain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 78)" onmouseover="showTip(event, 'fs36', 78)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs42', 79)" onmouseover="showTip(event, 'fs42', 79)" class="i">head</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs43', 80)" onmouseover="showTip(event, 'fs43', 80)" class="i">minHeight</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs44', 81)" onmouseover="showTip(event, 'fs44', 81)" class="i">min</span> <span onmouseout="hideTip(event, 'fs19', 82)" onmouseover="showTip(event, 'fs19', 82)" class="i">tip</span><span class="o">.</span><span class="i">Height</span> <span onmouseout="hideTip(event, 'fs41', 83)" onmouseover="showTip(event, 'fs41', 83)" class="i">newTip</span><span class="o">.</span><span class="i">Height</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs45', 84)" onmouseover="showTip(event, 'fs45', 84)" class="i">trimBlockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs40', 85)" onmouseover="showTip(event, 'fs40', 85)" class="i">blockchain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 86)" onmouseover="showTip(event, 'fs26', 86)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs46', 87)" onmouseover="showTip(event, 'fs46', 87)" class="i">skip</span> (<span onmouseout="hideTip(event, 'fs19', 88)" onmouseover="showTip(event, 'fs19', 88)" class="i">tip</span><span class="o">.</span><span class="i">Height</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs43', 89)" onmouseover="showTip(event, 'fs43', 89)" class="i">minHeight</span>)
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs47', 90)" onmouseover="showTip(event, 'fs47', 90)" class="i">trimNewHeaders</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs39', 91)" onmouseover="showTip(event, 'fs39', 91)" class="i">newChain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 92)" onmouseover="showTip(event, 'fs26', 92)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs46', 93)" onmouseover="showTip(event, 'fs46', 93)" class="i">skip</span> (<span onmouseout="hideTip(event, 'fs41', 94)" onmouseover="showTip(event, 'fs41', 94)" class="i">newTip</span><span class="o">.</span><span class="i">Height</span> <span class="o">-</span> <span onmouseout="hideTip(event, 'fs43', 95)" onmouseover="showTip(event, 'fs43', 95)" class="i">minHeight</span>)
+
+    (<span onmouseout="hideTip(event, 'fs26', 96)" onmouseover="showTip(event, 'fs26', 96)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs48', 97)" onmouseover="showTip(event, 'fs48', 97)" class="i">zip</span> <span onmouseout="hideTip(event, 'fs45', 98)" onmouseover="showTip(event, 'fs45', 98)" class="i">trimBlockchain</span> <span onmouseout="hideTip(event, 'fs47', 99)" onmouseover="showTip(event, 'fs47', 99)" class="i">trimNewHeaders</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 100)" onmouseover="showTip(event, 'fs26', 100)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 101)" onmouseover="showTip(event, 'fs49', 101)" class="i">find</span> (<span class="k">fun</span> (<span onmouseout="hideTip(event, 'fs50', 102)" onmouseover="showTip(event, 'fs50', 102)" class="i">a</span>, <span onmouseout="hideTip(event, 'fs51', 103)" onmouseover="showTip(event, 'fs51', 103)" class="i">b</span>) <span class="k">-&gt;</span> <span class="i">hashCompare</span><span class="o">.</span><span class="i">Equals</span>(<span onmouseout="hideTip(event, 'fs50', 104)" onmouseover="showTip(event, 'fs50', 104)" class="i">a</span><span class="o">.</span><span class="i">Hash</span>, <span onmouseout="hideTip(event, 'fs51', 105)" onmouseover="showTip(event, 'fs51', 105)" class="i">b</span><span class="o">.</span><span class="i">Hash</span>)) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs52', 106)" onmouseover="showTip(event, 'fs52', 106)" class="i">fst</span>)</pre>
+</td>
+</tr>
+</table>
+
+<p>Compares the POW of one chain against the current chain starting from the given node</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs53', 107)" onmouseover="showTip(event, 'fs53', 107)" class="i">isBetter</span> (<span onmouseout="hideTip(event, 'fs54', 108)" onmouseover="showTip(event, 'fs54', 108)" class="i">lowestCommonAncestor</span><span class="o">:</span> <span class="i">BlockHeader</span>) (<span onmouseout="hideTip(event, 'fs55', 109)" onmouseover="showTip(event, 'fs55', 109)" class="i">newChain</span><span class="o">:</span> <span class="i">BlockChainFragment</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs56', 110)" onmouseover="showTip(event, 'fs56', 110)" class="i">blockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs20', 111)" onmouseover="showTip(event, 'fs20', 111)" class="i">fnBlockchain</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs57', 112)" onmouseover="showTip(event, 'fs57', 112)" class="i">mainChain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs56', 113)" onmouseover="showTip(event, 'fs56', 113)" class="i">blockchain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 114)" onmouseover="showTip(event, 'fs26', 114)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs58', 115)" onmouseover="showTip(event, 'fs58', 115)" class="i">takeWhile</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs30', 116)" onmouseover="showTip(event, 'fs30', 116)" class="i">bh</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs30', 117)" onmouseover="showTip(event, 'fs30', 117)" class="i">bh</span><span class="o">.</span><span class="i">Height</span> <span class="o">&lt;&gt;</span> <span onmouseout="hideTip(event, 'fs54', 118)" onmouseover="showTip(event, 'fs54', 118)" class="i">lowestCommonAncestor</span><span class="o">.</span><span class="i">Height</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 119)" onmouseover="showTip(event, 'fs26', 119)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 120)" onmouseover="showTip(event, 'fs59', 120)" class="i">toList</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs60', 121)" onmouseover="showTip(event, 'fs60', 121)" class="i">newFork</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs55', 122)" onmouseover="showTip(event, 'fs55', 122)" class="i">newChain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 123)" onmouseover="showTip(event, 'fs26', 123)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs58', 124)" onmouseover="showTip(event, 'fs58', 124)" class="i">takeWhile</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs61', 125)" onmouseover="showTip(event, 'fs61', 125)" class="i">bh</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs61', 126)" onmouseover="showTip(event, 'fs61', 126)" class="i">bh</span><span class="o">.</span><span class="i">Height</span> <span class="o">&lt;&gt;</span> <span onmouseout="hideTip(event, 'fs54', 127)" onmouseover="showTip(event, 'fs54', 127)" class="i">lowestCommonAncestor</span><span class="o">.</span><span class="i">Height</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 128)" onmouseover="showTip(event, 'fs26', 128)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 129)" onmouseover="showTip(event, 'fs59', 129)" class="i">toList</span>
+    <span class="i">getWork</span> <span onmouseout="hideTip(event, 'fs57', 130)" onmouseover="showTip(event, 'fs57', 130)" class="i">mainChain</span> <span class="o">&lt;</span> <span class="i">getWork</span> <span onmouseout="hideTip(event, 'fs60', 131)" onmouseover="showTip(event, 'fs60', 131)" class="i">newFork</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Fetch a set of nodes asynchrounously from the current set of peers. The function retries until it reaches the maximum
+number of attempts. Between retries, only the failed downloads are retried. For instance, if a peer provides 9/10 blocks
+only the 1/10 missing block is retried. Furthermore, after a failure the peer gets a malus (<code>Bad</code>) and can end up being removed.
+In that case, the application will use a different peer. In the background, the tracker will eventually replace the bad peer too. 
+That takes place independently from Bob.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+<span class="l">40: </span>
+<span class="l">41: </span>
+<span class="l">42: </span>
+<span class="l">43: </span>
+<span class="l">44: </span>
+<span class="l">45: </span>
+<span class="l">46: </span>
+<span class="l">47: </span>
+<span class="l">48: </span>
+<span class="l">49: </span>
+<span class="l">50: </span>
+<span class="l">51: </span>
+<span class="l">52: </span>
+<span class="l">53: </span>
+<span class="l">54: </span>
+<span class="l">55: </span>
+<span class="l">56: </span>
+<span class="l">57: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs62', 132)" onmouseover="showTip(event, 'fs62', 132)" class="i">BlockMap</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs63', 133)" onmouseover="showTip(event, 'fs63', 133)" class="i">Map</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs64', 134)" onmouseover="showTip(event, 'fs64', 134)" class="i">byte</span>[], <span class="i">BlockHeader</span><span class="o">&gt;</span>
+<span class="c">// Get a list of blocks</span>
+<span class="k">let</span> <span class="k">rec</span> <span onmouseout="hideTip(event, 'fs65', 135)" onmouseover="showTip(event, 'fs65', 135)" class="i">asyncGetBlocks</span> (<span onmouseout="hideTip(event, 'fs66', 136)" onmouseover="showTip(event, 'fs66', 136)" class="i">headers</span><span class="o">:</span> <span class="i">BlockHeader</span> <span onmouseout="hideTip(event, 'fs67', 137)" onmouseover="showTip(event, 'fs67', 137)" class="i">list</span>) (<span onmouseout="hideTip(event, 'fs68', 138)" onmouseover="showTip(event, 'fs68', 138)" class="i">attempsRemaining</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs69', 139)" onmouseover="showTip(event, 'fs69', 139)" class="i">int</span>) <span class="o">=</span> 
+    <span class="c">// After a block is received, check that it&#39;s among the blocks we are waiting for</span>
+    <span class="c">// If so, update the height and store it on file</span>
+    <span class="c">// Then remove it from the list of pending blocks</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs70', 140)" onmouseover="showTip(event, 'fs70', 140)" class="i">updatePendingBlocks</span> (<span onmouseout="hideTip(event, 'fs71', 141)" onmouseover="showTip(event, 'fs71', 141)" class="i">pendingBlocks</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs62', 142)" onmouseover="showTip(event, 'fs62', 142)" class="i">BlockMap</span>) (<span onmouseout="hideTip(event, 'fs72', 143)" onmouseover="showTip(event, 'fs72', 143)" class="i">block</span><span class="o">:</span> <span class="i">Block</span>, <span onmouseout="hideTip(event, 'fs73', 144)" onmouseover="showTip(event, 'fs73', 144)" class="i">payload</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs64', 145)" onmouseover="showTip(event, 'fs64', 145)" class="i">byte</span>[]) <span class="o">=</span> 
+        <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Block</span><span class="s"> </span><span class="s">received</span><span class="s"> </span><span class="s">-</span><span class="s">&gt;</span><span class="s"> </span><span class="s">%</span><span class="s">s</span><span class="s">&quot;</span> (<span class="i">hashToHex</span> <span onmouseout="hideTip(event, 'fs72', 146)" onmouseover="showTip(event, 'fs72', 146)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Hash</span>)
+        <span onmouseout="hideTip(event, 'fs71', 147)" onmouseover="showTip(event, 'fs71', 147)" class="i">pendingBlocks</span><span class="o">.</span><span class="i">TryFind</span>(<span onmouseout="hideTip(event, 'fs72', 148)" onmouseover="showTip(event, 'fs72', 148)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Hash</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 149)" onmouseover="showTip(event, 'fs17', 149)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs74', 150)" onmouseover="showTip(event, 'fs74', 150)" class="i">iter</span>(<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs75', 151)" onmouseover="showTip(event, 'fs75', 151)" class="i">header</span> <span class="k">-&gt;</span>
+            <span onmouseout="hideTip(event, 'fs72', 152)" onmouseover="showTip(event, 'fs72', 152)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Height</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs75', 153)" onmouseover="showTip(event, 'fs75', 153)" class="i">header</span><span class="o">.</span><span class="i">Height</span>
+            <span class="i">storeBlock</span> <span onmouseout="hideTip(event, 'fs72', 154)" onmouseover="showTip(event, 'fs72', 154)" class="i">block</span> <span onmouseout="hideTip(event, 'fs73', 155)" onmouseover="showTip(event, 'fs73', 155)" class="i">payload</span>
+            )
+        <span onmouseout="hideTip(event, 'fs71', 156)" onmouseover="showTip(event, 'fs71', 156)" class="i">pendingBlocks</span><span class="o">.</span><span class="i">Remove</span>(<span onmouseout="hideTip(event, 'fs72', 157)" onmouseover="showTip(event, 'fs72', 157)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Hash</span>)
+
+    <span onmouseout="hideTip(event, 'fs76', 158)" onmouseover="showTip(event, 'fs76', 158)" class="i">async</span> {
+        <span class="c">// If we haven&#39;t reached the max number of attempts</span>
+        <span class="k">if</span> <span onmouseout="hideTip(event, 'fs68', 159)" onmouseover="showTip(event, 'fs68', 159)" class="i">attempsRemaining</span> <span class="o">&gt;</span> <span class="n">0</span> <span class="k">then</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs77', 160)" onmouseover="showTip(event, 'fs77', 160)" class="i">pendingBlocks</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs66', 161)" onmouseover="showTip(event, 'fs66', 161)" class="i">headers</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 162)" onmouseover="showTip(event, 'fs36', 162)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs78', 163)" onmouseover="showTip(event, 'fs78', 163)" class="i">map</span>(<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs79', 164)" onmouseover="showTip(event, 'fs79', 164)" class="i">bh</span> <span class="k">-&gt;</span> (<span onmouseout="hideTip(event, 'fs79', 165)" onmouseover="showTip(event, 'fs79', 165)" class="i">bh</span><span class="o">.</span><span class="i">Hash</span>, <span onmouseout="hideTip(event, 'fs79', 166)" onmouseover="showTip(event, 'fs79', 166)" class="i">bh</span>)) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs63', 167)" onmouseover="showTip(event, 'fs63', 167)" class="i">Map</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs80', 168)" onmouseover="showTip(event, 'fs80', 168)" class="i">ofList</span>
+            <span class="k">let!</span> (<span onmouseout="hideTip(event, 'fs81', 169)" onmouseover="showTip(event, 'fs81', 169)" class="i">peer</span>, <span onmouseout="hideTip(event, 'fs82', 170)" onmouseover="showTip(event, 'fs82', 170)" class="i">obs</span>) <span class="o">=</span> <span onmouseout="hideTip(event, 'fs83', 171)" onmouseover="showTip(event, 'fs83', 171)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs84', 172)" onmouseover="showTip(event, 'fs84', 172)" class="i">AwaitTask</span>(<span class="i">Tracker</span><span class="o">.</span><span class="i">getBlocks</span>(<span onmouseout="hideTip(event, 'fs77', 173)" onmouseover="showTip(event, 'fs77', 173)" class="i">pendingBlocks</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs63', 174)" onmouseover="showTip(event, 'fs63', 174)" class="i">Map</span><span class="o">.</span><span class="i">keys</span>)) <span class="c">// Send a getdata request and park until we get an observable of blocks</span>
+            <span class="k">let!</span> <span onmouseout="hideTip(event, 'fs85', 175)" onmouseover="showTip(event, 'fs85', 175)" class="i">failedBlocks</span> <span class="o">=</span> 
+                <span onmouseout="hideTip(event, 'fs83', 176)" onmouseover="showTip(event, 'fs83', 176)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs84', 177)" onmouseover="showTip(event, 'fs84', 177)" class="i">AwaitTask</span>(
+                    <span onmouseout="hideTip(event, 'fs14', 178)" onmouseover="showTip(event, 'fs14', 178)" class="i">Observable</span><span class="o">.</span><span class="i">Return</span>(<span onmouseout="hideTip(event, 'fs77', 179)" onmouseover="showTip(event, 'fs77', 179)" class="i">pendingBlocks</span>)
+                        <span class="o">.</span><span class="i">Concat</span>(<span onmouseout="hideTip(event, 'fs82', 180)" onmouseover="showTip(event, 'fs82', 180)" class="i">obs</span> <span class="c">// Unlike F# scan, RX scan doesn&#39;t emit the first element (pendingBlocks) and we must manually add it</span>
+                            <span class="o">.</span><span class="i">Scan</span>(<span onmouseout="hideTip(event, 'fs77', 181)" onmouseover="showTip(event, 'fs77', 181)" class="i">pendingBlocks</span>, <span onmouseout="hideTip(event, 'fs86', 182)" onmouseover="showTip(event, 'fs86', 182)" class="i">Func</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs62', 183)" onmouseover="showTip(event, 'fs62', 183)" class="i">BlockMap</span>, <span class="i">Block</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs64', 184)" onmouseover="showTip(event, 'fs64', 184)" class="i">byte</span>[], <span onmouseout="hideTip(event, 'fs62', 185)" onmouseover="showTip(event, 'fs62', 185)" class="i">BlockMap</span><span class="o">&gt;</span> <span onmouseout="hideTip(event, 'fs70', 186)" onmouseover="showTip(event, 'fs70', 186)" class="i">updatePendingBlocks</span>) <span class="c">// update pending block list as we get blocks</span>
+                            <span class="o">.</span><span class="i">OnErrorResumeNext</span>(<span onmouseout="hideTip(event, 'fs14', 187)" onmouseover="showTip(event, 'fs14', 187)" class="i">Observable</span><span class="o">.</span><span class="i">Empty</span>())) <span class="c">// If we get an exception quit without error</span>
+                        <span class="o">.</span><span class="i">LastOrDefaultAsync</span>() <span class="c">// Fetch the last pending block list</span>
+                        <span class="o">.</span><span class="i">ToTask</span>()) <span class="c">// Park until we finished</span>
+
+            <span onmouseout="hideTip(event, 'fs81', 188)" onmouseover="showTip(event, 'fs81', 188)" class="i">peer</span><span class="o">.</span><span class="i">Ready</span>()
+            <span class="k">if</span> <span onmouseout="hideTip(event, 'fs87', 189)" onmouseover="showTip(event, 'fs87', 189)" class="i">not</span> <span onmouseout="hideTip(event, 'fs85', 190)" onmouseover="showTip(event, 'fs85', 190)" class="i">failedBlocks</span><span class="o">.</span><span class="i">IsEmpty</span> <span class="k">then</span> <span class="c">// Some blocks remaining, it was a failure</span>
+                <span onmouseout="hideTip(event, 'fs81', 191)" onmouseover="showTip(event, 'fs81', 191)" class="i">peer</span><span class="o">.</span><span class="i">Bad</span>()
+                <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Failed</span><span class="s"> </span><span class="s">blocks</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> (<span onmouseout="hideTip(event, 'fs85', 192)" onmouseover="showTip(event, 'fs85', 192)" class="i">failedBlocks</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs63', 193)" onmouseover="showTip(event, 'fs63', 193)" class="i">Map</span><span class="o">.</span><span class="i">values</span>)
+                <span class="k">return!</span> <span onmouseout="hideTip(event, 'fs65', 194)" onmouseover="showTip(event, 'fs65', 194)" class="i">asyncGetBlocks</span> (<span onmouseout="hideTip(event, 'fs85', 195)" onmouseover="showTip(event, 'fs85', 195)" class="i">failedBlocks</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs63', 196)" onmouseover="showTip(event, 'fs63', 196)" class="i">Map</span><span class="o">.</span><span class="i">valueList</span>) (<span onmouseout="hideTip(event, 'fs68', 197)" onmouseover="showTip(event, 'fs68', 197)" class="i">attempsRemaining</span><span class="o">-</span><span class="n">1</span>) <span class="c">// Retry with 1 attempt fewer</span>
+            <span class="k">else</span>
+                <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">GetBlocks</span><span class="s"> </span><span class="s">completed</span><span class="s">&quot;</span>
+                <span class="k">return</span> ()
+        <span class="k">else</span>
+            <span onmouseout="hideTip(event, 'fs88', 198)" onmouseover="showTip(event, 'fs88', 198)" class="i">raise</span> (<span class="k">new</span> <span onmouseout="hideTip(event, 'fs89', 199)" onmouseover="showTip(event, 'fs89', 199)" class="i">IOException</span> <span class="s">&quot;</span><span class="s">GetBlocks</span><span class="s"> </span><span class="s">failed</span><span class="s">&quot;</span>) <span class="c">// TODO: Delete block files</span>
+    }
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs90', 200)" onmouseover="showTip(event, 'fs90', 200)" class="i">downloadBlocks</span> (<span onmouseout="hideTip(event, 'fs39', 201)" onmouseover="showTip(event, 'fs39', 201)" class="i">newChain</span><span class="o">:</span> <span class="i">BlockChainFragment</span>) <span class="o">=</span> 
+    <span class="c">// Fetching blocks from peers</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs91', 202)" onmouseover="showTip(event, 'fs91', 202)" class="i">h</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs39', 203)" onmouseover="showTip(event, 'fs39', 203)" class="i">newChain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 204)" onmouseover="showTip(event, 'fs36', 204)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs92', 205)" onmouseover="showTip(event, 'fs92', 205)" class="i">filter</span>(<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs79', 206)" onmouseover="showTip(event, 'fs79', 206)" class="i">bh</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs87', 207)" onmouseover="showTip(event, 'fs87', 207)" class="i">not</span> (<span class="i">hasBlock</span> <span onmouseout="hideTip(event, 'fs79', 208)" onmouseover="showTip(event, 'fs79', 208)" class="i">bh</span>)) <span class="c">// Filter the blocks that we already have</span>
+    <span class="c">// Spread blocks around &#39;evenly&#39; accross connected peers</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs93', 209)" onmouseover="showTip(event, 'fs93', 209)" class="i">c</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs94', 210)" onmouseover="showTip(event, 'fs94', 210)" class="i">max</span> <span class="i">Tracker</span><span class="o">.</span><span class="i">connectionCount</span> <span class="n">1</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs95', 211)" onmouseover="showTip(event, 'fs95', 211)" class="i">batchSize</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs91', 212)" onmouseover="showTip(event, 'fs91', 212)" class="i">h</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs96', 213)" onmouseover="showTip(event, 'fs96', 213)" class="i">Count</span>() <span class="o">/</span> <span onmouseout="hideTip(event, 'fs93', 214)" onmouseover="showTip(event, 'fs93', 214)" class="i">c</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs97', 215)" onmouseover="showTip(event, 'fs97', 215)" class="i">getdataBatchSize</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs94', 216)" onmouseover="showTip(event, 'fs94', 216)" class="i">max</span> (<span onmouseout="hideTip(event, 'fs44', 217)" onmouseover="showTip(event, 'fs44', 217)" class="i">min</span> <span onmouseout="hideTip(event, 'fs95', 218)" onmouseover="showTip(event, 'fs95', 218)" class="i">batchSize</span> <span class="i">maxGetdataBatchSize</span>) <span class="i">minGetdataBatchSize</span>
+
+    <span class="c">// Create an array of async work to fetch blocks</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs98', 219)" onmouseover="showTip(event, 'fs98', 219)" class="i">hashes</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs91', 220)" onmouseover="showTip(event, 'fs91', 220)" class="i">h</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 221)" onmouseover="showTip(event, 'fs36', 221)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs99', 222)" onmouseover="showTip(event, 'fs99', 222)" class="i">toArray</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs100', 223)" onmouseover="showTip(event, 'fs100', 223)" class="i">getblocks</span> <span class="o">=</span> 
+        <span onmouseout="hideTip(event, 'fs101', 224)" onmouseover="showTip(event, 'fs101', 224)" class="i">seq</span> { 
+        <span class="k">for</span> <span onmouseout="hideTip(event, 'fs102', 225)" onmouseover="showTip(event, 'fs102', 225)" class="i">batch</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs98', 226)" onmouseover="showTip(event, 'fs98', 226)" class="i">hashes</span><span class="o">.</span><span class="i">Batch</span>(<span onmouseout="hideTip(event, 'fs97', 227)" onmouseover="showTip(event, 'fs97', 227)" class="i">getdataBatchSize</span>) <span class="k">do</span>
+            <span class="k">yield</span> <span onmouseout="hideTip(event, 'fs65', 228)" onmouseover="showTip(event, 'fs65', 228)" class="i">asyncGetBlocks</span>(<span onmouseout="hideTip(event, 'fs102', 229)" onmouseover="showTip(event, 'fs102', 229)" class="i">batch</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 230)" onmouseover="showTip(event, 'fs26', 230)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 231)" onmouseover="showTip(event, 'fs59', 231)" class="i">toList</span>) <span class="i">settings</span><span class="o">.</span><span class="i">MaxGetblockRetry</span> }
+        <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 232)" onmouseover="showTip(event, 'fs26', 232)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs103', 233)" onmouseover="showTip(event, 'fs103', 233)" class="i">toArray</span>
+    <span onmouseout="hideTip(event, 'fs83', 234)" onmouseover="showTip(event, 'fs83', 234)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs104', 235)" onmouseover="showTip(event, 'fs104', 235)" class="i">Parallel</span> <span onmouseout="hideTip(event, 'fs100', 236)" onmouseover="showTip(event, 'fs100', 236)" class="i">getblocks</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs83', 237)" onmouseover="showTip(event, 'fs83', 237)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs105', 238)" onmouseover="showTip(event, 'fs105', 238)" class="i">Ignore</span> <span class="c">// execute fetch blocks in parallel - park until finished</span>
+        </pre>
+</td>
+</tr>
+</table>
+
+<p>Undo the blockchain up to a certain point</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs106', 239)" onmouseover="showTip(event, 'fs106', 239)" class="i">rollbackTo</span> (<span onmouseout="hideTip(event, 'fs107', 240)" onmouseover="showTip(event, 'fs107', 240)" class="i">accessor</span><span class="o">:</span> <span class="i">IUTXOAccessor</span>) (<span onmouseout="hideTip(event, 'fs108', 241)" onmouseover="showTip(event, 'fs108', 241)" class="i">targetBlock</span><span class="o">:</span> <span class="i">BlockHeader</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs56', 242)" onmouseover="showTip(event, 'fs56', 242)" class="i">blockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs20', 243)" onmouseover="showTip(event, 'fs20', 243)" class="i">fnBlockchain</span>()
+    <span onmouseout="hideTip(event, 'fs56', 244)" onmouseover="showTip(event, 'fs56', 244)" class="i">blockchain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 245)" onmouseover="showTip(event, 'fs26', 245)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs58', 246)" onmouseover="showTip(event, 'fs58', 246)" class="i">takeWhile</span>(<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs30', 247)" onmouseover="showTip(event, 'fs30', 247)" class="i">bh</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs30', 248)" onmouseover="showTip(event, 'fs30', 248)" class="i">bh</span><span class="o">.</span><span class="i">Hash</span> <span class="o">&lt;&gt;</span> <span onmouseout="hideTip(event, 'fs108', 249)" onmouseover="showTip(event, 'fs108', 249)" class="i">targetBlock</span><span class="o">.</span><span class="i">Hash</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 250)" onmouseover="showTip(event, 'fs26', 250)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs109', 251)" onmouseover="showTip(event, 'fs109', 251)" class="i">map</span>(<span class="i">undoBlock</span> <span onmouseout="hideTip(event, 'fs107', 252)" onmouseover="showTip(event, 'fs107', 252)" class="i">accessor</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 253)" onmouseover="showTip(event, 'fs26', 253)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 254)" onmouseover="showTip(event, 'fs59', 254)" class="i">toList</span></pre>
+</td>
+</tr>
+</table>
+
+<p>The function that drives all the checks and chains them together. Checks were discussed in the previous section.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span class="i">checkBlock</span> (<span onmouseout="hideTip(event, 'fs110', 255)" onmouseover="showTip(event, 'fs110', 255)" class="i">utxoAccessor</span><span class="o">:</span> <span class="i">IUTXOAccessor</span>) (<span onmouseout="hideTip(event, 'fs111', 256)" onmouseover="showTip(event, 'fs111', 256)" class="i">p</span><span class="o">:</span> <span class="i">BlockHeader</span>) (<span onmouseout="hideTip(event, 'fs112', 257)" onmouseover="showTip(event, 'fs112', 257)" class="i">blocks</span><span class="o">:</span> <span class="i">BlockHeader</span>[])<span class="o">:</span> <span onmouseout="hideTip(event, 'fs16', 258)" onmouseover="showTip(event, 'fs16', 258)" class="i">Choice</span><span class="o">&lt;</span><span class="i">BlockHeader</span>, <span class="i">BlockHeader</span> <span class="o">*</span> <span class="i">BlockHeader</span><span class="o">&gt;</span> <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs113', 259)" onmouseover="showTip(event, 'fs113', 259)" class="i">prevBlock</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs112', 260)" onmouseover="showTip(event, 'fs112', 260)" class="i">blocks</span><span class="o">.</span>[<span class="n">0</span>]
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs114', 261)" onmouseover="showTip(event, 'fs114', 261)" class="i">currentBlock</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs112', 262)" onmouseover="showTip(event, 'fs112', 262)" class="i">blocks</span><span class="o">.</span>[<span class="n">1</span>]
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs115', 263)" onmouseover="showTip(event, 'fs115', 263)" class="i">tempUTXO</span> <span class="o">=</span> <span class="k">new</span> <span class="i">MempoolUTXOAccessor</span>(<span onmouseout="hideTip(event, 'fs110', 264)" onmouseover="showTip(event, 'fs110', 264)" class="i">utxoAccessor</span>)
+    <span class="i">maybe</span> {
+        <span class="k">do!</span> <span onmouseout="hideTip(event, 'fs114', 265)" onmouseover="showTip(event, 'fs114', 265)" class="i">currentBlock</span><span class="o">.</span><span class="i">PrevHash</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs113', 266)" onmouseover="showTip(event, 'fs113', 266)" class="i">prevBlock</span><span class="o">.</span><span class="i">Hash</span> <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">prev</span><span class="s"> </span><span class="s">blockhash</span><span class="s"> </span><span class="s">field</span><span class="s"> </span><span class="s">does</span><span class="s"> </span><span class="s">not</span><span class="s"> </span><span class="s">match</span><span class="s"> </span><span class="s">hash</span><span class="s"> </span><span class="s">of</span><span class="s"> </span><span class="s">previous</span><span class="s"> </span><span class="s">block</span><span class="s">&quot;</span>
+        <span class="k">do!</span> <span class="i">checkBlockHeader</span> <span onmouseout="hideTip(event, 'fs114', 267)" onmouseover="showTip(event, 'fs114', 267)" class="i">currentBlock</span>
+        <span class="k">let</span> <span class="i">blockContent</span> <span class="o">=</span> <span class="i">loadBlock</span> <span onmouseout="hideTip(event, 'fs114', 268)" onmouseover="showTip(event, 'fs114', 268)" class="i">currentBlock</span>
+        <span class="k">let</span> <span class="i">blockContentSerialized</span> <span class="o">=</span> <span class="i">blockContent</span><span class="o">.</span><span class="i">ToByteArray</span>()
+        <span class="k">let</span> <span class="i">blockSize</span> <span class="o">=</span> <span class="i">blockContentSerialized</span><span class="o">.</span><span class="i">Length</span> <span class="c">// Length has to be based on serialized block and not original block</span>
+        <span class="k">do!</span> (<span class="i">blockSize</span> <span class="o">&lt;=</span> <span class="i">maxBlockSize</span>) <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">blocksize</span><span class="s"> </span><span class="s">exceeds</span><span class="s"> </span><span class="s">limit</span><span class="s">&quot;</span>
+        <span class="k">do!</span> <span class="i">checkBlockTxs</span> <span onmouseout="hideTip(event, 'fs115', 269)" onmouseover="showTip(event, 'fs115', 269)" class="i">tempUTXO</span> <span class="i">blockContent</span>
+        <span class="k">do!</span> <span class="i">updateBlockUTXO</span> <span onmouseout="hideTip(event, 'fs115', 270)" onmouseover="showTip(event, 'fs115', 270)" class="i">tempUTXO</span> <span class="i">blockContent</span>
+        <span onmouseout="hideTip(event, 'fs115', 271)" onmouseover="showTip(event, 'fs115', 271)" class="i">tempUTXO</span><span class="o">.</span><span class="i">Commit</span>()
+        <span class="k">return</span> ()
+    } <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 272)" onmouseover="showTip(event, 'fs17', 272)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs29', 273)" onmouseover="showTip(event, 'fs29', 273)" class="i">map</span>(<span class="k">fun</span> () <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs116', 274)" onmouseover="showTip(event, 'fs116', 274)" class="i">Choice1Of2</span> <span onmouseout="hideTip(event, 'fs114', 275)" onmouseover="showTip(event, 'fs114', 275)" class="i">currentBlock</span>) <span class="o">|?|</span> <span onmouseout="hideTip(event, 'fs117', 276)" onmouseover="showTip(event, 'fs117', 276)" class="i">Choice2Of2</span> (<span onmouseout="hideTip(event, 'fs111', 277)" onmouseover="showTip(event, 'fs111', 277)" class="i">p</span>, <span onmouseout="hideTip(event, 'fs114', 278)" onmouseover="showTip(event, 'fs114', 278)" class="i">currentBlock</span>)</pre>
+</td>
+</tr>
+</table>
+
+<h2>The catchup workflow</h2>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+<span class="l">40: </span>
+<span class="l">41: </span>
+<span class="l">42: </span>
+<span class="l">43: </span>
+<span class="l">44: </span>
+<span class="l">45: </span>
+<span class="l">46: </span>
+<span class="l">47: </span>
+<span class="l">48: </span>
+<span class="l">49: </span>
+<span class="l">50: </span>
+<span class="l">51: </span>
+<span class="l">52: </span>
+<span class="l">53: </span>
+<span class="l">54: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs118', 279)" onmouseover="showTip(event, 'fs118', 279)" class="i">catchup</span> (<span onmouseout="hideTip(event, 'fs119', 280)" onmouseover="showTip(event, 'fs119', 280)" class="i">peer</span><span class="o">:</span> <span class="i">IPeer</span>) <span class="o">=</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs120', 281)" onmouseover="showTip(event, 'fs120', 281)" class="i">getHeaders</span>()<span class="o">:</span> <span onmouseout="hideTip(event, 'fs83', 282)" onmouseover="showTip(event, 'fs83', 282)" class="i">Async</span><span class="o">&lt;</span><span class="i">Headers</span><span class="o">&gt;</span> <span class="o">=</span> 
+        <span onmouseout="hideTip(event, 'fs76', 283)" onmouseover="showTip(event, 'fs76', 283)" class="i">async</span> {
+            <span class="k">try</span>
+                <span class="k">let</span> <span onmouseout="hideTip(event, 'fs24', 284)" onmouseover="showTip(event, 'fs24', 284)" class="i">blockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs20', 285)" onmouseover="showTip(event, 'fs20', 285)" class="i">fnBlockchain</span>() <span class="c">// Get current blockchain</span>
+                <span class="k">let</span> <span onmouseout="hideTip(event, 'fs121', 286)" onmouseover="showTip(event, 'fs121', 286)" class="i">gh</span> <span class="o">=</span> <span class="k">new</span> <span class="i">GetHeaders</span>(<span onmouseout="hideTip(event, 'fs24', 287)" onmouseover="showTip(event, 'fs24', 287)" class="i">blockchain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 288)" onmouseover="showTip(event, 'fs26', 288)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs122', 289)" onmouseover="showTip(event, 'fs122', 289)" class="i">truncate</span> <span class="n">10</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 290)" onmouseover="showTip(event, 'fs26', 290)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs109', 291)" onmouseover="showTip(event, 'fs109', 291)" class="i">map</span>(<span class="k">fun</span> <span class="i">bh</span> <span class="k">-&gt;</span> <span class="i">bh</span><span class="o">.</span><span class="i">Hash</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 292)" onmouseover="showTip(event, 'fs26', 292)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 293)" onmouseover="showTip(event, 'fs59', 293)" class="i">toList</span>, <span onmouseout="hideTip(event, 'fs123', 294)" onmouseover="showTip(event, 'fs123', 294)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs124', 295)" onmouseover="showTip(event, 'fs124', 295)" class="i">zeroCreate</span> <span class="n">32</span>) <span class="c">// Prepare GetHeaders request</span>
+                <span class="k">let!</span> <span onmouseout="hideTip(event, 'fs125', 296)" onmouseover="showTip(event, 'fs125', 296)" class="i">headers</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs83', 297)" onmouseover="showTip(event, 'fs83', 297)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs84', 298)" onmouseover="showTip(event, 'fs84', 298)" class="i">AwaitTask</span>(<span class="i">Tracker</span><span class="o">.</span><span class="i">getHeaders</span>(<span onmouseout="hideTip(event, 'fs121', 299)" onmouseover="showTip(event, 'fs121', 299)" class="i">gh</span>, <span onmouseout="hideTip(event, 'fs119', 300)" onmouseover="showTip(event, 'fs119', 300)" class="i">peer</span>)) <span class="c">// Send request - park until request is processed</span>
+                <span class="k">let!</span> <span onmouseout="hideTip(event, 'fs126', 301)" onmouseover="showTip(event, 'fs126', 301)" class="i">getHeadersResult</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs83', 302)" onmouseover="showTip(event, 'fs83', 302)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs84', 303)" onmouseover="showTip(event, 'fs84', 303)" class="i">AwaitTask</span>(<span onmouseout="hideTip(event, 'fs125', 304)" onmouseover="showTip(event, 'fs125', 304)" class="i">headers</span><span class="o">.</span><span class="i">FirstOrDefaultAsync</span>()<span class="o">.</span><span class="i">ToTask</span>()) <span class="c">// Pick Headers or exception</span>
+                <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">GetHeaders</span><span class="s"> </span><span class="s">Results</span><span class="s">&gt;</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> (<span onmouseout="hideTip(event, 'fs119', 305)" onmouseover="showTip(event, 'fs119', 305)" class="i">peer</span><span class="o">.</span><span class="i">Target</span>) (<span onmouseout="hideTip(event, 'fs126', 306)" onmouseover="showTip(event, 'fs126', 306)" class="i">getHeadersResult</span>)
+                <span class="k">return</span> <span onmouseout="hideTip(event, 'fs126', 307)" onmouseover="showTip(event, 'fs126', 307)" class="i">getHeadersResult</span>
+            <span class="k">finally</span>
+                <span onmouseout="hideTip(event, 'fs119', 308)" onmouseover="showTip(event, 'fs119', 308)" class="i">peer</span><span class="o">.</span><span class="i">Ready</span>()
+        }
+
+    <span class="k">let</span> <span class="k">rec</span> <span onmouseout="hideTip(event, 'fs127', 309)" onmouseover="showTip(event, 'fs127', 309)" class="i">catchupImpl</span>() <span class="o">=</span> 
+        <span class="k">try</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs128', 310)" onmouseover="showTip(event, 'fs128', 310)" class="i">headersMessage</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs120', 311)" onmouseover="showTip(event, 'fs120', 311)" class="i">getHeaders</span>() <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs83', 312)" onmouseover="showTip(event, 'fs83', 312)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs129', 313)" onmouseover="showTip(event, 'fs129', 313)" class="i">RunSynchronously</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs130', 314)" onmouseover="showTip(event, 'fs130', 314)" class="i">headers</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs128', 315)" onmouseover="showTip(event, 'fs128', 315)" class="i">headersMessage</span><span class="o">.</span><span class="i">Headers</span>
+
+            <span class="k">if</span> <span onmouseout="hideTip(event, 'fs87', 316)" onmouseover="showTip(event, 'fs87', 316)" class="i">not</span> <span onmouseout="hideTip(event, 'fs130', 317)" onmouseover="showTip(event, 'fs130', 317)" class="i">headers</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs131', 318)" onmouseover="showTip(event, 'fs131', 318)" class="i">IsEmpty</span> <span class="k">then</span>
+                <span class="k">let</span> <span onmouseout="hideTip(event, 'fs132', 319)" onmouseover="showTip(event, 'fs132', 319)" class="i">newBlockchainOpt</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs21', 320)" onmouseover="showTip(event, 'fs21', 320)" class="i">calculateChainHeights</span> <span onmouseout="hideTip(event, 'fs130', 321)" onmouseover="showTip(event, 'fs130', 321)" class="i">headers</span>
+                <span onmouseout="hideTip(event, 'fs132', 322)" onmouseover="showTip(event, 'fs132', 322)" class="i">newBlockchainOpt</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 323)" onmouseover="showTip(event, 'fs17', 323)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs74', 324)" onmouseover="showTip(event, 'fs74', 324)" class="i">iter</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs133', 325)" onmouseover="showTip(event, 'fs133', 325)" class="i">newBlockchainFrag</span> <span class="k">-&gt;</span>
+                    <span onmouseout="hideTip(event, 'fs133', 326)" onmouseover="showTip(event, 'fs133', 326)" class="i">newBlockchainFrag</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 327)" onmouseover="showTip(event, 'fs36', 327)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs134', 328)" onmouseover="showTip(event, 'fs134', 328)" class="i">iter</span> <span class="i">Db</span><span class="o">.</span><span class="i">writeHeaders</span>
+                    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs135', 329)" onmouseover="showTip(event, 'fs135', 329)" class="i">headersAfter</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs133', 330)" onmouseover="showTip(event, 'fs133', 330)" class="i">newBlockchainFrag</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 331)" onmouseover="showTip(event, 'fs36', 331)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs42', 332)" onmouseover="showTip(event, 'fs42', 332)" class="i">head</span> <span class="o">|&gt;</span> <span class="i">iterate</span> (<span class="k">fun</span> <span class="i">bh</span> <span class="k">-&gt;</span> <span class="i">Db</span><span class="o">.</span><span class="i">getNextHeader</span> <span class="i">bh</span><span class="o">.</span><span class="i">Hash</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 333)" onmouseover="showTip(event, 'fs26', 333)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs58', 334)" onmouseover="showTip(event, 'fs58', 334)" class="i">takeWhile</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs30', 335)" onmouseover="showTip(event, 'fs30', 335)" class="i">bh</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs30', 336)" onmouseover="showTip(event, 'fs30', 336)" class="i">bh</span><span class="o">.</span><span class="i">Hash</span> <span class="o">&lt;&gt;</span> <span class="i">zeroHash</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 337)" onmouseover="showTip(event, 'fs26', 337)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs46', 338)" onmouseover="showTip(event, 'fs46', 338)" class="i">skip</span> <span class="n">1</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 339)" onmouseover="showTip(event, 'fs26', 339)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 340)" onmouseover="showTip(event, 'fs59', 340)" class="i">toList</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 341)" onmouseover="showTip(event, 'fs36', 341)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs37', 342)" onmouseover="showTip(event, 'fs37', 342)" class="i">rev</span>
+                    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs136', 343)" onmouseover="showTip(event, 'fs136', 343)" class="i">connectedNewBlockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs135', 344)" onmouseover="showTip(event, 'fs135', 344)" class="i">headersAfter</span> <span class="o">@</span> <span onmouseout="hideTip(event, 'fs133', 345)" onmouseover="showTip(event, 'fs133', 345)" class="i">newBlockchainFrag</span>
+                    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs137', 346)" onmouseover="showTip(event, 'fs137', 346)" class="i">downloadBlocksAsync</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs136', 347)" onmouseover="showTip(event, 'fs136', 347)" class="i">connectedNewBlockchain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 348)" onmouseover="showTip(event, 'fs36', 348)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs37', 349)" onmouseover="showTip(event, 'fs37', 349)" class="i">rev</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 350)" onmouseover="showTip(event, 'fs36', 350)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs138', 351)" onmouseover="showTip(event, 'fs138', 351)" class="i">tail</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs90', 352)" onmouseover="showTip(event, 'fs90', 352)" class="i">downloadBlocks</span>
+                    <span onmouseout="hideTip(event, 'fs137', 353)" onmouseover="showTip(event, 'fs137', 353)" class="i">downloadBlocksAsync</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs83', 354)" onmouseover="showTip(event, 'fs83', 354)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs129', 355)" onmouseover="showTip(event, 'fs129', 355)" class="i">RunSynchronously</span>
+                    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs139', 356)" onmouseover="showTip(event, 'fs139', 356)" class="i">tempUTXO</span> <span class="o">=</span> <span class="k">new</span> <span class="i">MempoolUTXOAccessor</span>(<span class="i">utxoAccessor</span>)
+                    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs140', 357)" onmouseover="showTip(event, 'fs140', 357)" class="i">lca</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs38', 358)" onmouseover="showTip(event, 'fs38', 358)" class="i">calculateLowestCommonAncestor</span> <span onmouseout="hideTip(event, 'fs136', 359)" onmouseover="showTip(event, 'fs136', 359)" class="i">connectedNewBlockchain</span>
+                    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs141', 360)" onmouseover="showTip(event, 'fs141', 360)" class="i">newBlockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs136', 361)" onmouseover="showTip(event, 'fs136', 361)" class="i">connectedNewBlockchain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 362)" onmouseover="showTip(event, 'fs36', 362)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs142', 363)" onmouseover="showTip(event, 'fs142', 363)" class="i">takeWhile</span>(<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs30', 364)" onmouseover="showTip(event, 'fs30', 364)" class="i">bh</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs30', 365)" onmouseover="showTip(event, 'fs30', 365)" class="i">bh</span><span class="o">.</span><span class="i">Hash</span> <span class="o">&lt;&gt;</span> <span onmouseout="hideTip(event, 'fs140', 366)" onmouseover="showTip(event, 'fs140', 366)" class="i">lca</span><span class="o">.</span><span class="i">Hash</span>)
+                    <span class="k">if</span> <span onmouseout="hideTip(event, 'fs53', 367)" onmouseover="showTip(event, 'fs53', 367)" class="i">isBetter</span> <span onmouseout="hideTip(event, 'fs140', 368)" onmouseover="showTip(event, 'fs140', 368)" class="i">lca</span> <span onmouseout="hideTip(event, 'fs141', 369)" onmouseover="showTip(event, 'fs141', 369)" class="i">newBlockchain</span> <span class="k">then</span>
+                        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs143', 370)" onmouseover="showTip(event, 'fs143', 370)" class="i">undoTxs</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs106', 371)" onmouseover="showTip(event, 'fs106', 371)" class="i">rollbackTo</span> <span onmouseout="hideTip(event, 'fs139', 372)" onmouseover="showTip(event, 'fs139', 372)" class="i">tempUTXO</span> <span onmouseout="hideTip(event, 'fs140', 373)" onmouseover="showTip(event, 'fs140', 373)" class="i">lca</span>
+                        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs144', 374)" onmouseover="showTip(event, 'fs144', 374)" class="i">newBlockList</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs140', 375)" onmouseover="showTip(event, 'fs140', 375)" class="i">lca</span> <span class="o">::</span> (<span onmouseout="hideTip(event, 'fs141', 376)" onmouseover="showTip(event, 'fs141', 376)" class="i">newBlockchain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 377)" onmouseover="showTip(event, 'fs36', 377)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs37', 378)" onmouseover="showTip(event, 'fs37', 378)" class="i">rev</span>)
+
+                        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs145', 379)" onmouseover="showTip(event, 'fs145', 379)" class="i">lastValidBlockChoice</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs144', 380)" onmouseover="showTip(event, 'fs144', 380)" class="i">newBlockList</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 381)" onmouseover="showTip(event, 'fs26', 381)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs146', 382)" onmouseover="showTip(event, 'fs146', 382)" class="i">windowed</span> <span class="n">2</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs16', 383)" onmouseover="showTip(event, 'fs16', 383)" class="i">Choice</span><span class="o">.</span><span class="i">foldM</span> (<span class="i">checkBlock</span> <span onmouseout="hideTip(event, 'fs139', 384)" onmouseover="showTip(event, 'fs139', 384)" class="i">tempUTXO</span>) <span onmouseout="hideTip(event, 'fs140', 385)" onmouseover="showTip(event, 'fs140', 385)" class="i">lca</span>
+                        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs147', 386)" onmouseover="showTip(event, 'fs147', 386)" class="i">lastValidBlock</span> <span class="o">=</span>
+                            <span class="k">match</span> <span onmouseout="hideTip(event, 'fs145', 387)" onmouseover="showTip(event, 'fs145', 387)" class="i">lastValidBlockChoice</span> <span class="k">with</span>
+                            | <span onmouseout="hideTip(event, 'fs116', 388)" onmouseover="showTip(event, 'fs116', 388)" class="i">Choice1Of2</span> <span onmouseout="hideTip(event, 'fs30', 389)" onmouseover="showTip(event, 'fs30', 389)" class="i">bh</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs30', 390)" onmouseover="showTip(event, 'fs30', 390)" class="i">bh</span>
+                            | <span onmouseout="hideTip(event, 'fs117', 391)" onmouseover="showTip(event, 'fs117', 391)" class="i">Choice2Of2</span> (<span onmouseout="hideTip(event, 'fs30', 392)" onmouseover="showTip(event, 'fs30', 392)" class="i">bh</span>, <span onmouseout="hideTip(event, 'fs148', 393)" onmouseover="showTip(event, 'fs148', 393)" class="i">invalidBlock</span>) <span class="k">-&gt;</span> 
+                                <span class="i">deleteBlock</span> <span onmouseout="hideTip(event, 'fs148', 394)" onmouseover="showTip(event, 'fs148', 394)" class="i">invalidBlock</span>
+                                <span onmouseout="hideTip(event, 'fs30', 395)" onmouseover="showTip(event, 'fs30', 395)" class="i">bh</span>
+                        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs149', 396)" onmouseover="showTip(event, 'fs149', 396)" class="i">validNewBlockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs141', 397)" onmouseover="showTip(event, 'fs141', 397)" class="i">newBlockchain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 398)" onmouseover="showTip(event, 'fs36', 398)" class="i">List</span><span class="o">.</span><span class="i">skipWhile</span>(<span class="k">fun</span> <span class="i">bh</span> <span class="k">-&gt;</span> <span class="i">bh</span><span class="o">.</span><span class="i">Hash</span> <span class="o">&lt;&gt;</span> <span onmouseout="hideTip(event, 'fs147', 399)" onmouseover="showTip(event, 'fs147', 399)" class="i">lastValidBlock</span><span class="o">.</span><span class="i">Hash</span>)
+                        <span class="k">if</span> <span onmouseout="hideTip(event, 'fs53', 400)" onmouseover="showTip(event, 'fs53', 400)" class="i">isBetter</span> <span onmouseout="hideTip(event, 'fs140', 401)" onmouseover="showTip(event, 'fs140', 401)" class="i">lca</span> <span onmouseout="hideTip(event, 'fs149', 402)" onmouseover="showTip(event, 'fs149', 402)" class="i">validNewBlockchain</span> <span class="k">then</span>
+                            <span class="i">logger</span><span class="o">.</span><span class="i">InfoF</span> <span class="s">&quot;</span><span class="s">New</span><span class="s"> </span><span class="s">chain</span><span class="s"> </span><span class="s">is</span><span class="s"> </span><span class="s">better</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs130', 403)" onmouseover="showTip(event, 'fs130', 403)" class="i">headers</span>
+                            <span onmouseout="hideTip(event, 'fs139', 404)" onmouseover="showTip(event, 'fs139', 404)" class="i">tempUTXO</span><span class="o">.</span><span class="i">Commit</span>()
+                            <span onmouseout="hideTip(event, 'fs19', 405)" onmouseover="showTip(event, 'fs19', 405)" class="i">tip</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs147', 406)" onmouseover="showTip(event, 'fs147', 406)" class="i">lastValidBlock</span>
+                            <span class="i">Db</span><span class="o">.</span><span class="i">writeTip</span> <span onmouseout="hideTip(event, 'fs19', 407)" onmouseover="showTip(event, 'fs19', 407)" class="i">tip</span><span class="o">.</span><span class="i">Hash</span>
+                            <span class="i">mempoolIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span class="i">Revalidate</span> (<span onmouseout="hideTip(event, 'fs19', 408)" onmouseover="showTip(event, 'fs19', 408)" class="i">tip</span><span class="o">.</span><span class="i">Height</span>, (<span onmouseout="hideTip(event, 'fs143', 409)" onmouseover="showTip(event, 'fs143', 409)" class="i">undoTxs</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 410)" onmouseover="showTip(event, 'fs36', 410)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs37', 411)" onmouseover="showTip(event, 'fs37', 411)" class="i">rev</span>)))
+                            <span onmouseout="hideTip(event, 'fs127', 412)" onmouseover="showTip(event, 'fs127', 412)" class="i">catchupImpl</span>()
+                )
+            <span class="k">with</span> 
+            | <span onmouseout="hideTip(event, 'fs150', 413)" onmouseover="showTip(event, 'fs150', 413)" class="i">ex</span> <span class="k">-&gt;</span> <span class="i">logger</span><span class="o">.</span><span class="i">ErrorF</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs150', 414)" onmouseover="showTip(event, 'fs150', 414)" class="i">ex</span>
+
+    <span onmouseout="hideTip(event, 'fs127', 415)" onmouseover="showTip(event, 'fs127', 415)" class="i">catchupImpl</span>()</pre>
+</td>
+</tr>
+</table>
+
+<h2>Command handler</h2>
+
+<p>Bob's commands are:</p>
+
+<ul>
+<li>Catchup from a given peer</li>
+<li>GetBlock. A remote node wants to get a block from this client</li>
+<li>GetHeaders. A remote node wants to get the headers from this client</li>
+<li>Ping. Ping is here only because it helps with acceptance testing. The system works asynchronously and it makes
+difficult to know when catchup completes for an external component. The test driver probes the client node by sending
+pings and then waits for the pong. Originally, ping/pong was directly handled by the peer but then the response was too fast
+and the test driver would proceed before catchup even started. By putting ping here, the request gets queued until Bob is
+finished with catchup.</li>
+</ul>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs151', 416)" onmouseover="showTip(event, 'fs151', 416)" class="i">processCommand</span> <span onmouseout="hideTip(event, 'fs152', 417)" onmouseover="showTip(event, 'fs152', 417)" class="i">command</span> <span class="o">=</span> 
+    <span class="k">match</span> <span onmouseout="hideTip(event, 'fs152', 418)" onmouseover="showTip(event, 'fs152', 418)" class="i">command</span> <span class="k">with</span>
+    | <span class="i">Catchup</span> (<span class="i">peer</span>, <span onmouseout="hideTip(event, 'fs153', 419)" onmouseover="showTip(event, 'fs153', 419)" class="i">hash</span>) <span class="k">-&gt;</span> 
+        <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Catchup</span><span class="s"> </span><span class="s">started</span><span class="s"> </span><span class="s">for</span><span class="s"> </span><span class="s">peer</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span class="i">peer</span>
+        <span class="k">let</span> <span class="i">blockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs20', 420)" onmouseover="showTip(event, 'fs20', 420)" class="i">fnBlockchain</span>()
+        <span class="k">if</span> <span onmouseout="hideTip(event, 'fs153', 421)" onmouseover="showTip(event, 'fs153', 421)" class="i">hash</span> <span class="o">=</span> <span class="k">null</span> <span class="o">||</span> (<span class="i">Db</span><span class="o">.</span><span class="i">readHeader</span> <span onmouseout="hideTip(event, 'fs153', 422)" onmouseover="showTip(event, 'fs153', 422)" class="i">hash</span>)<span class="o">.</span><span class="i">Hash</span> <span class="o">=</span> <span class="i">zeroHash</span> <span class="o">||</span> <span onmouseout="hideTip(event, 'fs87', 423)" onmouseover="showTip(event, 'fs87', 423)" class="i">not</span> (<span class="i">hasBlock</span> (<span class="i">Db</span><span class="o">.</span><span class="i">readHeader</span> <span onmouseout="hideTip(event, 'fs153', 424)" onmouseover="showTip(event, 'fs153', 424)" class="i">hash</span>)) <span class="k">then</span>
+            <span onmouseout="hideTip(event, 'fs118', 425)" onmouseover="showTip(event, 'fs118', 425)" class="i">catchup</span> <span class="i">peer</span>
+        <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Catchup</span><span class="s"> </span><span class="s">completed</span><span class="s"> </span><span class="s">for</span><span class="s"> </span><span class="s">peer</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span class="i">peer</span>
+    | <span class="i">GetBlock</span> (<span class="i">invs</span>, <span class="i">peer</span>) <span class="k">-&gt;</span>
+        <span class="k">for</span> <span class="i">inv</span> <span class="k">in</span> <span class="i">invs</span> <span class="k">do</span>
+            <span class="k">try</span>
+                <span class="k">let</span> <span class="i">bh</span> <span class="o">=</span> <span class="i">Db</span><span class="o">.</span><span class="i">readHeader</span> <span class="i">inv</span><span class="o">.</span><span class="i">Hash</span>
+                <span class="k">let</span> <span class="i">block</span> <span class="o">=</span> <span class="i">loadBlock</span> <span class="i">bh</span>
+                <span class="i">peer</span><span class="o">.</span><span class="i">OnNext</span>(<span class="k">new</span> <span class="i">BitcoinMessage</span>(<span class="s">&quot;</span><span class="s">block</span><span class="s">&quot;</span>, <span class="i">block</span><span class="o">.</span><span class="i">ToByteArray</span>()))
+            <span class="k">with</span>
+            | _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs154', 426)" onmouseover="showTip(event, 'fs154', 426)" class="i">ignore</span>() <span class="c">// TODO: send notfound?</span>
+    | <span class="i">GetHeaders</span> (<span class="i">gh</span>, <span class="i">peer</span>) <span class="k">-&gt;</span>
+        <span class="k">try</span>
+            <span class="k">let</span> <span class="i">blockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs20', 427)" onmouseover="showTip(event, 'fs20', 427)" class="i">fnBlockchain</span>()
+            <span class="k">let</span> <span class="i">reqBlockchain</span> <span class="o">=</span> 
+                <span class="i">blockchain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 428)" onmouseover="showTip(event, 'fs26', 428)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs58', 429)" onmouseover="showTip(event, 'fs58', 429)" class="i">takeWhile</span> (<span class="k">fun</span> <span class="i">bh</span> <span class="k">-&gt;</span> 
+                <span class="k">let</span> <span class="i">stop</span> <span class="o">=</span> <span class="i">gh</span><span class="o">.</span><span class="i">Hashes</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 430)" onmouseover="showTip(event, 'fs26', 430)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs155', 431)" onmouseover="showTip(event, 'fs155', 431)" class="i">tryFind</span> (<span class="k">fun</span> <span class="i">ghHash</span> <span class="k">-&gt;</span> <span class="i">hashCompare</span><span class="o">.</span><span class="i">Equals</span>(<span class="i">bh</span><span class="o">.</span><span class="i">Hash</span>, <span class="i">ghHash</span>))
+                <span class="i">stop</span><span class="o">.</span><span class="i">IsNone</span>
+                ) 
+                <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 432)" onmouseover="showTip(event, 'fs26', 432)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs122', 433)" onmouseover="showTip(event, 'fs122', 433)" class="i">truncate</span> <span class="n">2000</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs26', 434)" onmouseover="showTip(event, 'fs26', 434)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 435)" onmouseover="showTip(event, 'fs59', 435)" class="i">toList</span>
+                <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 436)" onmouseover="showTip(event, 'fs36', 436)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs37', 437)" onmouseover="showTip(event, 'fs37', 437)" class="i">rev</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs36', 438)" onmouseover="showTip(event, 'fs36', 438)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs142', 439)" onmouseover="showTip(event, 'fs142', 439)" class="i">takeWhile</span> (<span class="k">fun</span> <span class="i">bh</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs87', 440)" onmouseover="showTip(event, 'fs87', 440)" class="i">not</span>(<span class="i">hashCompare</span><span class="o">.</span><span class="i">Equals</span>(<span class="i">bh</span><span class="o">.</span><span class="i">Hash</span>, <span class="i">gh</span><span class="o">.</span><span class="i">HashStop</span>)))
+            <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Headers</span><span class="s"> </span><span class="s">sent</span><span class="s">&gt;</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span class="i">reqBlockchain</span>
+            <span class="k">let</span> <span class="i">headers</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Headers</span>(<span class="i">reqBlockchain</span>)
+            <span class="i">peer</span><span class="o">.</span><span class="i">OnNext</span>(<span class="k">new</span> <span class="i">BitcoinMessage</span>(<span class="s">&quot;</span><span class="s">headers</span><span class="s">&quot;</span>, <span class="i">headers</span><span class="o">.</span><span class="i">ToByteArray</span>()))
+        <span class="k">with</span>
+            | <span class="i">e</span> <span class="k">-&gt;</span> <span class="i">logger</span><span class="o">.</span><span class="i">ErrorF</span> <span class="s">&quot;</span><span class="s">Exception</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span class="i">e</span>
+    | <span class="i">Ping</span> (<span class="i">ping</span>, <span class="i">peer</span>) <span class="k">-&gt;</span>
+        <span class="k">let</span> <span class="i">pong</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Pong</span>(<span class="i">ping</span><span class="o">.</span><span class="i">Nonce</span>)
+        <span class="i">peer</span><span class="o">.</span><span class="i">OnNext</span>(<span class="k">new</span> <span class="i">BitcoinMessage</span>(<span class="s">&quot;</span><span class="s">pong</span><span class="s">&quot;</span>, <span class="i">pong</span><span class="o">.</span><span class="i">ToByteArray</span>()))
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs156', 441)" onmouseover="showTip(event, 'fs156', 441)" class="i">blockchainStart</span>() <span class="o">=</span>
+    <span onmouseout="hideTip(event, 'fs18', 442)" onmouseover="showTip(event, 'fs18', 442)" class="i">disposable</span><span class="o">.</span><span class="i">Add</span>(<span class="i">blockchainIncoming</span><span class="o">.</span><span class="i">ObserveOn</span>(<span class="i">NewThreadScheduler</span><span class="o">.</span><span class="i">Default</span>)<span class="o">.</span><span class="i">Subscribe</span>(<span onmouseout="hideTip(event, 'fs151', 443)" onmouseover="showTip(event, 'fs151', 443)" class="i">processCommand</span>))</pre>
+</td>
+</tr>
+</table>
+
+          <div class="tip" id="fs1">module Blockchain</div>
+<div class="tip" id="fs2">namespace System</div>
+<div class="tip" id="fs3">namespace System.Net</div>
+<div class="tip" id="fs4">namespace System.Net.Sockets</div>
+<div class="tip" id="fs5">namespace System.Collections</div>
+<div class="tip" id="fs6">namespace System.Collections.Generic</div>
+<div class="tip" id="fs7">namespace System.Linq</div>
+<div class="tip" id="fs8">namespace System.IO</div>
+<div class="tip" id="fs9">namespace System.Text</div>
+<div class="tip" id="fs10">Multiple items<br />namespace System.Linq<br /><br />--------------------<br />namespace Microsoft.FSharp.Linq</div>
+<div class="tip" id="fs11">namespace System.Threading</div>
+<div class="tip" id="fs12">namespace System.Threading.Tasks</div>
+<div class="tip" id="fs13">namespace Microsoft.FSharp.Control</div>
+<div class="tip" id="fs14">module Observable<br /><br />from Microsoft.FSharp.Control</div>
+<div class="tip" id="fs15">Multiple items<br />namespace System.Collections<br /><br />--------------------<br />namespace Microsoft.FSharp.Collections</div>
+<div class="tip" id="fs16">Multiple items<br />type Choice&lt;&#39;T1,&#39;T2&gt; =<br />&#160;&#160;| Choice1Of2 of &#39;T1<br />&#160;&#160;| Choice2Of2 of &#39;T2<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3&gt; =<br />&#160;&#160;| Choice1Of3 of &#39;T1<br />&#160;&#160;| Choice2Of3 of &#39;T2<br />&#160;&#160;| Choice3Of3 of &#39;T3<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4&gt; =<br />&#160;&#160;| Choice1Of4 of &#39;T1<br />&#160;&#160;| Choice2Of4 of &#39;T2<br />&#160;&#160;| Choice3Of4 of &#39;T3<br />&#160;&#160;| Choice4Of4 of &#39;T4<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5&gt; =<br />&#160;&#160;| Choice1Of5 of &#39;T1<br />&#160;&#160;| Choice2Of5 of &#39;T2<br />&#160;&#160;| Choice3Of5 of &#39;T3<br />&#160;&#160;| Choice4Of5 of &#39;T4<br />&#160;&#160;| Choice5Of5 of &#39;T5<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6&gt; =<br />&#160;&#160;| Choice1Of6 of &#39;T1<br />&#160;&#160;| Choice2Of6 of &#39;T2<br />&#160;&#160;| Choice3Of6 of &#39;T3<br />&#160;&#160;| Choice4Of6 of &#39;T4<br />&#160;&#160;| Choice5Of6 of &#39;T5<br />&#160;&#160;| Choice6Of6 of &#39;T6<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7&gt; =<br />&#160;&#160;| Choice1Of7 of &#39;T1<br />&#160;&#160;| Choice2Of7 of &#39;T2<br />&#160;&#160;| Choice3Of7 of &#39;T3<br />&#160;&#160;| Choice4Of7 of &#39;T4<br />&#160;&#160;| Choice5Of7 of &#39;T5<br />&#160;&#160;| Choice6Of7 of &#39;T6<br />&#160;&#160;| Choice7Of7 of &#39;T7<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_,_,_,_&gt;</div>
+<div class="tip" id="fs17">module Option<br /><br />from Microsoft.FSharp.Core</div>
+<div class="tip" id="fs18">val disposable : obj<br /><br />Full name: Blockchain.disposable</div>
+<div class="tip" id="fs19">val mutable tip : obj<br /><br />Full name: Blockchain.tip</div>
+<div class="tip" id="fs20">val fnBlockchain : unit -&gt; &#39;a<br /><br />Full name: Blockchain.fnBlockchain</div>
+<div class="tip" id="fs21">val calculateChainHeights : newHeaders:&#39;a list -&gt; &#39;a list option<br /><br />Full name: Blockchain.calculateChainHeights</div>
+<div class="tip" id="fs22">val newHeaders : &#39;a list</div>
+<div class="tip" id="fs23">type &#39;T option = Option&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Core.option&lt;_&gt;</div>
+<div class="tip" id="fs24">val blockchain : obj</div>
+<div class="tip" id="fs25">val hashOfPrevNewHeader : obj</div>
+<div class="tip" id="fs26">module Seq<br /><br />from Microsoft.FSharp.Collections</div>
+<div class="tip" id="fs27">val tryPick : chooser:(&#39;T -&gt; &#39;U option) -&gt; source:seq&lt;&#39;T&gt; -&gt; &#39;U option<br /><br />Full name: Microsoft.FSharp.Collections.Seq.tryPick</div>
+<div class="tip" id="fs28">union case Option.Some: Value: &#39;T -&gt; Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs29">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; option:&#39;T option -&gt; &#39;U option<br /><br />Full name: Microsoft.FSharp.Core.Option.map</div>
+<div class="tip" id="fs30">val bh : obj</div>
+<div class="tip" id="fs31">val prevNewHeader : &#39;a</div>
+<div class="tip" id="fs32">union case Option.None: Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs33">val iteri : action:(int -&gt; &#39;T -&gt; unit) -&gt; source:seq&lt;&#39;T&gt; -&gt; unit<br /><br />Full name: Microsoft.FSharp.Collections.Seq.iteri</div>
+<div class="tip" id="fs34">val i : int</div>
+<div class="tip" id="fs35">val newHeader : obj</div>
+<div class="tip" id="fs36">Multiple items<br />type List&lt;&#39;T&gt; =<br />&#160;&#160;new : unit -&gt; List&lt;&#39;T&gt; + 2 overloads<br />&#160;&#160;member Add : item:&#39;T -&gt; unit<br />&#160;&#160;member AddRange : collection:IEnumerable&lt;&#39;T&gt; -&gt; unit<br />&#160;&#160;member AsReadOnly : unit -&gt; ReadOnlyCollection&lt;&#39;T&gt;<br />&#160;&#160;member BinarySearch : item:&#39;T -&gt; int + 2 overloads<br />&#160;&#160;member Capacity : int with get, set<br />&#160;&#160;member Clear : unit -&gt; unit<br />&#160;&#160;member Contains : item:&#39;T -&gt; bool<br />&#160;&#160;member ConvertAll&lt;&#39;TOutput&gt; : converter:Converter&lt;&#39;T, &#39;TOutput&gt; -&gt; List&lt;&#39;TOutput&gt;<br />&#160;&#160;member CopyTo : array:&#39;T[] -&gt; unit + 2 overloads<br />&#160;&#160;...<br />&#160;&#160;nested type Enumerator<br /><br />Full name: System.Collections.Generic.List&lt;_&gt;<br /><br />--------------------<br />List() : unit<br />List(capacity: int) : unit<br />List(collection: IEnumerable&lt;&#39;T&gt;) : unit</div>
+<div class="tip" id="fs37">val rev : list:&#39;T list -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.List.rev</div>
+<div class="tip" id="fs38">val calculateLowestCommonAncestor : newChain:&#39;a list -&gt; &#39;b<br /><br />Full name: Blockchain.calculateLowestCommonAncestor</div>
+<div class="tip" id="fs39">val newChain : &#39;a list</div>
+<div class="tip" id="fs40">val blockchain : seq&lt;&#39;b&gt;</div>
+<div class="tip" id="fs41">val newTip : &#39;a</div>
+<div class="tip" id="fs42">val head : list:&#39;T list -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Collections.List.head</div>
+<div class="tip" id="fs43">val minHeight : int</div>
+<div class="tip" id="fs44">val min : e1:&#39;T -&gt; e2:&#39;T -&gt; &#39;T (requires comparison)<br /><br />Full name: Microsoft.FSharp.Core.Operators.min</div>
+<div class="tip" id="fs45">val trimBlockchain : seq&lt;&#39;b&gt;</div>
+<div class="tip" id="fs46">val skip : count:int -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.skip</div>
+<div class="tip" id="fs47">val trimNewHeaders : seq&lt;&#39;a&gt;</div>
+<div class="tip" id="fs48">val zip : source1:seq&lt;&#39;T1&gt; -&gt; source2:seq&lt;&#39;T2&gt; -&gt; seq&lt;&#39;T1 * &#39;T2&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.zip</div>
+<div class="tip" id="fs49">val find : predicate:(&#39;T -&gt; bool) -&gt; source:seq&lt;&#39;T&gt; -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Collections.Seq.find</div>
+<div class="tip" id="fs50">val a : &#39;b</div>
+<div class="tip" id="fs51">val b : &#39;a</div>
+<div class="tip" id="fs52">val fst : tuple:(&#39;T1 * &#39;T2) -&gt; &#39;T1<br /><br />Full name: Microsoft.FSharp.Core.Operators.fst</div>
+<div class="tip" id="fs53">val isBetter : lowestCommonAncestor:&#39;a -&gt; newChain:seq&lt;&#39;b&gt; -&gt; bool<br /><br />Full name: Blockchain.isBetter</div>
+<div class="tip" id="fs54">val lowestCommonAncestor : &#39;a</div>
+<div class="tip" id="fs55">val newChain : seq&lt;&#39;b&gt;</div>
+<div class="tip" id="fs56">val blockchain : seq&lt;obj&gt;</div>
+<div class="tip" id="fs57">val mainChain : obj list</div>
+<div class="tip" id="fs58">val takeWhile : predicate:(&#39;T -&gt; bool) -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.takeWhile</div>
+<div class="tip" id="fs59">val toList : source:seq&lt;&#39;T&gt; -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.Seq.toList</div>
+<div class="tip" id="fs60">val newFork : &#39;b list</div>
+<div class="tip" id="fs61">val bh : &#39;b</div>
+<div class="tip" id="fs62">type BlockMap = obj<br /><br />Full name: Blockchain.BlockMap</div>
+<div class="tip" id="fs63">Multiple items<br />module Map<br /><br />from Microsoft.FSharp.Collections<br /><br />--------------------<br />type Map&lt;&#39;Key,&#39;Value (requires comparison)&gt; =<br />&#160;&#160;interface IEnumerable<br />&#160;&#160;interface IComparable<br />&#160;&#160;interface IEnumerable&lt;KeyValuePair&lt;&#39;Key,&#39;Value&gt;&gt;<br />&#160;&#160;interface ICollection&lt;KeyValuePair&lt;&#39;Key,&#39;Value&gt;&gt;<br />&#160;&#160;interface IDictionary&lt;&#39;Key,&#39;Value&gt;<br />&#160;&#160;new : elements:seq&lt;&#39;Key * &#39;Value&gt; -&gt; Map&lt;&#39;Key,&#39;Value&gt;<br />&#160;&#160;member Add : key:&#39;Key * value:&#39;Value -&gt; Map&lt;&#39;Key,&#39;Value&gt;<br />&#160;&#160;member ContainsKey : key:&#39;Key -&gt; bool<br />&#160;&#160;override Equals : obj -&gt; bool<br />&#160;&#160;member Remove : key:&#39;Key -&gt; Map&lt;&#39;Key,&#39;Value&gt;<br />&#160;&#160;...<br /><br />Full name: Microsoft.FSharp.Collections.Map&lt;_,_&gt;<br /><br />--------------------<br />new : elements:seq&lt;&#39;Key * &#39;Value&gt; -&gt; Map&lt;&#39;Key,&#39;Value&gt;</div>
+<div class="tip" id="fs64">Multiple items<br />val byte : value:&#39;T -&gt; byte (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.byte<br /><br />--------------------<br />type byte = Byte<br /><br />Full name: Microsoft.FSharp.Core.byte</div>
+<div class="tip" id="fs65">val asyncGetBlocks : headers:&#39;a list -&gt; attempsRemaining:int -&gt; Async&lt;unit&gt;<br /><br />Full name: Blockchain.asyncGetBlocks</div>
+<div class="tip" id="fs66">val headers : &#39;a list</div>
+<div class="tip" id="fs67">type &#39;T list = List&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.list&lt;_&gt;</div>
+<div class="tip" id="fs68">val attempsRemaining : int</div>
+<div class="tip" id="fs69">Multiple items<br />val int : value:&#39;T -&gt; int (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.int<br /><br />--------------------<br />type int = int32<br /><br />Full name: Microsoft.FSharp.Core.int<br /><br />--------------------<br />type int&lt;&#39;Measure&gt; = int<br /><br />Full name: Microsoft.FSharp.Core.int&lt;_&gt;</div>
+<div class="tip" id="fs70">val updatePendingBlocks : (BlockMap -&gt; &#39;b * byte [] -&gt; &#39;c)</div>
+<div class="tip" id="fs71">val pendingBlocks : BlockMap</div>
+<div class="tip" id="fs72">val block : &#39;b</div>
+<div class="tip" id="fs73">val payload : byte []</div>
+<div class="tip" id="fs74">val iter : action:(&#39;T -&gt; unit) -&gt; option:&#39;T option -&gt; unit<br /><br />Full name: Microsoft.FSharp.Core.Option.iter</div>
+<div class="tip" id="fs75">val header : obj</div>
+<div class="tip" id="fs76">val async : AsyncBuilder<br /><br />Full name: Microsoft.FSharp.Core.ExtraTopLevelOperators.async</div>
+<div class="tip" id="fs77">val pendingBlocks : Map&lt;IComparable,&#39;a&gt;</div>
+<div class="tip" id="fs78">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; list:&#39;T list -&gt; &#39;U list<br /><br />Full name: Microsoft.FSharp.Collections.List.map</div>
+<div class="tip" id="fs79">val bh : &#39;a</div>
+<div class="tip" id="fs80">val ofList : elements:(&#39;Key * &#39;T) list -&gt; Map&lt;&#39;Key,&#39;T&gt; (requires comparison)<br /><br />Full name: Microsoft.FSharp.Collections.Map.ofList</div>
+<div class="tip" id="fs81">val peer : obj</div>
+<div class="tip" id="fs82">val obs : obj</div>
+<div class="tip" id="fs83">Multiple items<br />type Async<br />static member AsBeginEnd : computation:(&#39;Arg -&gt; Async&lt;&#39;T&gt;) -&gt; (&#39;Arg * AsyncCallback * obj -&gt; IAsyncResult) * (IAsyncResult -&gt; &#39;T) * (IAsyncResult -&gt; unit)<br />static member AwaitEvent : event:IEvent&lt;&#39;Del,&#39;T&gt; * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt; (requires delegate and &#39;Del :&gt; Delegate)<br />static member AwaitIAsyncResult : iar:IAsyncResult * ?millisecondsTimeout:int -&gt; Async&lt;bool&gt;<br />static member AwaitTask : task:Task&lt;&#39;T&gt; -&gt; Async&lt;&#39;T&gt;<br />static member AwaitWaitHandle : waitHandle:WaitHandle * ?millisecondsTimeout:int -&gt; Async&lt;bool&gt;<br />static member CancelDefaultToken : unit -&gt; unit<br />static member Catch : computation:Async&lt;&#39;T&gt; -&gt; Async&lt;Choice&lt;&#39;T,exn&gt;&gt;<br />static member FromBeginEnd : beginAction:(AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member FromBeginEnd : arg:&#39;Arg1 * beginAction:(&#39;Arg1 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member FromBeginEnd : arg1:&#39;Arg1 * arg2:&#39;Arg2 * beginAction:(&#39;Arg1 * &#39;Arg2 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member FromBeginEnd : arg1:&#39;Arg1 * arg2:&#39;Arg2 * arg3:&#39;Arg3 * beginAction:(&#39;Arg1 * &#39;Arg2 * &#39;Arg3 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member FromContinuations : callback:((&#39;T -&gt; unit) * (exn -&gt; unit) * (OperationCanceledException -&gt; unit) -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member Ignore : computation:Async&lt;&#39;T&gt; -&gt; Async&lt;unit&gt;<br />static member OnCancel : interruption:(unit -&gt; unit) -&gt; Async&lt;IDisposable&gt;<br />static member Parallel : computations:seq&lt;Async&lt;&#39;T&gt;&gt; -&gt; Async&lt;&#39;T []&gt;<br />static member RunSynchronously : computation:Async&lt;&#39;T&gt; * ?timeout:int * ?cancellationToken:CancellationToken -&gt; &#39;T<br />static member Sleep : millisecondsDueTime:int -&gt; Async&lt;unit&gt;<br />static member Start : computation:Async&lt;unit&gt; * ?cancellationToken:CancellationToken -&gt; unit<br />static member StartAsTask : computation:Async&lt;&#39;T&gt; * ?taskCreationOptions:TaskCreationOptions * ?cancellationToken:CancellationToken -&gt; Task&lt;&#39;T&gt;<br />static member StartChild : computation:Async&lt;&#39;T&gt; * ?millisecondsTimeout:int -&gt; Async&lt;Async&lt;&#39;T&gt;&gt;<br />static member StartChildAsTask : computation:Async&lt;&#39;T&gt; * ?taskCreationOptions:TaskCreationOptions -&gt; Async&lt;Task&lt;&#39;T&gt;&gt;<br />static member StartImmediate : computation:Async&lt;unit&gt; * ?cancellationToken:CancellationToken -&gt; unit<br />static member StartWithContinuations : computation:Async&lt;&#39;T&gt; * continuation:(&#39;T -&gt; unit) * exceptionContinuation:(exn -&gt; unit) * cancellationContinuation:(OperationCanceledException -&gt; unit) * ?cancellationToken:CancellationToken -&gt; unit<br />static member SwitchToContext : syncContext:SynchronizationContext -&gt; Async&lt;unit&gt;<br />static member SwitchToNewThread : unit -&gt; Async&lt;unit&gt;<br />static member SwitchToThreadPool : unit -&gt; Async&lt;unit&gt;<br />static member TryCancelled : computation:Async&lt;&#39;T&gt; * compensation:(OperationCanceledException -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member CancellationToken : Async&lt;CancellationToken&gt;<br />static member DefaultCancellationToken : CancellationToken<br /><br />Full name: Microsoft.FSharp.Control.Async<br /><br />--------------------<br />type Async&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Control.Async&lt;_&gt;</div>
+<div class="tip" id="fs84">static member Async.AwaitTask : task:Task&lt;&#39;T&gt; -&gt; Async&lt;&#39;T&gt;</div>
+<div class="tip" id="fs85">val failedBlocks : obj</div>
+<div class="tip" id="fs86">Multiple items<br />type Func&lt;&#39;TResult&gt; =<br />&#160;&#160;delegate of unit -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;T11,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 * &#39;T11 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;T11,&#39;T12,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 * &#39;T11 * &#39;T12 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;T11,&#39;T12,&#39;T13,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 * &#39;T11 * &#39;T12 * &#39;T13 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;T11,&#39;T12,&#39;T13,&#39;T14,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 * &#39;T11 * &#39;T12 * &#39;T13 * &#39;T14 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;T11,&#39;T12,&#39;T13,&#39;T14,&#39;T15,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 * &#39;T11 * &#39;T12 * &#39;T13 * &#39;T14 * &#39;T15 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;T11,&#39;T12,&#39;T13,&#39;T14,&#39;T15,&#39;T16,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 * &#39;T11 * &#39;T12 * &#39;T13 * &#39;T14 * &#39;T15 * &#39;T16 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_&gt;</div>
+<div class="tip" id="fs87">val not : value:bool -&gt; bool<br /><br />Full name: Microsoft.FSharp.Core.Operators.not</div>
+<div class="tip" id="fs88">val raise : exn:Exception -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.Operators.raise</div>
+<div class="tip" id="fs89">Multiple items<br />type IOException =<br />&#160;&#160;inherit SystemException<br />&#160;&#160;new : unit -&gt; IOException + 3 overloads<br /><br />Full name: System.IO.IOException<br /><br />--------------------<br />IOException() : unit<br />IOException(message: string) : unit<br />IOException(message: string, hresult: int) : unit<br />IOException(message: string, innerException: exn) : unit</div>
+<div class="tip" id="fs90">val downloadBlocks : newChain:&#39;a list -&gt; Async&lt;unit&gt;<br /><br />Full name: Blockchain.downloadBlocks</div>
+<div class="tip" id="fs91">val h : &#39;a list</div>
+<div class="tip" id="fs92">val filter : predicate:(&#39;T -&gt; bool) -&gt; list:&#39;T list -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.List.filter</div>
+<div class="tip" id="fs93">val c : int</div>
+<div class="tip" id="fs94">val max : e1:&#39;T -&gt; e2:&#39;T -&gt; &#39;T (requires comparison)<br /><br />Full name: Microsoft.FSharp.Core.Operators.max</div>
+<div class="tip" id="fs95">val batchSize : int</div>
+<div class="tip" id="fs96">(extension) IEnumerable.Count&lt;&#39;TSource&gt;() : int<br />(extension) IEnumerable.Count&lt;&#39;TSource&gt;(predicate: Func&lt;&#39;TSource,bool&gt;) : int</div>
+<div class="tip" id="fs97">val getdataBatchSize : int</div>
+<div class="tip" id="fs98">val hashes : &#39;a []</div>
+<div class="tip" id="fs99">val toArray : list:&#39;T list -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.List.toArray</div>
+<div class="tip" id="fs100">val getblocks : Async&lt;unit&gt; []</div>
+<div class="tip" id="fs101">Multiple items<br />val seq : sequence:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Core.Operators.seq<br /><br />--------------------<br />type seq&lt;&#39;T&gt; = IEnumerable&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.seq&lt;_&gt;</div>
+<div class="tip" id="fs102">val batch : seq&lt;obj&gt;</div>
+<div class="tip" id="fs103">val toArray : source:seq&lt;&#39;T&gt; -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Seq.toArray</div>
+<div class="tip" id="fs104">static member Async.Parallel : computations:seq&lt;Async&lt;&#39;T&gt;&gt; -&gt; Async&lt;&#39;T []&gt;</div>
+<div class="tip" id="fs105">static member Async.Ignore : computation:Async&lt;&#39;T&gt; -&gt; Async&lt;unit&gt;</div>
+<div class="tip" id="fs106">val rollbackTo : accessor:&#39;a -&gt; targetBlock:&#39;b -&gt; &#39;c list<br /><br />Full name: Blockchain.rollbackTo</div>
+<div class="tip" id="fs107">val accessor : &#39;a</div>
+<div class="tip" id="fs108">val targetBlock : &#39;b</div>
+<div class="tip" id="fs109">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;U&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.map</div>
+<div class="tip" id="fs110">val utxoAccessor : &#39;a</div>
+<div class="tip" id="fs111">val p : &#39;a</div>
+<div class="tip" id="fs112">val blocks : &#39;a []</div>
+<div class="tip" id="fs113">val prevBlock : &#39;a</div>
+<div class="tip" id="fs114">val currentBlock : &#39;a</div>
+<div class="tip" id="fs115">val tempUTXO : &#39;a</div>
+<div class="tip" id="fs116">union case Choice.Choice1Of2: &#39;T1 -&gt; Choice&lt;&#39;T1,&#39;T2&gt;</div>
+<div class="tip" id="fs117">union case Choice.Choice2Of2: &#39;T2 -&gt; Choice&lt;&#39;T1,&#39;T2&gt;</div>
+<div class="tip" id="fs118">val catchup : peer:&#39;a -&gt; unit<br /><br />Full name: Blockchain.catchup</div>
+<div class="tip" id="fs119">val peer : &#39;a</div>
+<div class="tip" id="fs120">val getHeaders : (unit -&gt; Async&lt;&#39;b&gt;)</div>
+<div class="tip" id="fs121">val gh : obj</div>
+<div class="tip" id="fs122">val truncate : count:int -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.truncate</div>
+<div class="tip" id="fs123">type Array =<br />&#160;&#160;member Clone : unit -&gt; obj<br />&#160;&#160;member CopyTo : array:Array * index:int -&gt; unit + 1 overload<br />&#160;&#160;member GetEnumerator : unit -&gt; IEnumerator<br />&#160;&#160;member GetLength : dimension:int -&gt; int<br />&#160;&#160;member GetLongLength : dimension:int -&gt; int64<br />&#160;&#160;member GetLowerBound : dimension:int -&gt; int<br />&#160;&#160;member GetUpperBound : dimension:int -&gt; int<br />&#160;&#160;member GetValue : params indices:int[] -&gt; obj + 7 overloads<br />&#160;&#160;member Initialize : unit -&gt; unit<br />&#160;&#160;member IsFixedSize : bool<br />&#160;&#160;...<br /><br />Full name: System.Array</div>
+<div class="tip" id="fs124">val zeroCreate : count:int -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Array.zeroCreate</div>
+<div class="tip" id="fs125">val headers : obj</div>
+<div class="tip" id="fs126">val getHeadersResult : &#39;b</div>
+<div class="tip" id="fs127">val catchupImpl : (unit -&gt; unit)</div>
+<div class="tip" id="fs128">val headersMessage : obj</div>
+<div class="tip" id="fs129">static member Async.RunSynchronously : computation:Async&lt;&#39;T&gt; * ?timeout:int * ?cancellationToken:Threading.CancellationToken -&gt; &#39;T</div>
+<div class="tip" id="fs130">val headers : obj list</div>
+<div class="tip" id="fs131">property List.IsEmpty: bool</div>
+<div class="tip" id="fs132">val newBlockchainOpt : obj list option</div>
+<div class="tip" id="fs133">val newBlockchainFrag : obj list</div>
+<div class="tip" id="fs134">val iter : action:(&#39;T -&gt; unit) -&gt; list:&#39;T list -&gt; unit<br /><br />Full name: Microsoft.FSharp.Collections.List.iter</div>
+<div class="tip" id="fs135">val headersAfter : obj list</div>
+<div class="tip" id="fs136">val connectedNewBlockchain : obj list</div>
+<div class="tip" id="fs137">val downloadBlocksAsync : Async&lt;unit&gt;</div>
+<div class="tip" id="fs138">val tail : list:&#39;T list -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.List.tail</div>
+<div class="tip" id="fs139">val tempUTXO : obj</div>
+<div class="tip" id="fs140">val lca : obj</div>
+<div class="tip" id="fs141">val newBlockchain : obj list</div>
+<div class="tip" id="fs142">val takeWhile : predicate:(&#39;T -&gt; bool) -&gt; list:&#39;T list -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.List.takeWhile</div>
+<div class="tip" id="fs143">val undoTxs : obj list</div>
+<div class="tip" id="fs144">val newBlockList : obj list</div>
+<div class="tip" id="fs145">val lastValidBlockChoice : Choice&lt;obj,(obj * obj)&gt;</div>
+<div class="tip" id="fs146">val windowed : windowSize:int -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T []&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.windowed</div>
+<div class="tip" id="fs147">val lastValidBlock : obj</div>
+<div class="tip" id="fs148">val invalidBlock : obj</div>
+<div class="tip" id="fs149">val validNewBlockchain : seq&lt;obj&gt;</div>
+<div class="tip" id="fs150">val ex : exn</div>
+<div class="tip" id="fs151">val processCommand : command:&#39;a -&gt; &#39;b<br /><br />Full name: Blockchain.processCommand</div>
+<div class="tip" id="fs152">val command : &#39;a</div>
+<div class="tip" id="fs153">val hash : obj:&#39;T -&gt; int (requires equality)<br /><br />Full name: Microsoft.FSharp.Core.Operators.hash</div>
+<div class="tip" id="fs154">val ignore : value:&#39;T -&gt; unit<br /><br />Full name: Microsoft.FSharp.Core.Operators.ignore</div>
+<div class="tip" id="fs155">val tryFind : predicate:(&#39;T -&gt; bool) -&gt; source:seq&lt;&#39;T&gt; -&gt; &#39;T option<br /><br />Full name: Microsoft.FSharp.Collections.Seq.tryFind</div>
+<div class="tip" id="fs156">val blockchainStart : unit -&gt; &#39;a<br /><br />Full name: Blockchain.blockchainStart</div>
+          
+        </div>
+        <div class="span1"></div>
+      </div>
+    </div>
+  </body>
+</html>

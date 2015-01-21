@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <!-- 
+      The Database
+ parameters will be replaced with the 
+      document title extracted from the <h1> element or
+      file name, if there is no <h1> heading
+    -->
+    <title>Database
+</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="http://code.jquery.com/jquery-1.8.0.js"></script>
+    <script src="http://code.jquery.com/ui/1.8.23/jquery-ui.js"></script>
+    <script src="http://netdna.bootstrapcdn.com/twitter-bootstrap/3.3.2/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link href="http://getbootstrap.com/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="content/style.css" />
+    <script src="content/tips.js" type="text/javascript"></script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="index.html">Bitcoin F#</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li><a href="index.html">Intro</a></li>
+            <li><a href="Protocol.html">Protocol</a></li>
+            <li><a href="DB.html">Persistence</a></li>
+            <li><a href="P2P.html">Peer to Peer</a></li>
+            <li><a href="Peer.html">Peer</a></li>
+            <li><a href="Tracker.html">Tracker</a></li>
+            <li><a href="Script.html">Script Interpreter</a></li>
+            <li><a href="Mempool.html">Mempool</a></li>
+            <li><a href="Checks.html">Validation</a></li>
+            <li><a href="Blockchain.html">Blockchain</a></li>
+            <li><a href="Main.html">Main</a></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </nav>
+    <div class="container">
+      <div class="row" style="margin-top:70px">
+        <div class="span1"></div>
+        <div class="span10" id="main">
+          <h1>Database</h1>
+
+<p>The database module handles the persistance of the blockchain, unspent transaction outputs and peer
+addresses.</p>
+
+<ul>
+<li>The largest amount of data is in the blocks of the blockchain. It represents nearly 30 GB at this time
+(2015) and will continue growing. They are written as binary files so that they can be conveniently trimmed.</li>
+<li>The unspent transaction outputs are the stashes of bitcoins that haven't been used by a transaction yet. They
+are the application main data. Once blocks are analyzed, the application doesn't need them anymore except during
+reorganization of the blockchain. Instead, the application refers to the UTXO which is a much smaller set of data (~1GB).
+The UTXO are kept in a LevelDB database for better performance.</li>
+<li>Finally, the metadata is in a SQLite database. The relational database allows advanced querying that LevelDB doesn't
+provide and the amount of data isn't an issue here.</li>
+</ul>
+
+<h2>Backup</h2>
+
+<p>To make a backup, the easiest way is to shutdown the application and copy the content of the <code>utxo</code> folder which has the
+UTXO database and the <code>bitcoin.db</code> file that has the associated metadata. The blocks can be saved too but they are not 
+vital.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs11', 19)" onmouseover="showTip(event, 'fs11', 19)" class="i">connectionString</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs12', 20)" onmouseover="showTip(event, 'fs12', 20)" class="i">sprintf</span> <span class="s">&quot;</span><span class="s">Data</span><span class="s"> </span><span class="s">Source</span><span class="s">=</span><span class="s">%</span><span class="s">s</span><span class="s">/</span><span class="s">bitcoin</span><span class="s">.</span><span class="s">db</span><span class="s">&quot;</span> <span class="i">baseDir</span></pre>
+</td>
+</tr>
+</table>
+
+<p>DB Connections can't be shared between threads but they are coming from a pool and are cheap to establish. Using ADO.NET, 
+I can write parametrized SQL statements. It's direct SQL and therefore not portable to other DB providers but it works
+well here. The database model isn't sophisticated enough to warrant an entity-relation library. I prefer to keep the 
+database layer a straight get and put interface.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs13', 21)" onmouseover="showTip(event, 'fs13', 21)" class="i">connection</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteConnection</span>(<span onmouseout="hideTip(event, 'fs11', 22)" onmouseover="showTip(event, 'fs11', 22)" class="i">connectionString</span>)
+<span onmouseout="hideTip(event, 'fs13', 23)" onmouseover="showTip(event, 'fs13', 23)" class="i">connection</span><span class="o">.</span><span class="i">Open</span>()
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs14', 24)" onmouseover="showTip(event, 'fs14', 24)" class="i">updateAddrQuery</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteCommand</span>(<span class="s">@&quot;</span><span class="s">insert</span><span class="s"> </span><span class="s">or</span><span class="s"> </span><span class="s">ignore</span><span class="s"> </span><span class="s">into</span><span class="s"> </span><span class="s">peerInfo</span><span class="s">(</span><span class="s">host</span><span class="s">,</span><span class="s"> </span><span class="s">port</span><span class="s">,</span><span class="s"> </span><span class="s">ts</span><span class="s">,</span><span class="s"> </span><span class="s">user_agent</span><span class="s">,</span><span class="s"> </span><span class="s">state</span><span class="s">,</span><span class="s"> </span><span class="s">score</span><span class="s">)</span><span class="s"> </span><span class="s">values</span><span class="s">(</span><span class="s">@</span><span class="s">host</span><span class="s">,</span><span class="s"> </span><span class="s">@</span><span class="s">port</span><span class="s">,</span><span class="s"> </span><span class="s">@</span><span class="s">ts</span><span class="s">,</span><span class="s"> </span><span class="s">@</span><span class="s">user_agent</span><span class="s">,</span><span class="s"> </span><span class="s">0</span><span class="s">,</span><span class="s"> </span><span class="s">0</span><span class="s">)</span><span class="s">;</span>
+<span class="s">    </span><span class="s">update</span><span class="s"> </span><span class="s">peerInfo</span><span class="s"> </span><span class="s">set</span><span class="s"> </span><span class="s">ts</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">@</span><span class="s">ts</span><span class="s"> </span><span class="s">where</span><span class="s"> </span><span class="s">host</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">@</span><span class="s">host</span><span class="s"> </span><span class="s">and</span><span class="s"> </span><span class="s">port</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">@</span><span class="s">port</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs13', 25)" onmouseover="showTip(event, 'fs13', 25)" class="i">connection</span>)
+<span onmouseout="hideTip(event, 'fs14', 26)" onmouseover="showTip(event, 'fs14', 26)" class="i">updateAddrQuery</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">@</span><span class="s">host</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 27)" onmouseover="showTip(event, 'fs15', 27)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs16', 28)" onmouseover="showTip(event, 'fs16', 28)" class="i">String</span>, <span class="n">256</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 29)" onmouseover="showTip(event, 'fs17', 29)" class="i">ignore</span>
+<span onmouseout="hideTip(event, 'fs14', 30)" onmouseover="showTip(event, 'fs14', 30)" class="i">updateAddrQuery</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">@</span><span class="s">port</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 31)" onmouseover="showTip(event, 'fs15', 31)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 32)" onmouseover="showTip(event, 'fs18', 32)" class="i">Int32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 33)" onmouseover="showTip(event, 'fs17', 33)" class="i">ignore</span>
+<span onmouseout="hideTip(event, 'fs14', 34)" onmouseover="showTip(event, 'fs14', 34)" class="i">updateAddrQuery</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">@</span><span class="s">ts</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 35)" onmouseover="showTip(event, 'fs15', 35)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs19', 36)" onmouseover="showTip(event, 'fs19', 36)" class="i">DateTime</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 37)" onmouseover="showTip(event, 'fs17', 37)" class="i">ignore</span>
+<span onmouseout="hideTip(event, 'fs14', 38)" onmouseover="showTip(event, 'fs14', 38)" class="i">updateAddrQuery</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">@</span><span class="s">user_agent</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 39)" onmouseover="showTip(event, 'fs15', 39)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs16', 40)" onmouseover="showTip(event, 'fs16', 40)" class="i">String</span>, <span class="n">256</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 41)" onmouseover="showTip(event, 'fs17', 41)" class="i">ignore</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs20', 42)" onmouseover="showTip(event, 'fs20', 42)" class="i">updateAddr</span>(<span onmouseout="hideTip(event, 'fs21', 43)" onmouseover="showTip(event, 'fs21', 43)" class="i">addr</span><span class="o">:</span> <span class="i">AddrEntry</span>) <span class="o">=</span>
+    <span onmouseout="hideTip(event, 'fs14', 44)" onmouseover="showTip(event, 'fs14', 44)" class="i">updateAddrQuery</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs21', 45)" onmouseover="showTip(event, 'fs21', 45)" class="i">addr</span><span class="o">.</span><span class="i">Address</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs22', 46)" onmouseover="showTip(event, 'fs22', 46)" class="i">EndPoint</span><span class="o">.</span><span class="i">Address</span><span class="o">.</span><span class="i">ToString</span>()
+    <span onmouseout="hideTip(event, 'fs14', 47)" onmouseover="showTip(event, 'fs14', 47)" class="i">updateAddrQuery</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">1</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs21', 48)" onmouseover="showTip(event, 'fs21', 48)" class="i">addr</span><span class="o">.</span><span class="i">Address</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs22', 49)" onmouseover="showTip(event, 'fs22', 49)" class="i">EndPoint</span><span class="o">.</span><span class="i">Port</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs23', 50)" onmouseover="showTip(event, 'fs23', 50)" class="i">dts</span> <span class="o">=</span> (<span class="k">new</span> <span class="i">Instant</span>(<span onmouseout="hideTip(event, 'fs24', 51)" onmouseover="showTip(event, 'fs24', 51)" class="i">int64</span>(<span onmouseout="hideTip(event, 'fs21', 52)" onmouseover="showTip(event, 'fs21', 52)" class="i">addr</span><span class="o">.</span><span class="i">Timestamp</span>) <span class="o">*</span> <span class="i">NodaConstants</span><span class="o">.</span><span class="i">TicksPerSecond</span>))<span class="o">.</span><span class="i">ToDateTimeUtc</span>()
+    <span onmouseout="hideTip(event, 'fs14', 53)" onmouseover="showTip(event, 'fs14', 53)" class="i">updateAddrQuery</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">2</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs23', 54)" onmouseover="showTip(event, 'fs23', 54)" class="i">dts</span>
+    <span onmouseout="hideTip(event, 'fs14', 55)" onmouseover="showTip(event, 'fs14', 55)" class="i">updateAddrQuery</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">3</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span class="s">&quot;</span><span class="s">&quot;</span>
+    <span onmouseout="hideTip(event, 'fs14', 56)" onmouseover="showTip(event, 'fs14', 56)" class="i">updateAddrQuery</span><span class="o">.</span><span class="i">ExecuteNonQuery</span>() <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 57)" onmouseover="showTip(event, 'fs17', 57)" class="i">ignore</span></pre>
+</td>
+</tr>
+</table>
+
+<h2>Peers</h2>
+
+<p>The peerInfo table has the addresses of the peers that were advertised either through seed discovery or through
+peer to peer <code>addr</code> messages. I don't do much peer management. Typically, the quality of the information degrades over
+time since peers disconnect and reconnect freely. Therefore, I keep updating the table and the query that returns peers
+orders them from the most recent to the least.</p>
+
+<p>Peers have a state telling whether they are in use but they should also have a badness score. It's not done at the moment.
+The application will disconnect from badly behaved peers but without a score value and a ban period, nothing prevents
+a peer from reconnecting immediately. This is on the TODO list.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+<span class="l">40: </span>
+<span class="l">41: </span>
+<span class="l">42: </span>
+<span class="l">43: </span>
+<span class="l">44: </span>
+<span class="l">45: </span>
+<span class="l">46: </span>
+<span class="l">47: </span>
+<span class="l">48: </span>
+<span class="l">49: </span>
+<span class="l">50: </span>
+<span class="l">51: </span>
+<span class="l">52: </span>
+<span class="l">53: </span>
+<span class="l">54: </span>
+<span class="l">55: </span>
+<span class="l">56: </span>
+<span class="l">57: </span>
+<span class="l">58: </span>
+<span class="l">59: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs25', 58)" onmouseover="showTip(event, 'fs25', 58)" class="i">getPeers</span>() <span class="o">=</span>
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs26', 59)" onmouseover="showTip(event, 'fs26', 59)" class="i">connection</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteConnection</span>(<span onmouseout="hideTip(event, 'fs11', 60)" onmouseover="showTip(event, 'fs11', 60)" class="i">connectionString</span>)
+    <span onmouseout="hideTip(event, 'fs26', 61)" onmouseover="showTip(event, 'fs26', 61)" class="i">connection</span><span class="o">.</span><span class="i">Open</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs27', 62)" onmouseover="showTip(event, 'fs27', 62)" class="i">command</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteCommand</span>(<span class="s">&quot;</span><span class="s">select</span><span class="s"> </span><span class="s">host</span><span class="s">,</span><span class="s"> </span><span class="s">port</span><span class="s"> </span><span class="s">from</span><span class="s"> </span><span class="s">peerInfo</span><span class="s"> </span><span class="s">where</span><span class="s"> </span><span class="s">state</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">0</span><span class="s"> </span><span class="s">order</span><span class="s"> </span><span class="s">by</span><span class="s"> </span><span class="s">ts</span><span class="s"> </span><span class="s">desc</span><span class="s"> </span><span class="s">limit</span><span class="s"> </span><span class="s">1000</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs26', 63)" onmouseover="showTip(event, 'fs26', 63)" class="i">connection</span>)
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs28', 64)" onmouseover="showTip(event, 'fs28', 64)" class="i">reader</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs27', 65)" onmouseover="showTip(event, 'fs27', 65)" class="i">command</span><span class="o">.</span><span class="i">ExecuteReader</span>()
+    [<span class="k">while</span> <span onmouseout="hideTip(event, 'fs28', 66)" onmouseover="showTip(event, 'fs28', 66)" class="i">reader</span><span class="o">.</span><span class="i">Read</span>() <span class="k">do</span> 
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs29', 67)" onmouseover="showTip(event, 'fs29', 67)" class="i">host</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs28', 68)" onmouseover="showTip(event, 'fs28', 68)" class="i">reader</span><span class="o">.</span><span class="i">GetString</span>(<span class="n">0</span>)
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs30', 69)" onmouseover="showTip(event, 'fs30', 69)" class="i">port</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs28', 70)" onmouseover="showTip(event, 'fs28', 70)" class="i">reader</span><span class="o">.</span><span class="i">GetInt32</span>(<span class="n">1</span>)
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs31', 71)" onmouseover="showTip(event, 'fs31', 71)" class="i">ip</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs32', 72)" onmouseover="showTip(event, 'fs32', 72)" class="i">IPAddress</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs33', 73)" onmouseover="showTip(event, 'fs33', 73)" class="i">Parse</span>(<span onmouseout="hideTip(event, 'fs29', 74)" onmouseover="showTip(event, 'fs29', 74)" class="i">host</span>)
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs34', 75)" onmouseover="showTip(event, 'fs34', 75)" class="i">endpoint</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs35', 76)" onmouseover="showTip(event, 'fs35', 76)" class="i">IPEndPoint</span>(<span onmouseout="hideTip(event, 'fs31', 77)" onmouseover="showTip(event, 'fs31', 77)" class="i">ip</span>, <span onmouseout="hideTip(event, 'fs30', 78)" onmouseover="showTip(event, 'fs30', 78)" class="i">port</span>)
+        <span class="k">yield</span> <span onmouseout="hideTip(event, 'fs34', 79)" onmouseover="showTip(event, 'fs34', 79)" class="i">endpoint</span>
+    ]
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs36', 80)" onmouseover="showTip(event, 'fs36', 80)" class="i">getPeer</span>() <span class="o">=</span>
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs26', 81)" onmouseover="showTip(event, 'fs26', 81)" class="i">connection</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteConnection</span>(<span onmouseout="hideTip(event, 'fs11', 82)" onmouseover="showTip(event, 'fs11', 82)" class="i">connectionString</span>)
+    <span onmouseout="hideTip(event, 'fs26', 83)" onmouseover="showTip(event, 'fs26', 83)" class="i">connection</span><span class="o">.</span><span class="i">Open</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs27', 84)" onmouseover="showTip(event, 'fs27', 84)" class="i">command</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteCommand</span>(<span class="s">&quot;</span><span class="s">select</span><span class="s"> </span><span class="s">host</span><span class="s">,</span><span class="s"> </span><span class="s">port</span><span class="s"> </span><span class="s">from</span><span class="s"> </span><span class="s">peerInfo</span><span class="s"> </span><span class="s">where</span><span class="s"> </span><span class="s">state</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">0</span><span class="s"> </span><span class="s">order</span><span class="s"> </span><span class="s">by</span><span class="s"> </span><span class="s">ts</span><span class="s"> </span><span class="s">desc</span><span class="s"> </span><span class="s">limit</span><span class="s"> </span><span class="s">1</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs26', 85)" onmouseover="showTip(event, 'fs26', 85)" class="i">connection</span>)
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs28', 86)" onmouseover="showTip(event, 'fs28', 86)" class="i">reader</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs27', 87)" onmouseover="showTip(event, 'fs27', 87)" class="i">command</span><span class="o">.</span><span class="i">ExecuteReader</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs37', 88)" onmouseover="showTip(event, 'fs37', 88)" class="i">peers</span> <span class="o">=</span> 
+        [<span class="k">while</span> <span onmouseout="hideTip(event, 'fs28', 89)" onmouseover="showTip(event, 'fs28', 89)" class="i">reader</span><span class="o">.</span><span class="i">Read</span>() <span class="k">do</span> 
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs29', 90)" onmouseover="showTip(event, 'fs29', 90)" class="i">host</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs28', 91)" onmouseover="showTip(event, 'fs28', 91)" class="i">reader</span><span class="o">.</span><span class="i">GetString</span>(<span class="n">0</span>)
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs30', 92)" onmouseover="showTip(event, 'fs30', 92)" class="i">port</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs28', 93)" onmouseover="showTip(event, 'fs28', 93)" class="i">reader</span><span class="o">.</span><span class="i">GetInt32</span>(<span class="n">1</span>)
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs31', 94)" onmouseover="showTip(event, 'fs31', 94)" class="i">ip</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs32', 95)" onmouseover="showTip(event, 'fs32', 95)" class="i">IPAddress</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs33', 96)" onmouseover="showTip(event, 'fs33', 96)" class="i">Parse</span>(<span onmouseout="hideTip(event, 'fs29', 97)" onmouseover="showTip(event, 'fs29', 97)" class="i">host</span>)
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs34', 98)" onmouseover="showTip(event, 'fs34', 98)" class="i">endpoint</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs35', 99)" onmouseover="showTip(event, 'fs35', 99)" class="i">IPEndPoint</span>(<span onmouseout="hideTip(event, 'fs31', 100)" onmouseover="showTip(event, 'fs31', 100)" class="i">ip</span>, <span onmouseout="hideTip(event, 'fs30', 101)" onmouseover="showTip(event, 'fs30', 101)" class="i">port</span>)
+            <span class="k">yield</span> <span onmouseout="hideTip(event, 'fs34', 102)" onmouseover="showTip(event, 'fs34', 102)" class="i">endpoint</span>
+        ]
+    <span onmouseout="hideTip(event, 'fs37', 103)" onmouseover="showTip(event, 'fs37', 103)" class="i">peers</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs38', 104)" onmouseover="showTip(event, 'fs38', 104)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs39', 105)" onmouseover="showTip(event, 'fs39', 105)" class="i">tryPick</span> <span onmouseout="hideTip(event, 'fs40', 106)" onmouseover="showTip(event, 'fs40', 106)" class="i">Some</span>
+
+<span class="c">(*</span>
+<span class="c">Drop peers that are older than a certain timestamp. Normally, 3h ago.</span>
+<span class="c">*)</span>
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs41', 107)" onmouseover="showTip(event, 'fs41', 107)" class="i">dropOldPeers</span> <span onmouseout="hideTip(event, 'fs42', 108)" onmouseover="showTip(event, 'fs42', 108)" class="i">dts</span> <span class="o">=</span> 
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs26', 109)" onmouseover="showTip(event, 'fs26', 109)" class="i">connection</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteConnection</span>(<span onmouseout="hideTip(event, 'fs11', 110)" onmouseover="showTip(event, 'fs11', 110)" class="i">connectionString</span>)
+    <span onmouseout="hideTip(event, 'fs26', 111)" onmouseover="showTip(event, 'fs26', 111)" class="i">connection</span><span class="o">.</span><span class="i">Open</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs27', 112)" onmouseover="showTip(event, 'fs27', 112)" class="i">command</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteCommand</span>(<span class="s">&quot;</span><span class="s">delete</span><span class="s"> </span><span class="s">from</span><span class="s"> </span><span class="s">peerInfo</span><span class="s"> </span><span class="s">where</span><span class="s"> </span><span class="s">ts</span><span class="s"> </span><span class="s">&lt;</span><span class="s">=</span><span class="s"> </span><span class="s">@</span><span class="s">ts</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs26', 113)" onmouseover="showTip(event, 'fs26', 113)" class="i">connection</span>)
+    <span onmouseout="hideTip(event, 'fs27', 114)" onmouseover="showTip(event, 'fs27', 114)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">@</span><span class="s">ts</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 115)" onmouseover="showTip(event, 'fs15', 115)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs19', 116)" onmouseover="showTip(event, 'fs19', 116)" class="i">DateTime</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 117)" onmouseover="showTip(event, 'fs17', 117)" class="i">ignore</span>
+    <span onmouseout="hideTip(event, 'fs27', 118)" onmouseover="showTip(event, 'fs27', 118)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs42', 119)" onmouseover="showTip(event, 'fs42', 119)" class="i">dts</span>
+    <span onmouseout="hideTip(event, 'fs27', 120)" onmouseover="showTip(event, 'fs27', 120)" class="i">command</span><span class="o">.</span><span class="i">ExecuteNonQuery</span>() <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 121)" onmouseover="showTip(event, 'fs17', 121)" class="i">ignore</span>
+
+<span class="c">(*</span>
+<span class="c">At startup, mark all the peers as disconnected</span>
+<span class="c">*)</span>
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs43', 122)" onmouseover="showTip(event, 'fs43', 122)" class="i">resetState</span>() <span class="o">=</span>
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs26', 123)" onmouseover="showTip(event, 'fs26', 123)" class="i">connection</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteConnection</span>(<span onmouseout="hideTip(event, 'fs11', 124)" onmouseover="showTip(event, 'fs11', 124)" class="i">connectionString</span>)
+    <span onmouseout="hideTip(event, 'fs26', 125)" onmouseover="showTip(event, 'fs26', 125)" class="i">connection</span><span class="o">.</span><span class="i">Open</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs27', 126)" onmouseover="showTip(event, 'fs27', 126)" class="i">command</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteCommand</span>(<span class="s">&quot;</span><span class="s">update</span><span class="s"> </span><span class="s">peerInfo</span><span class="s"> </span><span class="s">set</span><span class="s"> </span><span class="s">state</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">0</span><span class="s"> </span><span class="s">where</span><span class="s"> </span><span class="s">state</span><span class="s"> </span><span class="s">&gt;</span><span class="s"> </span><span class="s">0</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs26', 127)" onmouseover="showTip(event, 'fs26', 127)" class="i">connection</span>)
+    <span onmouseout="hideTip(event, 'fs27', 128)" onmouseover="showTip(event, 'fs27', 128)" class="i">command</span><span class="o">.</span><span class="i">ExecuteNonQuery</span>() <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 129)" onmouseover="showTip(event, 'fs17', 129)" class="i">ignore</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs44', 130)" onmouseover="showTip(event, 'fs44', 130)" class="i">updateState</span>(<span onmouseout="hideTip(event, 'fs45', 131)" onmouseover="showTip(event, 'fs45', 131)" class="i">peer</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs35', 132)" onmouseover="showTip(event, 'fs35', 132)" class="i">IPEndPoint</span>, <span onmouseout="hideTip(event, 'fs46', 133)" onmouseover="showTip(event, 'fs46', 133)" class="i">state</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs47', 134)" onmouseover="showTip(event, 'fs47', 134)" class="i">int</span>) <span class="o">=</span>
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs26', 135)" onmouseover="showTip(event, 'fs26', 135)" class="i">connection</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteConnection</span>(<span onmouseout="hideTip(event, 'fs11', 136)" onmouseover="showTip(event, 'fs11', 136)" class="i">connectionString</span>)
+    <span onmouseout="hideTip(event, 'fs26', 137)" onmouseover="showTip(event, 'fs26', 137)" class="i">connection</span><span class="o">.</span><span class="i">Open</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs48', 138)" onmouseover="showTip(event, 'fs48', 138)" class="i">query</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteCommand</span>(<span class="s">&quot;</span><span class="s">update</span><span class="s"> </span><span class="s">peerInfo</span><span class="s"> </span><span class="s">set</span><span class="s"> </span><span class="s">state</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">?</span><span class="s"> </span><span class="s">where</span><span class="s"> </span><span class="s">host</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">?</span><span class="s"> </span><span class="s">and</span><span class="s"> </span><span class="s">port</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">?</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs26', 139)" onmouseover="showTip(event, 'fs26', 139)" class="i">connection</span>)
+    <span onmouseout="hideTip(event, 'fs48', 140)" onmouseover="showTip(event, 'fs48', 140)" class="i">query</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">state</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 141)" onmouseover="showTip(event, 'fs15', 141)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 142)" onmouseover="showTip(event, 'fs18', 142)" class="i">Int32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 143)" onmouseover="showTip(event, 'fs17', 143)" class="i">ignore</span>
+    <span onmouseout="hideTip(event, 'fs48', 144)" onmouseover="showTip(event, 'fs48', 144)" class="i">query</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">host</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 145)" onmouseover="showTip(event, 'fs15', 145)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs16', 146)" onmouseover="showTip(event, 'fs16', 146)" class="i">String</span>, <span class="n">256</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 147)" onmouseover="showTip(event, 'fs17', 147)" class="i">ignore</span>
+    <span onmouseout="hideTip(event, 'fs48', 148)" onmouseover="showTip(event, 'fs48', 148)" class="i">query</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">port</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 149)" onmouseover="showTip(event, 'fs15', 149)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 150)" onmouseover="showTip(event, 'fs18', 150)" class="i">Int32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 151)" onmouseover="showTip(event, 'fs17', 151)" class="i">ignore</span>
+    <span onmouseout="hideTip(event, 'fs48', 152)" onmouseover="showTip(event, 'fs48', 152)" class="i">query</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs46', 153)" onmouseover="showTip(event, 'fs46', 153)" class="i">state</span>
+    <span onmouseout="hideTip(event, 'fs48', 154)" onmouseover="showTip(event, 'fs48', 154)" class="i">query</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">1</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs45', 155)" onmouseover="showTip(event, 'fs45', 155)" class="i">peer</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 156)" onmouseover="showTip(event, 'fs49', 156)" class="i">Address</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs50', 157)" onmouseover="showTip(event, 'fs50', 157)" class="i">ToString</span>()
+    <span onmouseout="hideTip(event, 'fs48', 158)" onmouseover="showTip(event, 'fs48', 158)" class="i">query</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">2</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs45', 159)" onmouseover="showTip(event, 'fs45', 159)" class="i">peer</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs51', 160)" onmouseover="showTip(event, 'fs51', 160)" class="i">Port</span>
+    <span onmouseout="hideTip(event, 'fs48', 161)" onmouseover="showTip(event, 'fs48', 161)" class="i">query</span><span class="o">.</span><span class="i">ExecuteNonQuery</span>() <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 162)" onmouseover="showTip(event, 'fs17', 162)" class="i">ignore</span></pre>
+</td>
+</tr>
+</table>
+
+<h2>Headers</h2>
+
+<p>I keep all the information that I parse from a header. The tx-count is not populated in the <code>Headers</code> message
+and will be zero. The column is there for later. The hash isn't part of the header but is in fact the actual hash of the
+header itself. It is calculated and then stored. Finally, the height is also determined by looking up the previous header.
+If the previous header is not present in the database, then the header is skipped and not stored at all. When the missing
+header comes and the block connects, I'll get the header again.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+<span class="l">40: </span>
+<span class="l">41: </span>
+<span class="l">42: </span>
+<span class="l">43: </span>
+<span class="l">44: </span>
+<span class="l">45: </span>
+<span class="l">46: </span>
+<span class="l">47: </span>
+<span class="l">48: </span>
+<span class="l">49: </span>
+<span class="l">50: </span>
+<span class="l">51: </span>
+<span class="l">52: </span>
+<span class="l">53: </span>
+<span class="l">54: </span>
+<span class="l">55: </span>
+<span class="l">56: </span>
+<span class="l">57: </span>
+<span class="l">58: </span>
+<span class="l">59: </span>
+<span class="l">60: </span>
+<span class="l">61: </span>
+<span class="l">62: </span>
+<span class="l">63: </span>
+<span class="l">64: </span>
+<span class="l">65: </span>
+<span class="l">66: </span>
+<span class="l">67: </span>
+<span class="l">68: </span>
+<span class="l">69: </span>
+<span class="l">70: </span>
+<span class="l">71: </span>
+<span class="l">72: </span>
+<span class="l">73: </span>
+<span class="l">74: </span>
+<span class="l">75: </span>
+<span class="l">76: </span>
+<span class="l">77: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs52', 163)" onmouseover="showTip(event, 'fs52', 163)" class="i">headerConnection</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteConnection</span>(<span onmouseout="hideTip(event, 'fs11', 164)" onmouseover="showTip(event, 'fs11', 164)" class="i">connectionString</span>)
+<span onmouseout="hideTip(event, 'fs52', 165)" onmouseover="showTip(event, 'fs52', 165)" class="i">headerConnection</span><span class="o">.</span><span class="i">Open</span>()
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs53', 166)" onmouseover="showTip(event, 'fs53', 166)" class="i">command</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteCommand</span>(<span class="s">@&quot;</span><span class="s">insert</span><span class="s"> </span><span class="s">or</span><span class="s"> </span><span class="s">replace</span><span class="s"> </span><span class="s">into</span><span class="s"> </span><span class="s">header</span><span class="s">(</span><span class="s">hash</span><span class="s">,</span><span class="s"> </span><span class="s">height</span><span class="s">,</span><span class="s"> </span><span class="s">version</span><span class="s">,</span><span class="s"> </span><span class="s">prev_hash</span><span class="s">,</span><span class="s"> </span><span class="s">merkle_root</span><span class="s">,</span><span class="s"> </span><span class="s">ts</span><span class="s">,</span><span class="s"> </span><span class="s">bits</span><span class="s">,</span><span class="s"> </span><span class="s">nonce</span><span class="s">,</span><span class="s"> </span><span class="s">tx_count</span><span class="s">,</span><span class="s"> </span><span class="s">state</span><span class="s">)</span><span class="s"> </span><span class="s">values</span><span class="s">(</span><span class="s">?</span><span class="s">,</span><span class="s"> </span><span class="s">?</span><span class="s">,</span><span class="s"> </span><span class="s">?</span><span class="s">,</span><span class="s"> </span><span class="s">?</span><span class="s">,</span><span class="s"> </span><span class="s">?</span><span class="s">,</span><span class="s"> </span><span class="s">?</span><span class="s">,</span><span class="s"> </span><span class="s">?</span><span class="s">,</span><span class="s"> </span><span class="s">?</span><span class="s">,</span><span class="s"> </span><span class="s">?</span><span class="s">,</span><span class="s"> </span><span class="s">?</span><span class="s">)</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs52', 167)" onmouseover="showTip(event, 'fs52', 167)" class="i">headerConnection</span>)
+<span onmouseout="hideTip(event, 'fs53', 168)" onmouseover="showTip(event, 'fs53', 168)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">hash</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 169)" onmouseover="showTip(event, 'fs15', 169)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs54', 170)" onmouseover="showTip(event, 'fs54', 170)" class="i">Binary</span>, <span class="n">32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 171)" onmouseover="showTip(event, 'fs17', 171)" class="i">ignore</span>
+<span onmouseout="hideTip(event, 'fs53', 172)" onmouseover="showTip(event, 'fs53', 172)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">height</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 173)" onmouseover="showTip(event, 'fs15', 173)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 174)" onmouseover="showTip(event, 'fs18', 174)" class="i">Int32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 175)" onmouseover="showTip(event, 'fs17', 175)" class="i">ignore</span>
+<span onmouseout="hideTip(event, 'fs53', 176)" onmouseover="showTip(event, 'fs53', 176)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">version</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 177)" onmouseover="showTip(event, 'fs15', 177)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 178)" onmouseover="showTip(event, 'fs18', 178)" class="i">Int32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 179)" onmouseover="showTip(event, 'fs17', 179)" class="i">ignore</span>
+<span onmouseout="hideTip(event, 'fs53', 180)" onmouseover="showTip(event, 'fs53', 180)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">prev_hash</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 181)" onmouseover="showTip(event, 'fs15', 181)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs54', 182)" onmouseover="showTip(event, 'fs54', 182)" class="i">Binary</span>, <span class="n">32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 183)" onmouseover="showTip(event, 'fs17', 183)" class="i">ignore</span>
+<span onmouseout="hideTip(event, 'fs53', 184)" onmouseover="showTip(event, 'fs53', 184)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">merkle_root</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 185)" onmouseover="showTip(event, 'fs15', 185)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs54', 186)" onmouseover="showTip(event, 'fs54', 186)" class="i">Binary</span>, <span class="n">32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 187)" onmouseover="showTip(event, 'fs17', 187)" class="i">ignore</span>
+<span onmouseout="hideTip(event, 'fs53', 188)" onmouseover="showTip(event, 'fs53', 188)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">ts</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 189)" onmouseover="showTip(event, 'fs15', 189)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 190)" onmouseover="showTip(event, 'fs18', 190)" class="i">Int32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 191)" onmouseover="showTip(event, 'fs17', 191)" class="i">ignore</span>
+<span onmouseout="hideTip(event, 'fs53', 192)" onmouseover="showTip(event, 'fs53', 192)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">bits</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 193)" onmouseover="showTip(event, 'fs15', 193)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 194)" onmouseover="showTip(event, 'fs18', 194)" class="i">Int32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 195)" onmouseover="showTip(event, 'fs17', 195)" class="i">ignore</span>
+<span onmouseout="hideTip(event, 'fs53', 196)" onmouseover="showTip(event, 'fs53', 196)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">nonce</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 197)" onmouseover="showTip(event, 'fs15', 197)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 198)" onmouseover="showTip(event, 'fs18', 198)" class="i">Int32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 199)" onmouseover="showTip(event, 'fs17', 199)" class="i">ignore</span>
+<span onmouseout="hideTip(event, 'fs53', 200)" onmouseover="showTip(event, 'fs53', 200)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">tx_count</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 201)" onmouseover="showTip(event, 'fs15', 201)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 202)" onmouseover="showTip(event, 'fs18', 202)" class="i">Int32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 203)" onmouseover="showTip(event, 'fs17', 203)" class="i">ignore</span>
+<span onmouseout="hideTip(event, 'fs53', 204)" onmouseover="showTip(event, 'fs53', 204)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">state</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 205)" onmouseover="showTip(event, 'fs15', 205)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 206)" onmouseover="showTip(event, 'fs18', 206)" class="i">Int32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 207)" onmouseover="showTip(event, 'fs17', 207)" class="i">ignore</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs55', 208)" onmouseover="showTip(event, 'fs55', 208)" class="i">readTip</span>()<span class="o">:</span> <span onmouseout="hideTip(event, 'fs56', 209)" onmouseover="showTip(event, 'fs56', 209)" class="i">byte</span>[] <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs27', 210)" onmouseover="showTip(event, 'fs27', 210)" class="i">command</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteCommand</span>(<span class="s">&quot;</span><span class="s">select</span><span class="s"> </span><span class="s">best</span><span class="s"> </span><span class="s">from</span><span class="s"> </span><span class="s">chainstate</span><span class="s"> </span><span class="s">where</span><span class="s"> </span><span class="s">id</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">0</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs52', 211)" onmouseover="showTip(event, 'fs52', 211)" class="i">headerConnection</span>)
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs28', 212)" onmouseover="showTip(event, 'fs28', 212)" class="i">reader</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs27', 213)" onmouseover="showTip(event, 'fs27', 213)" class="i">command</span><span class="o">.</span><span class="i">ExecuteReader</span>()
+    [<span class="k">while</span> <span onmouseout="hideTip(event, 'fs28', 214)" onmouseover="showTip(event, 'fs28', 214)" class="i">reader</span><span class="o">.</span><span class="i">Read</span>() <span class="k">do</span> 
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs57', 215)" onmouseover="showTip(event, 'fs57', 215)" class="i">tip</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs58', 216)" onmouseover="showTip(event, 'fs58', 216)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 217)" onmouseover="showTip(event, 'fs59', 217)" class="i">zeroCreate</span> <span class="n">32</span>
+        <span onmouseout="hideTip(event, 'fs28', 218)" onmouseover="showTip(event, 'fs28', 218)" class="i">reader</span><span class="o">.</span><span class="i">GetBytes</span>(<span class="n">0</span>, <span class="n">0L</span>, <span onmouseout="hideTip(event, 'fs57', 219)" onmouseover="showTip(event, 'fs57', 219)" class="i">tip</span>, <span class="n">0</span>, <span class="n">32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 220)" onmouseover="showTip(event, 'fs17', 220)" class="i">ignore</span>
+        <span class="k">yield</span> <span onmouseout="hideTip(event, 'fs57', 221)" onmouseover="showTip(event, 'fs57', 221)" class="i">tip</span>
+    ] <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs60', 222)" onmouseover="showTip(event, 'fs60', 222)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs61', 223)" onmouseover="showTip(event, 'fs61', 223)" class="i">head</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs62', 224)" onmouseover="showTip(event, 'fs62', 224)" class="i">writeTip</span>(<span onmouseout="hideTip(event, 'fs57', 225)" onmouseover="showTip(event, 'fs57', 225)" class="i">tip</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs56', 226)" onmouseover="showTip(event, 'fs56', 226)" class="i">byte</span>[]) <span class="o">=</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs27', 227)" onmouseover="showTip(event, 'fs27', 227)" class="i">command</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteCommand</span>(<span class="s">&quot;</span><span class="s">update</span><span class="s"> </span><span class="s">chainstate</span><span class="s"> </span><span class="s">set</span><span class="s"> </span><span class="s">best</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">?</span><span class="s"> </span><span class="s">where</span><span class="s"> </span><span class="s">id</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">0</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs52', 228)" onmouseover="showTip(event, 'fs52', 228)" class="i">headerConnection</span>)
+    <span onmouseout="hideTip(event, 'fs27', 229)" onmouseover="showTip(event, 'fs27', 229)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">best</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 230)" onmouseover="showTip(event, 'fs15', 230)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs54', 231)" onmouseover="showTip(event, 'fs54', 231)" class="i">Binary</span>, <span class="n">32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 232)" onmouseover="showTip(event, 'fs17', 232)" class="i">ignore</span>
+    <span onmouseout="hideTip(event, 'fs27', 233)" onmouseover="showTip(event, 'fs27', 233)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs57', 234)" onmouseover="showTip(event, 'fs57', 234)" class="i">tip</span>
+    <span onmouseout="hideTip(event, 'fs27', 235)" onmouseover="showTip(event, 'fs27', 235)" class="i">command</span><span class="o">.</span><span class="i">ExecuteNonQuery</span>() <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 236)" onmouseover="showTip(event, 'fs17', 236)" class="i">ignore</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs63', 237)" onmouseover="showTip(event, 'fs63', 237)" class="i">getHeader</span> (<span onmouseout="hideTip(event, 'fs64', 238)" onmouseover="showTip(event, 'fs64', 238)" class="i">reader</span><span class="o">:</span> <span class="i">SQLiteDataReader</span>) <span class="o">=</span>
+    [<span class="k">while</span> <span onmouseout="hideTip(event, 'fs64', 239)" onmouseover="showTip(event, 'fs64', 239)" class="i">reader</span><span class="o">.</span><span class="i">Read</span>() <span class="k">do</span> 
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs65', 240)" onmouseover="showTip(event, 'fs65', 240)" class="i">hash</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs58', 241)" onmouseover="showTip(event, 'fs58', 241)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 242)" onmouseover="showTip(event, 'fs59', 242)" class="i">zeroCreate</span> <span class="n">32</span>
+        <span onmouseout="hideTip(event, 'fs64', 243)" onmouseover="showTip(event, 'fs64', 243)" class="i">reader</span><span class="o">.</span><span class="i">GetBytes</span>(<span class="n">0</span>, <span class="n">0L</span>, <span onmouseout="hideTip(event, 'fs65', 244)" onmouseover="showTip(event, 'fs65', 244)" class="i">hash</span>, <span class="n">0</span>, <span class="n">32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 245)" onmouseover="showTip(event, 'fs17', 245)" class="i">ignore</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs66', 246)" onmouseover="showTip(event, 'fs66', 246)" class="i">height</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs64', 247)" onmouseover="showTip(event, 'fs64', 247)" class="i">reader</span><span class="o">.</span><span class="i">GetInt32</span>(<span class="n">1</span>)
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs67', 248)" onmouseover="showTip(event, 'fs67', 248)" class="i">version</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs64', 249)" onmouseover="showTip(event, 'fs64', 249)" class="i">reader</span><span class="o">.</span><span class="i">GetInt32</span>(<span class="n">2</span>)
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs68', 250)" onmouseover="showTip(event, 'fs68', 250)" class="i">prev_hash</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs58', 251)" onmouseover="showTip(event, 'fs58', 251)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 252)" onmouseover="showTip(event, 'fs59', 252)" class="i">zeroCreate</span> <span class="n">32</span>
+        <span onmouseout="hideTip(event, 'fs64', 253)" onmouseover="showTip(event, 'fs64', 253)" class="i">reader</span><span class="o">.</span><span class="i">GetBytes</span>(<span class="n">3</span>, <span class="n">0L</span>, <span onmouseout="hideTip(event, 'fs68', 254)" onmouseover="showTip(event, 'fs68', 254)" class="i">prev_hash</span>, <span class="n">0</span>, <span class="n">32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 255)" onmouseover="showTip(event, 'fs17', 255)" class="i">ignore</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs69', 256)" onmouseover="showTip(event, 'fs69', 256)" class="i">merkle_root</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs58', 257)" onmouseover="showTip(event, 'fs58', 257)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 258)" onmouseover="showTip(event, 'fs59', 258)" class="i">zeroCreate</span> <span class="n">32</span>
+        <span onmouseout="hideTip(event, 'fs64', 259)" onmouseover="showTip(event, 'fs64', 259)" class="i">reader</span><span class="o">.</span><span class="i">GetBytes</span>(<span class="n">4</span>, <span class="n">0L</span>, <span onmouseout="hideTip(event, 'fs69', 260)" onmouseover="showTip(event, 'fs69', 260)" class="i">merkle_root</span>, <span class="n">0</span>, <span class="n">32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 261)" onmouseover="showTip(event, 'fs17', 261)" class="i">ignore</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs70', 262)" onmouseover="showTip(event, 'fs70', 262)" class="i">ts</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs64', 263)" onmouseover="showTip(event, 'fs64', 263)" class="i">reader</span><span class="o">.</span><span class="i">GetInt32</span>(<span class="n">5</span>)
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs71', 264)" onmouseover="showTip(event, 'fs71', 264)" class="i">bits</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs64', 265)" onmouseover="showTip(event, 'fs64', 265)" class="i">reader</span><span class="o">.</span><span class="i">GetInt32</span>(<span class="n">6</span>)
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs72', 266)" onmouseover="showTip(event, 'fs72', 266)" class="i">nonce</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs64', 267)" onmouseover="showTip(event, 'fs64', 267)" class="i">reader</span><span class="o">.</span><span class="i">GetInt32</span>(<span class="n">7</span>)
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs73', 268)" onmouseover="showTip(event, 'fs73', 268)" class="i">tx_count</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs64', 269)" onmouseover="showTip(event, 'fs64', 269)" class="i">reader</span><span class="o">.</span><span class="i">GetInt32</span>(<span class="n">8</span>)
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs74', 270)" onmouseover="showTip(event, 'fs74', 270)" class="i">bh</span> <span class="o">=</span> <span class="k">new</span> <span class="i">BlockHeader</span>(<span onmouseout="hideTip(event, 'fs65', 271)" onmouseover="showTip(event, 'fs65', 271)" class="i">hash</span>, <span onmouseout="hideTip(event, 'fs67', 272)" onmouseover="showTip(event, 'fs67', 272)" class="i">version</span>, <span onmouseout="hideTip(event, 'fs68', 273)" onmouseover="showTip(event, 'fs68', 273)" class="i">prev_hash</span>, <span onmouseout="hideTip(event, 'fs69', 274)" onmouseover="showTip(event, 'fs69', 274)" class="i">merkle_root</span>, <span onmouseout="hideTip(event, 'fs75', 275)" onmouseover="showTip(event, 'fs75', 275)" class="i">uint32</span> <span onmouseout="hideTip(event, 'fs70', 276)" onmouseover="showTip(event, 'fs70', 276)" class="i">ts</span>, <span onmouseout="hideTip(event, 'fs71', 277)" onmouseover="showTip(event, 'fs71', 277)" class="i">bits</span>, <span onmouseout="hideTip(event, 'fs72', 278)" onmouseover="showTip(event, 'fs72', 278)" class="i">nonce</span>, <span onmouseout="hideTip(event, 'fs73', 279)" onmouseover="showTip(event, 'fs73', 279)" class="i">tx_count</span>)
+        <span onmouseout="hideTip(event, 'fs74', 280)" onmouseover="showTip(event, 'fs74', 280)" class="i">bh</span><span class="o">.</span><span class="i">Height</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs66', 281)" onmouseover="showTip(event, 'fs66', 281)" class="i">height</span>
+        <span class="k">yield</span> <span onmouseout="hideTip(event, 'fs74', 282)" onmouseover="showTip(event, 'fs74', 282)" class="i">bh</span>
+    ]
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs76', 283)" onmouseover="showTip(event, 'fs76', 283)" class="i">readHeader</span>(<span onmouseout="hideTip(event, 'fs77', 284)" onmouseover="showTip(event, 'fs77', 284)" class="i">hash</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs56', 285)" onmouseover="showTip(event, 'fs56', 285)" class="i">byte</span>[])<span class="o">:</span> <span class="i">BlockHeader</span> <span class="o">=</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs27', 286)" onmouseover="showTip(event, 'fs27', 286)" class="i">command</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteCommand</span>(<span class="s">&quot;</span><span class="s">select</span><span class="s"> </span><span class="s">hash</span><span class="s">,</span><span class="s"> </span><span class="s">height</span><span class="s">,</span><span class="s"> </span><span class="s">version</span><span class="s">,</span><span class="s"> </span><span class="s">prev_hash</span><span class="s">,</span><span class="s"> </span><span class="s">merkle_root</span><span class="s">,</span><span class="s"> </span><span class="s">ts</span><span class="s">,</span><span class="s"> </span><span class="s">bits</span><span class="s">,</span><span class="s"> </span><span class="s">nonce</span><span class="s">,</span><span class="s"> </span><span class="s">tx_count</span><span class="s"> </span><span class="s">from</span><span class="s"> </span><span class="s">header</span><span class="s"> </span><span class="s">where</span><span class="s"> </span><span class="s">hash</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">?</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs52', 287)" onmouseover="showTip(event, 'fs52', 287)" class="i">headerConnection</span>)
+    <span onmouseout="hideTip(event, 'fs27', 288)" onmouseover="showTip(event, 'fs27', 288)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">hash</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 289)" onmouseover="showTip(event, 'fs15', 289)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs54', 290)" onmouseover="showTip(event, 'fs54', 290)" class="i">Binary</span>, <span class="n">32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 291)" onmouseover="showTip(event, 'fs17', 291)" class="i">ignore</span>
+    <span onmouseout="hideTip(event, 'fs27', 292)" onmouseover="showTip(event, 'fs27', 292)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs77', 293)" onmouseover="showTip(event, 'fs77', 293)" class="i">hash</span>
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs28', 294)" onmouseover="showTip(event, 'fs28', 294)" class="i">reader</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs27', 295)" onmouseover="showTip(event, 'fs27', 295)" class="i">command</span><span class="o">.</span><span class="i">ExecuteReader</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs78', 296)" onmouseover="showTip(event, 'fs78', 296)" class="i">res</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs63', 297)" onmouseover="showTip(event, 'fs63', 297)" class="i">getHeader</span> <span onmouseout="hideTip(event, 'fs28', 298)" onmouseover="showTip(event, 'fs28', 298)" class="i">reader</span>
+    <span class="k">if</span> <span onmouseout="hideTip(event, 'fs78', 299)" onmouseover="showTip(event, 'fs78', 299)" class="i">res</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs79', 300)" onmouseover="showTip(event, 'fs79', 300)" class="i">Length</span> <span class="o">&lt;&gt;</span> <span class="n">0</span> <span class="k">then</span> <span onmouseout="hideTip(event, 'fs78', 301)" onmouseover="showTip(event, 'fs78', 301)" class="i">res</span><span class="o">.</span>[<span class="n">0</span>] <span class="k">else</span> <span class="i">BlockHeader</span><span class="o">.</span><span class="i">Zero</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs80', 302)" onmouseover="showTip(event, 'fs80', 302)" class="i">getNextHeader</span>(<span onmouseout="hideTip(event, 'fs77', 303)" onmouseover="showTip(event, 'fs77', 303)" class="i">hash</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs56', 304)" onmouseover="showTip(event, 'fs56', 304)" class="i">byte</span>[])<span class="o">:</span> <span class="i">BlockHeader</span> <span class="o">=</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs27', 305)" onmouseover="showTip(event, 'fs27', 305)" class="i">command</span> <span class="o">=</span> <span class="k">new</span> <span class="i">SQLiteCommand</span>(<span class="s">&quot;</span><span class="s">select</span><span class="s"> </span><span class="s">hash</span><span class="s">,</span><span class="s"> </span><span class="s">height</span><span class="s">,</span><span class="s"> </span><span class="s">version</span><span class="s">,</span><span class="s"> </span><span class="s">prev_hash</span><span class="s">,</span><span class="s"> </span><span class="s">merkle_root</span><span class="s">,</span><span class="s"> </span><span class="s">ts</span><span class="s">,</span><span class="s"> </span><span class="s">bits</span><span class="s">,</span><span class="s"> </span><span class="s">nonce</span><span class="s">,</span><span class="s"> </span><span class="s">tx_count</span><span class="s"> </span><span class="s">from</span><span class="s"> </span><span class="s">header</span><span class="s"> </span><span class="s">where</span><span class="s"> </span><span class="s">prev_hash</span><span class="s"> </span><span class="s">=</span><span class="s"> </span><span class="s">?</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs52', 306)" onmouseover="showTip(event, 'fs52', 306)" class="i">headerConnection</span>)
+    <span onmouseout="hideTip(event, 'fs27', 307)" onmouseover="showTip(event, 'fs27', 307)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span><span class="i">Add</span>(<span class="s">&quot;</span><span class="s">prev_hash</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs15', 308)" onmouseover="showTip(event, 'fs15', 308)" class="i">DbType</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs54', 309)" onmouseover="showTip(event, 'fs54', 309)" class="i">Binary</span>, <span class="n">32</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 310)" onmouseover="showTip(event, 'fs17', 310)" class="i">ignore</span>
+    <span onmouseout="hideTip(event, 'fs27', 311)" onmouseover="showTip(event, 'fs27', 311)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs77', 312)" onmouseover="showTip(event, 'fs77', 312)" class="i">hash</span>
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs28', 313)" onmouseover="showTip(event, 'fs28', 313)" class="i">reader</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs27', 314)" onmouseover="showTip(event, 'fs27', 314)" class="i">command</span><span class="o">.</span><span class="i">ExecuteReader</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs78', 315)" onmouseover="showTip(event, 'fs78', 315)" class="i">res</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs63', 316)" onmouseover="showTip(event, 'fs63', 316)" class="i">getHeader</span> <span onmouseout="hideTip(event, 'fs28', 317)" onmouseover="showTip(event, 'fs28', 317)" class="i">reader</span>
+    <span class="k">if</span> <span onmouseout="hideTip(event, 'fs78', 318)" onmouseover="showTip(event, 'fs78', 318)" class="i">res</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs79', 319)" onmouseover="showTip(event, 'fs79', 319)" class="i">Length</span> <span class="o">&lt;&gt;</span> <span class="n">0</span> <span class="k">then</span> <span onmouseout="hideTip(event, 'fs78', 320)" onmouseover="showTip(event, 'fs78', 320)" class="i">res</span><span class="o">.</span>[<span class="n">0</span>] <span class="k">else</span> <span class="i">BlockHeader</span><span class="o">.</span><span class="i">Zero</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs81', 321)" onmouseover="showTip(event, 'fs81', 321)" class="i">writeHeaders</span>(<span onmouseout="hideTip(event, 'fs82', 322)" onmouseover="showTip(event, 'fs82', 322)" class="i">header</span><span class="o">:</span> <span class="i">BlockHeader</span>) <span class="o">=</span> 
+    <span onmouseout="hideTip(event, 'fs53', 323)" onmouseover="showTip(event, 'fs53', 323)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs82', 324)" onmouseover="showTip(event, 'fs82', 324)" class="i">header</span><span class="o">.</span><span class="i">Hash</span>
+    <span onmouseout="hideTip(event, 'fs53', 325)" onmouseover="showTip(event, 'fs53', 325)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">1</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs82', 326)" onmouseover="showTip(event, 'fs82', 326)" class="i">header</span><span class="o">.</span><span class="i">Height</span>
+    <span onmouseout="hideTip(event, 'fs53', 327)" onmouseover="showTip(event, 'fs53', 327)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">2</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs82', 328)" onmouseover="showTip(event, 'fs82', 328)" class="i">header</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs83', 329)" onmouseover="showTip(event, 'fs83', 329)" class="i">Version</span>
+    <span onmouseout="hideTip(event, 'fs53', 330)" onmouseover="showTip(event, 'fs53', 330)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">3</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs82', 331)" onmouseover="showTip(event, 'fs82', 331)" class="i">header</span><span class="o">.</span><span class="i">PrevHash</span>
+    <span onmouseout="hideTip(event, 'fs53', 332)" onmouseover="showTip(event, 'fs53', 332)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">4</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs82', 333)" onmouseover="showTip(event, 'fs82', 333)" class="i">header</span><span class="o">.</span><span class="i">MerkleRoot</span>
+    <span onmouseout="hideTip(event, 'fs53', 334)" onmouseover="showTip(event, 'fs53', 334)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">5</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs82', 335)" onmouseover="showTip(event, 'fs82', 335)" class="i">header</span><span class="o">.</span><span class="i">Timestamp</span>
+    <span onmouseout="hideTip(event, 'fs53', 336)" onmouseover="showTip(event, 'fs53', 336)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">6</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs82', 337)" onmouseover="showTip(event, 'fs82', 337)" class="i">header</span><span class="o">.</span><span class="i">Bits</span>
+    <span onmouseout="hideTip(event, 'fs53', 338)" onmouseover="showTip(event, 'fs53', 338)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">7</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs82', 339)" onmouseover="showTip(event, 'fs82', 339)" class="i">header</span><span class="o">.</span><span class="i">Nonce</span>
+    <span onmouseout="hideTip(event, 'fs53', 340)" onmouseover="showTip(event, 'fs53', 340)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">8</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs82', 341)" onmouseover="showTip(event, 'fs82', 341)" class="i">header</span><span class="o">.</span><span class="i">TxCount</span>
+    <span onmouseout="hideTip(event, 'fs53', 342)" onmouseover="showTip(event, 'fs53', 342)" class="i">command</span><span class="o">.</span><span class="i">Parameters</span><span class="o">.</span>[<span class="n">9</span>]<span class="o">.</span><span class="i">Value</span> <span class="o">&lt;-</span> <span class="n">0</span>
+
+    <span onmouseout="hideTip(event, 'fs53', 343)" onmouseover="showTip(event, 'fs53', 343)" class="i">command</span><span class="o">.</span><span class="i">ExecuteNonQuery</span>() <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 344)" onmouseover="showTip(event, 'fs17', 344)" class="i">ignore</span></pre>
+</td>
+</tr>
+</table>
+
+<h2>UTXO accessor</h2>
+
+<p>The UTXO accessor interface is the abstract interface over the UTXO data store. The primary store is the levelDB database. It is where
+the main chain gets synced up to. However during acceptance of a new block(s), the blockchain validator works with a temporary set of UTXO.
+Being a low level store, LevelDB doesn't have transactions and therefore it has to be added in application. The technique I use is a simple
+versioning in-memory table. Regardless of whether it is talking directly to the on-disk db or through an overlay, the application
+code uses the same interface.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+<span class="l">6: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs84', 345)" onmouseover="showTip(event, 'fs84', 345)" class="i">IUTXOAccessor</span> <span class="o">=</span>
+    <span class="k">inherit</span> <span onmouseout="hideTip(event, 'fs85', 346)" onmouseover="showTip(event, 'fs85', 346)" class="i">IDisposable</span>
+    <span class="k">abstract</span> <span onmouseout="hideTip(event, 'fs86', 347)" onmouseover="showTip(event, 'fs86', 347)" class="i">DeleteUTXO</span><span class="o">:</span> <span class="i">OutPoint</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs87', 348)" onmouseover="showTip(event, 'fs87', 348)" class="i">unit</span>
+    <span class="k">abstract</span> <span onmouseout="hideTip(event, 'fs88', 349)" onmouseover="showTip(event, 'fs88', 349)" class="i">AddUTXO</span><span class="o">:</span> <span class="i">OutPoint</span> <span class="o">*</span> <span class="i">UTXO</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs87', 350)" onmouseover="showTip(event, 'fs87', 350)" class="i">unit</span>
+    <span class="k">abstract</span> <span onmouseout="hideTip(event, 'fs89', 351)" onmouseover="showTip(event, 'fs89', 351)" class="i">GetUTXO</span><span class="o">:</span> <span class="i">OutPoint</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs90', 352)" onmouseover="showTip(event, 'fs90', 352)" class="i">Option</span><span class="o">&lt;</span><span class="i">UTXO</span><span class="o">&gt;</span> <span class="c">// Try to get a given Outpoint</span>
+    <span class="k">abstract</span> <span onmouseout="hideTip(event, 'fs91', 353)" onmouseover="showTip(event, 'fs91', 353)" class="i">GetCount</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs56', 354)" onmouseover="showTip(event, 'fs56', 354)" class="i">byte</span>[] <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs47', 355)" onmouseover="showTip(event, 'fs47', 355)" class="i">int</span> <span class="c">// Counts how many UTXO exists for a given transaction hash</span></pre>
+</td>
+</tr>
+</table>
+
+<p>The LevelDB accessor converts keys &amp; values into binary strings and uses the LevelDB-Sharp bridge
+to read or write from the database.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+<span class="l">40: </span>
+<span class="l">41: </span>
+<span class="l">42: </span>
+<span class="l">43: </span>
+<span class="l">44: </span>
+<span class="l">45: </span>
+<span class="l">46: </span>
+<span class="l">47: </span>
+<span class="l">48: </span>
+<span class="l">49: </span>
+<span class="l">50: </span>
+<span class="l">51: </span>
+<span class="l">52: </span>
+<span class="l">53: </span>
+<span class="l">54: </span>
+<span class="l">55: </span>
+<span class="l">56: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs92', 356)" onmouseover="showTip(event, 'fs92', 356)" class="i">LevelDBUTXOAccessor</span>(<span onmouseout="hideTip(event, 'fs93', 357)" onmouseover="showTip(event, 'fs93', 357)" class="i">db</span><span class="o">:</span> <span class="i">DB</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs94', 358)" onmouseover="showTip(event, 'fs94', 358)" class="i">ro</span> <span class="o">=</span> <span class="k">new</span> <span class="i">ReadOptions</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs95', 359)" onmouseover="showTip(event, 'fs95', 359)" class="i">wo</span> <span class="o">=</span> <span class="k">new</span> <span class="i">WriteOptions</span>()
+
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs96', 360)" onmouseover="showTip(event, 'fs96', 360)" class="i">deleteUTXO</span> (<span onmouseout="hideTip(event, 'fs97', 361)" onmouseover="showTip(event, 'fs97', 361)" class="i">outpoint</span><span class="o">:</span> <span class="i">OutPoint</span>) <span class="o">=</span> 
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs98', 362)" onmouseover="showTip(event, 'fs98', 362)" class="i">k</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs97', 363)" onmouseover="showTip(event, 'fs97', 363)" class="i">outpoint</span><span class="o">.</span><span class="i">ToByteArray</span>()
+        <span onmouseout="hideTip(event, 'fs93', 364)" onmouseover="showTip(event, 'fs93', 364)" class="i">db</span><span class="o">.</span><span class="i">Delete</span>(<span onmouseout="hideTip(event, 'fs95', 365)" onmouseover="showTip(event, 'fs95', 365)" class="i">wo</span>, <span onmouseout="hideTip(event, 'fs98', 366)" onmouseover="showTip(event, 'fs98', 366)" class="i">k</span>)
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs99', 367)" onmouseover="showTip(event, 'fs99', 367)" class="i">addUTXO</span> (<span onmouseout="hideTip(event, 'fs97', 368)" onmouseover="showTip(event, 'fs97', 368)" class="i">outpoint</span><span class="o">:</span> <span class="i">OutPoint</span>) (<span onmouseout="hideTip(event, 'fs100', 369)" onmouseover="showTip(event, 'fs100', 369)" class="i">utxo</span><span class="o">:</span> <span class="i">UTXO</span>) <span class="o">=</span> 
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs98', 370)" onmouseover="showTip(event, 'fs98', 370)" class="i">k</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs97', 371)" onmouseover="showTip(event, 'fs97', 371)" class="i">outpoint</span><span class="o">.</span><span class="i">ToByteArray</span>()
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs101', 372)" onmouseover="showTip(event, 'fs101', 372)" class="i">v</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs100', 373)" onmouseover="showTip(event, 'fs100', 373)" class="i">utxo</span><span class="o">.</span><span class="i">ToByteArray</span>()
+        <span onmouseout="hideTip(event, 'fs93', 374)" onmouseover="showTip(event, 'fs93', 374)" class="i">db</span><span class="o">.</span><span class="i">Put</span>(<span onmouseout="hideTip(event, 'fs95', 375)" onmouseover="showTip(event, 'fs95', 375)" class="i">wo</span>, <span onmouseout="hideTip(event, 'fs98', 376)" onmouseover="showTip(event, 'fs98', 376)" class="i">k</span>, <span onmouseout="hideTip(event, 'fs101', 377)" onmouseover="showTip(event, 'fs101', 377)" class="i">v</span>)
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs102', 378)" onmouseover="showTip(event, 'fs102', 378)" class="i">getUTXO</span> (<span onmouseout="hideTip(event, 'fs97', 379)" onmouseover="showTip(event, 'fs97', 379)" class="i">outpoint</span><span class="o">:</span> <span class="i">OutPoint</span>) <span class="o">=</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs98', 380)" onmouseover="showTip(event, 'fs98', 380)" class="i">k</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs97', 381)" onmouseover="showTip(event, 'fs97', 381)" class="i">outpoint</span><span class="o">.</span><span class="i">ToByteArray</span>()
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs101', 382)" onmouseover="showTip(event, 'fs101', 382)" class="i">v</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs93', 383)" onmouseover="showTip(event, 'fs93', 383)" class="i">db</span><span class="o">.</span><span class="i">Get</span>(<span onmouseout="hideTip(event, 'fs94', 384)" onmouseover="showTip(event, 'fs94', 384)" class="i">ro</span>, <span onmouseout="hideTip(event, 'fs98', 385)" onmouseover="showTip(event, 'fs98', 385)" class="i">k</span>)
+        <span class="k">if</span> <span onmouseout="hideTip(event, 'fs101', 386)" onmouseover="showTip(event, 'fs101', 386)" class="i">v</span> <span class="o">&lt;&gt;</span> <span class="k">null</span> 
+        <span class="k">then</span> <span onmouseout="hideTip(event, 'fs40', 387)" onmouseover="showTip(event, 'fs40', 387)" class="i">Some</span>(<span class="i">ParseByteArray</span> <span onmouseout="hideTip(event, 'fs101', 388)" onmouseover="showTip(event, 'fs101', 388)" class="i">v</span> <span class="i">UTXO</span><span class="o">.</span><span class="i">Parse</span>)
+        <span class="k">else</span> 
+            <span class="i">logger</span><span class="o">.</span><span class="i">Debug</span> <span class="s">&quot;</span><span class="s">Cannot</span><span class="s"> </span><span class="s">find</span><span class="s"> </span><span class="s">outpoint</span><span class="s">&quot;</span> 
+            <span onmouseout="hideTip(event, 'fs103', 389)" onmouseover="showTip(event, 'fs103', 389)" class="i">None</span>
+
+    <span class="c">// Use the fact that the txhash is a prefix for the key</span>
+    <span class="c">// Seek into the database and iterate as long as the key has a prefix equal to the tx hash</span>
+    <span class="c">// It eliminates the need to keep an additional counter</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs104', 390)" onmouseover="showTip(event, 'fs104', 390)" class="i">getCount</span> (<span onmouseout="hideTip(event, 'fs105', 391)" onmouseover="showTip(event, 'fs105', 391)" class="i">txHash</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs56', 392)" onmouseover="showTip(event, 'fs56', 392)" class="i">byte</span>[]) <span class="o">=</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs106', 393)" onmouseover="showTip(event, 'fs106', 393)" class="i">cursor</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Iterator</span>(<span onmouseout="hideTip(event, 'fs93', 394)" onmouseover="showTip(event, 'fs93', 394)" class="i">db</span>, <span onmouseout="hideTip(event, 'fs94', 395)" onmouseover="showTip(event, 'fs94', 395)" class="i">ro</span>)
+        <span onmouseout="hideTip(event, 'fs106', 396)" onmouseover="showTip(event, 'fs106', 396)" class="i">cursor</span><span class="o">.</span><span class="i">Seek</span>(<span onmouseout="hideTip(event, 'fs105', 397)" onmouseover="showTip(event, 'fs105', 397)" class="i">txHash</span>)
+        <span class="k">let</span> <span class="k">mutable</span> <span onmouseout="hideTip(event, 'fs107', 398)" onmouseover="showTip(event, 'fs107', 398)" class="i">count</span> <span class="o">=</span> <span class="n">0</span>
+        <span class="k">let</span> <span class="k">rec</span> <span onmouseout="hideTip(event, 'fs108', 399)" onmouseover="showTip(event, 'fs108', 399)" class="i">getCountInner</span> (<span onmouseout="hideTip(event, 'fs109', 400)" onmouseover="showTip(event, 'fs109', 400)" class="i">count</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs47', 401)" onmouseover="showTip(event, 'fs47', 401)" class="i">int</span>)<span class="o">:</span> <span onmouseout="hideTip(event, 'fs47', 402)" onmouseover="showTip(event, 'fs47', 402)" class="i">int</span> <span class="o">=</span> 
+            <span class="k">if</span> <span onmouseout="hideTip(event, 'fs106', 403)" onmouseover="showTip(event, 'fs106', 403)" class="i">cursor</span><span class="o">.</span><span class="i">IsValid</span> <span class="k">then</span>
+                <span class="k">let</span> <span onmouseout="hideTip(event, 'fs110', 404)" onmouseover="showTip(event, 'fs110', 404)" class="i">k</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs106', 405)" onmouseover="showTip(event, 'fs106', 405)" class="i">cursor</span><span class="o">.</span><span class="i">Key</span>
+                <span class="k">let</span> <span onmouseout="hideTip(event, 'fs77', 406)" onmouseover="showTip(event, 'fs77', 406)" class="i">hash</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs110', 407)" onmouseover="showTip(event, 'fs110', 407)" class="i">k</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs58', 408)" onmouseover="showTip(event, 'fs58', 408)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs111', 409)" onmouseover="showTip(event, 'fs111', 409)" class="i">take</span> <span onmouseout="hideTip(event, 'fs105', 410)" onmouseover="showTip(event, 'fs105', 410)" class="i">txHash</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs112', 411)" onmouseover="showTip(event, 'fs112', 411)" class="i">Length</span> <span class="c">// first part of the key is the txhash</span>
+                <span class="k">if</span> <span onmouseout="hideTip(event, 'fs77', 412)" onmouseover="showTip(event, 'fs77', 412)" class="i">hash</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs105', 413)" onmouseover="showTip(event, 'fs105', 413)" class="i">txHash</span> 
+                <span class="k">then</span> 
+                    <span onmouseout="hideTip(event, 'fs106', 414)" onmouseover="showTip(event, 'fs106', 414)" class="i">cursor</span><span class="o">.</span><span class="i">Next</span>()
+                    <span onmouseout="hideTip(event, 'fs108', 415)" onmouseover="showTip(event, 'fs108', 415)" class="i">getCountInner</span> (<span onmouseout="hideTip(event, 'fs109', 416)" onmouseover="showTip(event, 'fs109', 416)" class="i">count</span><span class="o">+</span><span class="n">1</span>)
+                <span class="k">else</span> <span onmouseout="hideTip(event, 'fs109', 417)" onmouseover="showTip(event, 'fs109', 417)" class="i">count</span>
+            <span class="k">else</span> <span onmouseout="hideTip(event, 'fs109', 418)" onmouseover="showTip(event, 'fs109', 418)" class="i">count</span>
+
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs109', 419)" onmouseover="showTip(event, 'fs109', 419)" class="i">count</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs108', 420)" onmouseover="showTip(event, 'fs108', 420)" class="i">getCountInner</span>(<span class="n">0</span>)
+        <span onmouseout="hideTip(event, 'fs109', 421)" onmouseover="showTip(event, 'fs109', 421)" class="i">count</span>
+
+    <span class="k">new</span>() <span class="o">=</span> 
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs113', 422)" onmouseover="showTip(event, 'fs113', 422)" class="i">options</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Options</span>()
+        <span onmouseout="hideTip(event, 'fs113', 423)" onmouseover="showTip(event, 'fs113', 423)" class="i">options</span><span class="o">.</span><span class="i">CreateIfMissing</span> <span class="o">&lt;-</span> <span class="k">true</span>
+        <span class="k">new</span> <span onmouseout="hideTip(event, 'fs92', 424)" onmouseover="showTip(event, 'fs92', 424)" class="i">LevelDBUTXOAccessor</span>(<span class="i">DB</span><span class="o">.</span><span class="i">Open</span>(<span onmouseout="hideTip(event, 'fs113', 425)" onmouseover="showTip(event, 'fs113', 425)" class="i">options</span>, <span onmouseout="hideTip(event, 'fs12', 426)" onmouseover="showTip(event, 'fs12', 426)" class="i">sprintf</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">s</span><span class="s">/</span><span class="s">utxo</span><span class="s">&quot;</span> <span class="i">baseDir</span>))
+
+    <span class="k">interface</span> <span onmouseout="hideTip(event, 'fs84', 427)" onmouseover="showTip(event, 'fs84', 427)" class="i">IUTXOAccessor</span> <span class="k">with</span>
+        <span class="k">member</span> <span onmouseout="hideTip(event, 'fs114', 428)" onmouseover="showTip(event, 'fs114', 428)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs115', 429)" onmouseover="showTip(event, 'fs115', 429)" class="i">DeleteUTXO</span>(<span onmouseout="hideTip(event, 'fs116', 430)" onmouseover="showTip(event, 'fs116', 430)" class="i">outpoint</span>) <span class="o">=</span> <span onmouseout="hideTip(event, 'fs96', 431)" onmouseover="showTip(event, 'fs96', 431)" class="i">deleteUTXO</span> <span onmouseout="hideTip(event, 'fs116', 432)" onmouseover="showTip(event, 'fs116', 432)" class="i">outpoint</span>
+        <span class="k">member</span> <span onmouseout="hideTip(event, 'fs114', 433)" onmouseover="showTip(event, 'fs114', 433)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs117', 434)" onmouseover="showTip(event, 'fs117', 434)" class="i">AddUTXO</span>(<span onmouseout="hideTip(event, 'fs118', 435)" onmouseover="showTip(event, 'fs118', 435)" class="i">outpoint</span>, <span onmouseout="hideTip(event, 'fs119', 436)" onmouseover="showTip(event, 'fs119', 436)" class="i">txOut</span>) <span class="o">=</span> <span onmouseout="hideTip(event, 'fs99', 437)" onmouseover="showTip(event, 'fs99', 437)" class="i">addUTXO</span> <span onmouseout="hideTip(event, 'fs118', 438)" onmouseover="showTip(event, 'fs118', 438)" class="i">outpoint</span> <span onmouseout="hideTip(event, 'fs119', 439)" onmouseover="showTip(event, 'fs119', 439)" class="i">txOut</span>
+        <span class="k">member</span> <span onmouseout="hideTip(event, 'fs114', 440)" onmouseover="showTip(event, 'fs114', 440)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs120', 441)" onmouseover="showTip(event, 'fs120', 441)" class="i">GetUTXO</span>(<span onmouseout="hideTip(event, 'fs97', 442)" onmouseover="showTip(event, 'fs97', 442)" class="i">outpoint</span>) <span class="o">=</span> <span onmouseout="hideTip(event, 'fs102', 443)" onmouseover="showTip(event, 'fs102', 443)" class="i">getUTXO</span> <span onmouseout="hideTip(event, 'fs97', 444)" onmouseover="showTip(event, 'fs97', 444)" class="i">outpoint</span>
+        <span class="k">member</span> <span onmouseout="hideTip(event, 'fs114', 445)" onmouseover="showTip(event, 'fs114', 445)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs121', 446)" onmouseover="showTip(event, 'fs121', 446)" class="i">GetCount</span>(<span onmouseout="hideTip(event, 'fs105', 447)" onmouseover="showTip(event, 'fs105', 447)" class="i">txHash</span>) <span class="o">=</span> <span onmouseout="hideTip(event, 'fs104', 448)" onmouseover="showTip(event, 'fs104', 448)" class="i">getCount</span> <span onmouseout="hideTip(event, 'fs105', 449)" onmouseover="showTip(event, 'fs105', 449)" class="i">txHash</span>
+        <span class="k">member</span> <span onmouseout="hideTip(event, 'fs114', 450)" onmouseover="showTip(event, 'fs114', 450)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs122', 451)" onmouseover="showTip(event, 'fs122', 451)" class="i">Dispose</span>() <span class="o">=</span> <span onmouseout="hideTip(event, 'fs93', 452)" onmouseover="showTip(event, 'fs93', 452)" class="i">db</span><span class="o">.</span><span class="i">Dispose</span>()
+
+    <span class="k">member</span> <span class="k">val</span> <span class="i">Db</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs93', 453)" onmouseover="showTip(event, 'fs93', 453)" class="i">db</span> <span class="k">with</span> <span class="i">get</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs123', 454)" onmouseover="showTip(event, 'fs123', 454)" class="i">utxoAccessor</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs92', 455)" onmouseover="showTip(event, 'fs92', 455)" class="i">LevelDBUTXOAccessor</span>() <span class="o">:&gt;</span> <span onmouseout="hideTip(event, 'fs84', 456)" onmouseover="showTip(event, 'fs84', 456)" class="i">IUTXOAccessor</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Format of the UNDO file. The transactions stored in blocks must be reverted if they end up being
+part of an orphaned block. However, a block does not have enough data to undo the effects on the UTXO db.
+A transaction deletes the input TXO and creates new UTXO. If it needs to be reverted, it is easy to delete the
+newly created UTXO but difficult to recreate the input TXO unless that data is stored as well.</p>
+
+<p>When a block is processed and the UTXO db updated, I create an undo file that logs the changes applied to the db.
+It is kept in the same directory location as the block file and can be trimmed at the same time. Obviously deleting
+blocks and undo files removes the ability to reorganize the blockchain into a fork that is deeper than least recent block
+available.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+<span class="l">6: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs124', 457)" onmouseover="showTip(event, 'fs124', 457)" class="i">TxOperation</span> <span class="o">=</span> 
+    | <span onmouseout="hideTip(event, 'fs125', 458)" onmouseover="showTip(event, 'fs125', 458)" class="i">Add</span> 
+    | <span onmouseout="hideTip(event, 'fs126', 459)" onmouseover="showTip(event, 'fs126', 459)" class="i">Delete</span> 
+
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs127', 460)" onmouseover="showTip(event, 'fs127', 460)" class="i">IUTXOWriter</span> <span class="o">=</span>
+    <span class="k">abstract</span> <span onmouseout="hideTip(event, 'fs128', 461)" onmouseover="showTip(event, 'fs128', 461)" class="i">Write</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs124', 462)" onmouseover="showTip(event, 'fs124', 462)" class="i">TxOperation</span> <span class="o">*</span> <span class="i">OutPoint</span> <span class="o">*</span> <span class="i">UTXO</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs87', 463)" onmouseover="showTip(event, 'fs87', 463)" class="i">unit</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Some helper function for validity checks. It appears early in the code because of the <code>processUTXO</code> function which goes through the
+transactions and calls the UTXO accessor. I take advantage of this traversal to do some basic checks.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs129', 464)" onmouseover="showTip(event, 'fs129', 464)" class="i">checkMoney</span> (<span onmouseout="hideTip(event, 'fs130', 465)" onmouseover="showTip(event, 'fs130', 465)" class="i">v</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs24', 466)" onmouseover="showTip(event, 'fs24', 466)" class="i">int64</span>) <span class="o">=</span> (<span onmouseout="hideTip(event, 'fs130', 467)" onmouseover="showTip(event, 'fs130', 467)" class="i">v</span> <span class="o">&gt;</span><span class="o">=</span> <span class="n">0L</span> <span class="o">&amp;&amp;</span> <span onmouseout="hideTip(event, 'fs130', 468)" onmouseover="showTip(event, 'fs130', 468)" class="i">v</span> <span class="o">&lt;</span> <span class="n">2200000000000000L</span>) <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">not</span><span class="s"> </span><span class="s">in</span><span class="s"> </span><span class="s">money</span><span class="s"> </span><span class="s">range</span><span class="s">&quot;</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs90', 469)" onmouseover="showTip(event, 'fs90', 469)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs131', 470)" onmouseover="showTip(event, 'fs131', 470)" class="i">map</span>(<span class="k">fun</span> () <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs130', 471)" onmouseover="showTip(event, 'fs130', 471)" class="i">v</span>)
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs132', 472)" onmouseover="showTip(event, 'fs132', 472)" class="i">checkCoinbaseMaturity</span> (<span onmouseout="hideTip(event, 'fs133', 473)" onmouseover="showTip(event, 'fs133', 473)" class="i">utxo</span><span class="o">:</span> <span class="i">UTXO</span>) (<span onmouseout="hideTip(event, 'fs134', 474)" onmouseover="showTip(event, 'fs134', 474)" class="i">height</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs47', 475)" onmouseover="showTip(event, 'fs47', 475)" class="i">int</span>) <span class="o">=</span> (<span onmouseout="hideTip(event, 'fs133', 476)" onmouseover="showTip(event, 'fs133', 476)" class="i">utxo</span><span class="o">.</span><span class="i">Height</span> <span class="o">=</span> <span class="n">0</span> <span class="o">||</span> <span onmouseout="hideTip(event, 'fs134', 477)" onmouseover="showTip(event, 'fs134', 477)" class="i">height</span> <span class="o">&gt;</span><span class="o">=</span> <span onmouseout="hideTip(event, 'fs133', 478)" onmouseover="showTip(event, 'fs133', 478)" class="i">utxo</span><span class="o">.</span><span class="i">Height</span> <span class="o">+</span> <span class="i">coinbaseMaturity</span>) <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">coinbase</span><span class="s"> </span><span class="s">has</span><span class="s"> </span><span class="s">not</span><span class="s"> </span><span class="s">matured</span><span class="s">&quot;</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs90', 479)" onmouseover="showTip(event, 'fs90', 479)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs131', 480)" onmouseover="showTip(event, 'fs131', 480)" class="i">map</span>(<span class="k">fun</span> () <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs133', 481)" onmouseover="showTip(event, 'fs133', 481)" class="i">utxo</span>)
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs135', 482)" onmouseover="showTip(event, 'fs135', 482)" class="i">OP_RETURN</span> <span class="o">=</span> <span class="n">106uy</span>
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs136', 483)" onmouseover="showTip(event, 'fs136', 483)" class="i">isRETURN</span> (<span onmouseout="hideTip(event, 'fs137', 484)" onmouseover="showTip(event, 'fs137', 484)" class="i">script</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs56', 485)" onmouseover="showTip(event, 'fs56', 485)" class="i">byte</span>[]) <span class="o">=</span> <span onmouseout="hideTip(event, 'fs137', 486)" onmouseover="showTip(event, 'fs137', 486)" class="i">script</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs112', 487)" onmouseover="showTip(event, 'fs112', 487)" class="i">Length</span> <span class="o">&gt;</span> <span class="n">0</span> <span class="o">&amp;&amp;</span> <span onmouseout="hideTip(event, 'fs137', 488)" onmouseover="showTip(event, 'fs137', 488)" class="i">script</span><span class="o">.</span>[<span class="n">0</span>] <span class="o">=</span> <span onmouseout="hideTip(event, 'fs135', 489)" onmouseover="showTip(event, 'fs135', 489)" class="i">OP_RETURN</span></pre>
+</td>
+</tr>
+</table>
+
+<p>This is the first time that I use the <code>maybe</code> computational expression. So it maybe worth spending some time to talk about it.
+It is a builder for the monad <code>Option</code> type. Inside the <code>maybe</code>
+block, <code>let!</code> statements evaluate a <code>Some</code> or <code>None</code>. If the result is <code>None</code>, the rest is not evaluated and the <code>maybe</code> block
+returns <code>None</code>. It's syntaxic sugar for <code>bind</code>, <code>map</code>, etc. Sometimes I need to use these functions explicitly but when the <code>maybe</code>
+builder does the job, the code is easier to read. Even though it looks like a normal loop over tx inputs and outputs, if any of the checks
+fail, evaluation is short circuited and returns <code>None</code>. Exceptions could have worked but it is harder to control their propagation and
+monads keep the function pure (except at the db level of course).</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs138', 490)" onmouseover="showTip(event, 'fs138', 490)" class="i">processUTXO</span> (<span onmouseout="hideTip(event, 'fs139', 491)" onmouseover="showTip(event, 'fs139', 491)" class="i">utxoAccessor</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs84', 492)" onmouseover="showTip(event, 'fs84', 492)" class="i">IUTXOAccessor</span>) (<span onmouseout="hideTip(event, 'fs140', 493)" onmouseover="showTip(event, 'fs140', 493)" class="i">utxoWriter</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs127', 494)" onmouseover="showTip(event, 'fs127', 494)" class="i">IUTXOWriter</span>) (<span onmouseout="hideTip(event, 'fs141', 495)" onmouseover="showTip(event, 'fs141', 495)" class="i">isCoinbase</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs142', 496)" onmouseover="showTip(event, 'fs142', 496)" class="i">bool</span>) (<span onmouseout="hideTip(event, 'fs134', 497)" onmouseover="showTip(event, 'fs134', 497)" class="i">height</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs47', 498)" onmouseover="showTip(event, 'fs47', 498)" class="i">int</span>) (<span onmouseout="hideTip(event, 'fs143', 499)" onmouseover="showTip(event, 'fs143', 499)" class="i">tx</span><span class="o">:</span> <span class="i">Tx</span>)  <span class="o">=</span>
+    <span class="i">maybe</span> {
+        <span class="k">let!</span> <span class="i">totalIn</span> <span class="o">=</span> 
+            <span onmouseout="hideTip(event, 'fs143', 500)" onmouseover="showTip(event, 'fs143', 500)" class="i">tx</span><span class="o">.</span><span class="i">TxIns</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs38', 501)" onmouseover="showTip(event, 'fs38', 501)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs144', 502)" onmouseover="showTip(event, 'fs144', 502)" class="i">map</span> (<span class="k">fun</span> <span class="i">txIn</span> <span class="k">-&gt;</span>
+                <span class="k">if</span> <span onmouseout="hideTip(event, 'fs145', 503)" onmouseover="showTip(event, 'fs145', 503)" class="i">not</span> <span onmouseout="hideTip(event, 'fs141', 504)" onmouseover="showTip(event, 'fs141', 504)" class="i">isCoinbase</span> <span class="k">then</span>
+                    <span class="k">let</span> <span class="i">utxo</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs139', 505)" onmouseover="showTip(event, 'fs139', 505)" class="i">utxoAccessor</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs146', 506)" onmouseover="showTip(event, 'fs146', 506)" class="i">GetUTXO</span> <span class="i">txIn</span><span class="o">.</span><span class="i">PrevOutPoint</span>
+                    <span class="i">utxo</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs90', 507)" onmouseover="showTip(event, 'fs90', 507)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs131', 508)" onmouseover="showTip(event, 'fs131', 508)" class="i">map</span> (<span class="k">fun</span> <span class="i">utxo</span> <span class="k">-&gt;</span>
+                        <span onmouseout="hideTip(event, 'fs139', 509)" onmouseover="showTip(event, 'fs139', 509)" class="i">utxoAccessor</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs147', 510)" onmouseover="showTip(event, 'fs147', 510)" class="i">DeleteUTXO</span> <span class="i">txIn</span><span class="o">.</span><span class="i">PrevOutPoint</span>
+                        <span onmouseout="hideTip(event, 'fs140', 511)" onmouseover="showTip(event, 'fs140', 511)" class="i">utxoWriter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs148', 512)" onmouseover="showTip(event, 'fs148', 512)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs126', 513)" onmouseover="showTip(event, 'fs126', 513)" class="i">Delete</span>, <span class="i">txIn</span><span class="o">.</span><span class="i">PrevOutPoint</span>, <span class="i">utxo</span>)
+                        <span class="i">utxo</span>) 
+                        <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs90', 514)" onmouseover="showTip(event, 'fs90', 514)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs149', 515)" onmouseover="showTip(event, 'fs149', 515)" class="i">bind</span> (<span class="k">fun</span> <span class="i">utxo</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs132', 516)" onmouseover="showTip(event, 'fs132', 516)" class="i">checkCoinbaseMaturity</span> <span class="i">utxo</span> <span onmouseout="hideTip(event, 'fs134', 517)" onmouseover="showTip(event, 'fs134', 517)" class="i">height</span>)
+                        <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs90', 518)" onmouseover="showTip(event, 'fs90', 518)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs149', 519)" onmouseover="showTip(event, 'fs149', 519)" class="i">bind</span> (<span class="k">fun</span> <span class="i">utxo</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs129', 520)" onmouseover="showTip(event, 'fs129', 520)" class="i">checkMoney</span> <span class="i">utxo</span><span class="o">.</span><span class="i">TxOut</span><span class="o">.</span><span class="i">Value</span>)
+                <span class="k">else</span> <span onmouseout="hideTip(event, 'fs40', 521)" onmouseover="showTip(event, 'fs40', 521)" class="i">Some</span> <span class="n">0L</span>
+                ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs38', 522)" onmouseover="showTip(event, 'fs38', 522)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs150', 523)" onmouseover="showTip(event, 'fs150', 523)" class="i">toList</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs90', 524)" onmouseover="showTip(event, 'fs90', 524)" class="i">Option</span><span class="o">.</span><span class="i">sequence</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs90', 525)" onmouseover="showTip(event, 'fs90', 525)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs131', 526)" onmouseover="showTip(event, 'fs131', 526)" class="i">map</span> <span onmouseout="hideTip(event, 'fs38', 527)" onmouseover="showTip(event, 'fs38', 527)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs151', 528)" onmouseover="showTip(event, 'fs151', 528)" class="i">sum</span>
+        <span class="k">let!</span> <span class="i">totalOut</span> <span class="o">=</span>
+            <span onmouseout="hideTip(event, 'fs143', 529)" onmouseover="showTip(event, 'fs143', 529)" class="i">tx</span><span class="o">.</span><span class="i">TxOuts</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs38', 530)" onmouseover="showTip(event, 'fs38', 530)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs152', 531)" onmouseover="showTip(event, 'fs152', 531)" class="i">mapi</span> (<span class="k">fun</span> <span class="i">iTxOut</span> <span class="i">txOut</span> <span class="k">-&gt;</span>
+                <span class="k">let</span> <span class="i">outpoint</span> <span class="o">=</span> <span class="k">new</span> <span class="i">OutPoint</span>(<span onmouseout="hideTip(event, 'fs143', 532)" onmouseover="showTip(event, 'fs143', 532)" class="i">tx</span><span class="o">.</span><span class="i">Hash</span>, <span class="i">iTxOut</span>)
+                <span class="k">let</span> <span class="i">utxo</span> <span class="o">=</span> <span class="i">UTXO</span>(<span class="i">txOut</span>, <span class="k">if</span> <span onmouseout="hideTip(event, 'fs141', 533)" onmouseover="showTip(event, 'fs141', 533)" class="i">isCoinbase</span> <span class="k">then</span> <span onmouseout="hideTip(event, 'fs134', 534)" onmouseover="showTip(event, 'fs134', 534)" class="i">height</span> <span class="k">else</span> <span class="n">0</span>)
+                <span class="k">if</span> <span onmouseout="hideTip(event, 'fs145', 535)" onmouseover="showTip(event, 'fs145', 535)" class="i">not</span> (<span onmouseout="hideTip(event, 'fs136', 536)" onmouseover="showTip(event, 'fs136', 536)" class="i">isRETURN</span> <span class="i">utxo</span><span class="o">.</span><span class="i">TxOut</span><span class="o">.</span><span class="i">Script</span>) <span class="k">then</span>
+                    <span onmouseout="hideTip(event, 'fs139', 537)" onmouseover="showTip(event, 'fs139', 537)" class="i">utxoAccessor</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs153', 538)" onmouseover="showTip(event, 'fs153', 538)" class="i">AddUTXO</span> (<span class="i">outpoint</span>, <span class="i">utxo</span>)
+                    <span onmouseout="hideTip(event, 'fs140', 539)" onmouseover="showTip(event, 'fs140', 539)" class="i">utxoWriter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs148', 540)" onmouseover="showTip(event, 'fs148', 540)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs125', 541)" onmouseover="showTip(event, 'fs125', 541)" class="i">Add</span>, <span class="i">outpoint</span>, <span class="i">utxo</span>)
+                <span class="k">if</span> <span onmouseout="hideTip(event, 'fs145', 542)" onmouseover="showTip(event, 'fs145', 542)" class="i">not</span> <span onmouseout="hideTip(event, 'fs141', 543)" onmouseover="showTip(event, 'fs141', 543)" class="i">isCoinbase</span>
+                <span class="k">then</span> <span onmouseout="hideTip(event, 'fs129', 544)" onmouseover="showTip(event, 'fs129', 544)" class="i">checkMoney</span> <span class="i">txOut</span><span class="o">.</span><span class="i">Value</span> 
+                <span class="k">else</span> <span onmouseout="hideTip(event, 'fs40', 545)" onmouseover="showTip(event, 'fs40', 545)" class="i">Some</span> <span class="n">0L</span>
+            ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs38', 546)" onmouseover="showTip(event, 'fs38', 546)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs150', 547)" onmouseover="showTip(event, 'fs150', 547)" class="i">toList</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs90', 548)" onmouseover="showTip(event, 'fs90', 548)" class="i">Option</span><span class="o">.</span><span class="i">sequence</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs90', 549)" onmouseover="showTip(event, 'fs90', 549)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs131', 550)" onmouseover="showTip(event, 'fs131', 550)" class="i">map</span> <span onmouseout="hideTip(event, 'fs38', 551)" onmouseover="showTip(event, 'fs38', 551)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs151', 552)" onmouseover="showTip(event, 'fs151', 552)" class="i">sum</span>
+        <span class="k">let</span> <span class="i">fee</span> <span class="o">=</span> <span class="i">totalIn</span> <span class="o">-</span> <span class="i">totalOut</span>
+        <span class="k">do!</span> <span class="i">fee</span> <span class="o">&gt;</span><span class="o">=</span> <span class="n">0L</span> <span class="o">|&gt;</span> <span class="i">errorIfFalse</span> <span class="s">&quot;</span><span class="s">fee</span><span class="s"> </span><span class="s">must</span><span class="s"> </span><span class="s">be</span><span class="s"> </span><span class="s">positive</span><span class="s">&quot;</span>
+        <span class="k">return</span> <span class="i">fee</span>
+    }</pre>
+</td>
+</tr>
+</table>
+
+<h2>Block storage</h2>
+
+<p>Blocks are stored as flat binary file in the directory under the blocksDir configured in the <code>app.config</code>. The path follows a naming
+convention that takes the depth and hash into consideration. A block of hash '0bb74cf88a2e07275a36cb57e81ddb64933568f7720e2f91ff84c5ee614fa3e3' and height 1002
+will be under blocks/1/1002/0bb74cf88a2e07275a36cb57e81ddb64933568f7720e2f91ff84c5ee614fa3e3. The undo block has the same name and location but with the .undo extension.
+Undo blocks are written in the same order as the transactions of the block are written. Therefore when they are reverted, they must be applied in <em>reverse</em> order.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+<span class="l">40: </span>
+<span class="l">41: </span>
+<span class="l">42: </span>
+<span class="l">43: </span>
+<span class="l">44: </span>
+<span class="l">45: </span>
+<span class="l">46: </span>
+<span class="l">47: </span>
+<span class="l">48: </span>
+<span class="l">49: </span>
+<span class="l">50: </span>
+<span class="l">51: </span>
+<span class="l">52: </span>
+<span class="l">53: </span>
+<span class="l">54: </span>
+<span class="l">55: </span>
+<span class="l">56: </span>
+<span class="l">57: </span>
+<span class="l">58: </span>
+<span class="l">59: </span>
+<span class="l">60: </span>
+<span class="l">61: </span>
+<span class="l">62: </span>
+<span class="l">63: </span>
+<span class="l">64: </span>
+<span class="l">65: </span>
+<span class="l">66: </span>
+<span class="l">67: </span>
+<span class="l">68: </span>
+<span class="l">69: </span>
+<span class="l">70: </span>
+<span class="l">71: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs154', 553)" onmouseover="showTip(event, 'fs154', 553)" class="i">blocksBaseDir</span> <span class="o">=</span> <span class="i">settings</span><span class="o">.</span><span class="i">BlocksDir</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs155', 554)" onmouseover="showTip(event, 'fs155', 554)" class="i">getBlockDir</span> (<span onmouseout="hideTip(event, 'fs156', 555)" onmouseover="showTip(event, 'fs156', 555)" class="i">bh</span><span class="o">:</span> <span class="i">BlockHeader</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs134', 556)" onmouseover="showTip(event, 'fs134', 556)" class="i">height</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs156', 557)" onmouseover="showTip(event, 'fs156', 557)" class="i">bh</span><span class="o">.</span><span class="i">Height</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs157', 558)" onmouseover="showTip(event, 'fs157', 558)" class="i">path</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs12', 559)" onmouseover="showTip(event, 'fs12', 559)" class="i">sprintf</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">s</span><span class="s">/</span><span class="s">%</span><span class="s">d</span><span class="s">/</span><span class="s">%</span><span class="s">d</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs154', 560)" onmouseover="showTip(event, 'fs154', 560)" class="i">blocksBaseDir</span> (<span onmouseout="hideTip(event, 'fs134', 561)" onmouseover="showTip(event, 'fs134', 561)" class="i">height</span><span class="o">/</span><span class="n">1000</span>) <span onmouseout="hideTip(event, 'fs134', 562)" onmouseover="showTip(event, 'fs134', 562)" class="i">height</span>
+    <span onmouseout="hideTip(event, 'fs158', 563)" onmouseover="showTip(event, 'fs158', 563)" class="i">Directory</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs159', 564)" onmouseover="showTip(event, 'fs159', 564)" class="i">CreateDirectory</span> <span onmouseout="hideTip(event, 'fs157', 565)" onmouseover="showTip(event, 'fs157', 565)" class="i">path</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs17', 566)" onmouseover="showTip(event, 'fs17', 566)" class="i">ignore</span>
+    <span onmouseout="hideTip(event, 'fs157', 567)" onmouseover="showTip(event, 'fs157', 567)" class="i">path</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs160', 568)" onmouseover="showTip(event, 'fs160', 568)" class="i">hasBlock</span> (<span onmouseout="hideTip(event, 'fs156', 569)" onmouseover="showTip(event, 'fs156', 569)" class="i">bh</span><span class="o">:</span> <span class="i">BlockHeader</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs157', 570)" onmouseover="showTip(event, 'fs157', 570)" class="i">path</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs155', 571)" onmouseover="showTip(event, 'fs155', 571)" class="i">getBlockDir</span> <span onmouseout="hideTip(event, 'fs156', 572)" onmouseover="showTip(event, 'fs156', 572)" class="i">bh</span>
+    <span onmouseout="hideTip(event, 'fs161', 573)" onmouseover="showTip(event, 'fs161', 573)" class="i">File</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs162', 574)" onmouseover="showTip(event, 'fs162', 574)" class="i">Exists</span> (<span onmouseout="hideTip(event, 'fs12', 575)" onmouseover="showTip(event, 'fs12', 575)" class="i">sprintf</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">s</span><span class="s">/</span><span class="s">%</span><span class="s">s</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs157', 576)" onmouseover="showTip(event, 'fs157', 576)" class="i">path</span> (<span class="i">hashToHex</span> <span onmouseout="hideTip(event, 'fs156', 577)" onmouseover="showTip(event, 'fs156', 577)" class="i">bh</span><span class="o">.</span><span class="i">Hash</span>))
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs163', 578)" onmouseover="showTip(event, 'fs163', 578)" class="i">storeBlock</span> (<span onmouseout="hideTip(event, 'fs164', 579)" onmouseover="showTip(event, 'fs164', 579)" class="i">b</span><span class="o">:</span> <span class="i">Block</span>) (<span onmouseout="hideTip(event, 'fs165', 580)" onmouseover="showTip(event, 'fs165', 580)" class="i">p</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs56', 581)" onmouseover="showTip(event, 'fs56', 581)" class="i">byte</span>[]) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs157', 582)" onmouseover="showTip(event, 'fs157', 582)" class="i">path</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs155', 583)" onmouseover="showTip(event, 'fs155', 583)" class="i">getBlockDir</span> <span onmouseout="hideTip(event, 'fs164', 584)" onmouseover="showTip(event, 'fs164', 584)" class="i">b</span><span class="o">.</span><span class="i">Header</span>
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs166', 585)" onmouseover="showTip(event, 'fs166', 585)" class="i">fs</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs167', 586)" onmouseover="showTip(event, 'fs167', 586)" class="i">FileStream</span>(<span onmouseout="hideTip(event, 'fs12', 587)" onmouseover="showTip(event, 'fs12', 587)" class="i">sprintf</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">s</span><span class="s">/</span><span class="s">%</span><span class="s">s</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs157', 588)" onmouseover="showTip(event, 'fs157', 588)" class="i">path</span> (<span class="i">hashToHex</span> <span onmouseout="hideTip(event, 'fs164', 589)" onmouseover="showTip(event, 'fs164', 589)" class="i">b</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Hash</span>), <span onmouseout="hideTip(event, 'fs168', 590)" onmouseover="showTip(event, 'fs168', 590)" class="i">FileMode</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs169', 591)" onmouseover="showTip(event, 'fs169', 591)" class="i">Create</span>)
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs170', 592)" onmouseover="showTip(event, 'fs170', 592)" class="i">writer</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs171', 593)" onmouseover="showTip(event, 'fs171', 593)" class="i">BinaryWriter</span>(<span onmouseout="hideTip(event, 'fs166', 594)" onmouseover="showTip(event, 'fs166', 594)" class="i">fs</span>)
+    <span onmouseout="hideTip(event, 'fs170', 595)" onmouseover="showTip(event, 'fs170', 595)" class="i">writer</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs172', 596)" onmouseover="showTip(event, 'fs172', 596)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs165', 597)" onmouseover="showTip(event, 'fs165', 597)" class="i">p</span>)
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs173', 598)" onmouseover="showTip(event, 'fs173', 598)" class="i">deleteBlock</span> (<span onmouseout="hideTip(event, 'fs156', 599)" onmouseover="showTip(event, 'fs156', 599)" class="i">bh</span><span class="o">:</span> <span class="i">BlockHeader</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs157', 600)" onmouseover="showTip(event, 'fs157', 600)" class="i">path</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs155', 601)" onmouseover="showTip(event, 'fs155', 601)" class="i">getBlockDir</span> <span onmouseout="hideTip(event, 'fs156', 602)" onmouseover="showTip(event, 'fs156', 602)" class="i">bh</span>
+    <span onmouseout="hideTip(event, 'fs161', 603)" onmouseover="showTip(event, 'fs161', 603)" class="i">File</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs174', 604)" onmouseover="showTip(event, 'fs174', 604)" class="i">Delete</span> (<span onmouseout="hideTip(event, 'fs12', 605)" onmouseover="showTip(event, 'fs12', 605)" class="i">sprintf</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">s</span><span class="s">/</span><span class="s">%</span><span class="s">s</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs157', 606)" onmouseover="showTip(event, 'fs157', 606)" class="i">path</span> (<span class="i">hashToHex</span> <span onmouseout="hideTip(event, 'fs156', 607)" onmouseover="showTip(event, 'fs156', 607)" class="i">bh</span><span class="o">.</span><span class="i">Hash</span>))
+
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs175', 608)" onmouseover="showTip(event, 'fs175', 608)" class="i">UndoWriter</span>(<span onmouseout="hideTip(event, 'fs166', 609)" onmouseover="showTip(event, 'fs166', 609)" class="i">fs</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs167', 610)" onmouseover="showTip(event, 'fs167', 610)" class="i">FileStream</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs170', 611)" onmouseover="showTip(event, 'fs170', 611)" class="i">writer</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs171', 612)" onmouseover="showTip(event, 'fs171', 612)" class="i">BinaryWriter</span>(<span onmouseout="hideTip(event, 'fs166', 613)" onmouseover="showTip(event, 'fs166', 613)" class="i">fs</span>)
+
+    <span class="k">interface</span> <span onmouseout="hideTip(event, 'fs85', 614)" onmouseover="showTip(event, 'fs85', 614)" class="i">IDisposable</span> <span class="k">with</span>
+        <span class="k">override</span> <span onmouseout="hideTip(event, 'fs176', 615)" onmouseover="showTip(event, 'fs176', 615)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs177', 616)" onmouseover="showTip(event, 'fs177', 616)" class="i">Dispose</span>() <span class="o">=</span>
+            <span onmouseout="hideTip(event, 'fs170', 617)" onmouseover="showTip(event, 'fs170', 617)" class="i">writer</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs178', 618)" onmouseover="showTip(event, 'fs178', 618)" class="i">Close</span>()
+            <span onmouseout="hideTip(event, 'fs166', 619)" onmouseover="showTip(event, 'fs166', 619)" class="i">fs</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs179', 620)" onmouseover="showTip(event, 'fs179', 620)" class="i">Close</span>()
+
+    <span class="k">interface</span> <span onmouseout="hideTip(event, 'fs127', 621)" onmouseover="showTip(event, 'fs127', 621)" class="i">IUTXOWriter</span> <span class="k">with</span>
+        <span class="k">member</span> <span onmouseout="hideTip(event, 'fs176', 622)" onmouseover="showTip(event, 'fs176', 622)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs180', 623)" onmouseover="showTip(event, 'fs180', 623)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs181', 624)" onmouseover="showTip(event, 'fs181', 624)" class="i">txOp</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs124', 625)" onmouseover="showTip(event, 'fs124', 625)" class="i">TxOperation</span>, <span onmouseout="hideTip(event, 'fs97', 626)" onmouseover="showTip(event, 'fs97', 626)" class="i">outpoint</span><span class="o">:</span> <span class="i">OutPoint</span>, <span onmouseout="hideTip(event, 'fs100', 627)" onmouseover="showTip(event, 'fs100', 627)" class="i">utxo</span><span class="o">:</span> <span class="i">UTXO</span>) <span class="o">=</span> 
+            <span class="k">match</span> <span onmouseout="hideTip(event, 'fs181', 628)" onmouseover="showTip(event, 'fs181', 628)" class="i">txOp</span> <span class="k">with</span>
+            | <span onmouseout="hideTip(event, 'fs125', 629)" onmouseover="showTip(event, 'fs125', 629)" class="i">Add</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs170', 630)" onmouseover="showTip(event, 'fs170', 630)" class="i">writer</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs172', 631)" onmouseover="showTip(event, 'fs172', 631)" class="i">Write</span>(<span class="n">0uy</span>) <span class="c">// 0 is add</span>
+            | <span onmouseout="hideTip(event, 'fs126', 632)" onmouseover="showTip(event, 'fs126', 632)" class="i">Delete</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs170', 633)" onmouseover="showTip(event, 'fs170', 633)" class="i">writer</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs172', 634)" onmouseover="showTip(event, 'fs172', 634)" class="i">Write</span>(<span class="n">1uy</span>)
+            <span onmouseout="hideTip(event, 'fs170', 635)" onmouseover="showTip(event, 'fs170', 635)" class="i">writer</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs172', 636)" onmouseover="showTip(event, 'fs172', 636)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs97', 637)" onmouseover="showTip(event, 'fs97', 637)" class="i">outpoint</span><span class="o">.</span><span class="i">ToByteArray</span>())
+            <span onmouseout="hideTip(event, 'fs170', 638)" onmouseover="showTip(event, 'fs170', 638)" class="i">writer</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs172', 639)" onmouseover="showTip(event, 'fs172', 639)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs100', 640)" onmouseover="showTip(event, 'fs100', 640)" class="i">utxo</span><span class="o">.</span><span class="i">ToByteArray</span>())
+    
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs182', 641)" onmouseover="showTip(event, 'fs182', 641)" class="i">storeUndoBlock</span> (<span onmouseout="hideTip(event, 'fs164', 642)" onmouseover="showTip(event, 'fs164', 642)" class="i">b</span><span class="o">:</span> <span class="i">Block</span>) <span class="o">=</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs157', 643)" onmouseover="showTip(event, 'fs157', 643)" class="i">path</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs155', 644)" onmouseover="showTip(event, 'fs155', 644)" class="i">getBlockDir</span> <span onmouseout="hideTip(event, 'fs164', 645)" onmouseover="showTip(event, 'fs164', 645)" class="i">b</span><span class="o">.</span><span class="i">Header</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs166', 646)" onmouseover="showTip(event, 'fs166', 646)" class="i">fs</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs167', 647)" onmouseover="showTip(event, 'fs167', 647)" class="i">FileStream</span>(<span onmouseout="hideTip(event, 'fs12', 648)" onmouseover="showTip(event, 'fs12', 648)" class="i">sprintf</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">s</span><span class="s">/</span><span class="s">%</span><span class="s">s</span><span class="s">.</span><span class="s">undo</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs157', 649)" onmouseover="showTip(event, 'fs157', 649)" class="i">path</span> (<span class="i">hashToHex</span> <span onmouseout="hideTip(event, 'fs164', 650)" onmouseover="showTip(event, 'fs164', 650)" class="i">b</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Hash</span>), <span onmouseout="hideTip(event, 'fs168', 651)" onmouseover="showTip(event, 'fs168', 651)" class="i">FileMode</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs169', 652)" onmouseover="showTip(event, 'fs169', 652)" class="i">Create</span>)
+    <span class="k">new</span> <span onmouseout="hideTip(event, 'fs175', 653)" onmouseover="showTip(event, 'fs175', 653)" class="i">UndoWriter</span>(<span onmouseout="hideTip(event, 'fs166', 654)" onmouseover="showTip(event, 'fs166', 654)" class="i">fs</span>)
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs183', 655)" onmouseover="showTip(event, 'fs183', 655)" class="i">loadBlock</span> (<span onmouseout="hideTip(event, 'fs156', 656)" onmouseover="showTip(event, 'fs156', 656)" class="i">bh</span><span class="o">:</span> <span class="i">BlockHeader</span>) <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs157', 657)" onmouseover="showTip(event, 'fs157', 657)" class="i">path</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs155', 658)" onmouseover="showTip(event, 'fs155', 658)" class="i">getBlockDir</span> <span onmouseout="hideTip(event, 'fs156', 659)" onmouseover="showTip(event, 'fs156', 659)" class="i">bh</span>
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs166', 660)" onmouseover="showTip(event, 'fs166', 660)" class="i">fs</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs167', 661)" onmouseover="showTip(event, 'fs167', 661)" class="i">FileStream</span>(<span onmouseout="hideTip(event, 'fs12', 662)" onmouseover="showTip(event, 'fs12', 662)" class="i">sprintf</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">s</span><span class="s">/</span><span class="s">%</span><span class="s">s</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs157', 663)" onmouseover="showTip(event, 'fs157', 663)" class="i">path</span> (<span class="i">hashToHex</span> <span onmouseout="hideTip(event, 'fs156', 664)" onmouseover="showTip(event, 'fs156', 664)" class="i">bh</span><span class="o">.</span><span class="i">Hash</span>), <span onmouseout="hideTip(event, 'fs168', 665)" onmouseover="showTip(event, 'fs168', 665)" class="i">FileMode</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs184', 666)" onmouseover="showTip(event, 'fs184', 666)" class="i">Open</span>)
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs185', 667)" onmouseover="showTip(event, 'fs185', 667)" class="i">reader</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs186', 668)" onmouseover="showTip(event, 'fs186', 668)" class="i">BinaryReader</span>(<span onmouseout="hideTip(event, 'fs166', 669)" onmouseover="showTip(event, 'fs166', 669)" class="i">fs</span>)
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs187', 670)" onmouseover="showTip(event, 'fs187', 670)" class="i">block</span> <span class="o">=</span> <span class="i">Block</span><span class="o">.</span><span class="i">Parse</span> <span onmouseout="hideTip(event, 'fs185', 671)" onmouseover="showTip(event, 'fs185', 671)" class="i">reader</span>
+    <span onmouseout="hideTip(event, 'fs187', 672)" onmouseover="showTip(event, 'fs187', 672)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Height</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs156', 673)" onmouseover="showTip(event, 'fs156', 673)" class="i">bh</span><span class="o">.</span><span class="i">Height</span>
+    <span onmouseout="hideTip(event, 'fs187', 674)" onmouseover="showTip(event, 'fs187', 674)" class="i">block</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs188', 675)" onmouseover="showTip(event, 'fs188', 675)" class="i">undoBlock</span> (<span onmouseout="hideTip(event, 'fs139', 676)" onmouseover="showTip(event, 'fs139', 676)" class="i">utxoAccessor</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs84', 677)" onmouseover="showTip(event, 'fs84', 677)" class="i">IUTXOAccessor</span>) (<span onmouseout="hideTip(event, 'fs156', 678)" onmouseover="showTip(event, 'fs156', 678)" class="i">bh</span><span class="o">:</span> <span class="i">BlockHeader</span>) <span class="o">=</span> 
+    <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Undoing</span><span class="s"> </span><span class="s">block</span><span class="s"> </span><span class="s">#</span><span class="s">%</span><span class="s">d</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs156', 679)" onmouseover="showTip(event, 'fs156', 679)" class="i">bh</span><span class="o">.</span><span class="i">Height</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs157', 680)" onmouseover="showTip(event, 'fs157', 680)" class="i">path</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs155', 681)" onmouseover="showTip(event, 'fs155', 681)" class="i">getBlockDir</span> <span onmouseout="hideTip(event, 'fs156', 682)" onmouseover="showTip(event, 'fs156', 682)" class="i">bh</span>
+
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs189', 683)" onmouseover="showTip(event, 'fs189', 683)" class="i">fsUndo</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs167', 684)" onmouseover="showTip(event, 'fs167', 684)" class="i">FileStream</span>(<span onmouseout="hideTip(event, 'fs12', 685)" onmouseover="showTip(event, 'fs12', 685)" class="i">sprintf</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">s</span><span class="s">/</span><span class="s">%</span><span class="s">s</span><span class="s">.</span><span class="s">undo</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs157', 686)" onmouseover="showTip(event, 'fs157', 686)" class="i">path</span> (<span class="i">hashToHex</span> <span onmouseout="hideTip(event, 'fs156', 687)" onmouseover="showTip(event, 'fs156', 687)" class="i">bh</span><span class="o">.</span><span class="i">Hash</span>), <span onmouseout="hideTip(event, 'fs168', 688)" onmouseover="showTip(event, 'fs168', 688)" class="i">FileMode</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs184', 689)" onmouseover="showTip(event, 'fs184', 689)" class="i">Open</span>)
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs185', 690)" onmouseover="showTip(event, 'fs185', 690)" class="i">reader</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs186', 691)" onmouseover="showTip(event, 'fs186', 691)" class="i">BinaryReader</span>(<span onmouseout="hideTip(event, 'fs189', 692)" onmouseover="showTip(event, 'fs189', 692)" class="i">fsUndo</span>)
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs190', 693)" onmouseover="showTip(event, 'fs190', 693)" class="i">fops</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs60', 694)" onmouseover="showTip(event, 'fs60', 694)" class="i">List</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs87', 695)" onmouseover="showTip(event, 'fs87', 695)" class="i">unit</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs87', 696)" onmouseover="showTip(event, 'fs87', 696)" class="i">unit</span><span class="o">&gt;</span>()
+    <span class="k">while</span> (<span onmouseout="hideTip(event, 'fs189', 697)" onmouseover="showTip(event, 'fs189', 697)" class="i">fsUndo</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs191', 698)" onmouseover="showTip(event, 'fs191', 698)" class="i">Position</span> <span class="o">&lt;&gt;</span> <span onmouseout="hideTip(event, 'fs189', 699)" onmouseover="showTip(event, 'fs189', 699)" class="i">fsUndo</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs192', 700)" onmouseover="showTip(event, 'fs192', 700)" class="i">Length</span>) <span class="k">do</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs193', 701)" onmouseover="showTip(event, 'fs193', 701)" class="i">op</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs185', 702)" onmouseover="showTip(event, 'fs185', 702)" class="i">reader</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs194', 703)" onmouseover="showTip(event, 'fs194', 703)" class="i">ReadByte</span>()
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs195', 704)" onmouseover="showTip(event, 'fs195', 704)" class="i">outpoint</span> <span class="o">=</span> <span class="i">OutPoint</span><span class="o">.</span><span class="i">Parse</span> <span onmouseout="hideTip(event, 'fs185', 705)" onmouseover="showTip(event, 'fs185', 705)" class="i">reader</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs196', 706)" onmouseover="showTip(event, 'fs196', 706)" class="i">utxo</span> <span class="o">=</span> <span class="i">UTXO</span><span class="o">.</span><span class="i">Parse</span> <span onmouseout="hideTip(event, 'fs185', 707)" onmouseover="showTip(event, 'fs185', 707)" class="i">reader</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs197', 708)" onmouseover="showTip(event, 'fs197', 708)" class="i">fop</span> <span class="o">=</span> 
+            <span class="k">match</span> <span onmouseout="hideTip(event, 'fs193', 709)" onmouseover="showTip(event, 'fs193', 709)" class="i">op</span> <span class="k">with</span> 
+            | <span class="n">0uy</span> <span class="k">-&gt;</span> <span class="k">fun</span>() <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs139', 710)" onmouseover="showTip(event, 'fs139', 710)" class="i">utxoAccessor</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs147', 711)" onmouseover="showTip(event, 'fs147', 711)" class="i">DeleteUTXO</span> <span onmouseout="hideTip(event, 'fs195', 712)" onmouseover="showTip(event, 'fs195', 712)" class="i">outpoint</span> <span class="c">// 0 was an add and to undo an add, do a delete</span>
+            | <span class="n">1uy</span> <span class="k">-&gt;</span> <span class="k">fun</span>() <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs139', 713)" onmouseover="showTip(event, 'fs139', 713)" class="i">utxoAccessor</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs153', 714)" onmouseover="showTip(event, 'fs153', 714)" class="i">AddUTXO</span> (<span onmouseout="hideTip(event, 'fs195', 715)" onmouseover="showTip(event, 'fs195', 715)" class="i">outpoint</span>, <span onmouseout="hideTip(event, 'fs196', 716)" onmouseover="showTip(event, 'fs196', 716)" class="i">utxo</span>)
+            | _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs17', 717)" onmouseover="showTip(event, 'fs17', 717)" class="i">ignore</span>
+        <span onmouseout="hideTip(event, 'fs190', 718)" onmouseover="showTip(event, 'fs190', 718)" class="i">fops</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs198', 719)" onmouseover="showTip(event, 'fs198', 719)" class="i">Add</span>(<span onmouseout="hideTip(event, 'fs197', 720)" onmouseover="showTip(event, 'fs197', 720)" class="i">fop</span>)
+    <span onmouseout="hideTip(event, 'fs190', 721)" onmouseover="showTip(event, 'fs190', 721)" class="i">fops</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs38', 722)" onmouseover="showTip(event, 'fs38', 722)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs150', 723)" onmouseover="showTip(event, 'fs150', 723)" class="i">toList</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs60', 724)" onmouseover="showTip(event, 'fs60', 724)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs199', 725)" onmouseover="showTip(event, 'fs199', 725)" class="i">rev</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs60', 726)" onmouseover="showTip(event, 'fs60', 726)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs200', 727)" onmouseover="showTip(event, 'fs200', 727)" class="i">iter</span>(<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs197', 728)" onmouseover="showTip(event, 'fs197', 728)" class="i">fop</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs197', 729)" onmouseover="showTip(event, 'fs197', 729)" class="i">fop</span>()) <span class="c">// Don&#39;t forget to reverse the list</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs201', 730)" onmouseover="showTip(event, 'fs201', 730)" class="i">block</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs183', 731)" onmouseover="showTip(event, 'fs183', 731)" class="i">loadBlock</span> <span onmouseout="hideTip(event, 'fs156', 732)" onmouseover="showTip(event, 'fs156', 732)" class="i">bh</span>
+    <span onmouseout="hideTip(event, 'fs201', 733)" onmouseover="showTip(event, 'fs201', 733)" class="i">block</span><span class="o">.</span><span class="i">Txs</span></pre>
+</td>
+</tr>
+</table>
+
+          <div class="tip" id="fs1">module Db</div>
+<div class="tip" id="fs2">namespace System</div>
+<div class="tip" id="fs3">namespace System.IO</div>
+<div class="tip" id="fs4">namespace System.Collections</div>
+<div class="tip" id="fs5">namespace System.Collections.Generic</div>
+<div class="tip" id="fs6">namespace System.Net</div>
+<div class="tip" id="fs7">namespace System.Net.Sockets</div>
+<div class="tip" id="fs8">Multiple items<br />namespace System.Collections<br /><br />--------------------<br />namespace Microsoft.FSharp.Collections</div>
+<div class="tip" id="fs9">Multiple items<br />type Choice&lt;&#39;T1,&#39;T2&gt; =<br />&#160;&#160;| Choice1Of2 of &#39;T1<br />&#160;&#160;| Choice2Of2 of &#39;T2<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3&gt; =<br />&#160;&#160;| Choice1Of3 of &#39;T1<br />&#160;&#160;| Choice2Of3 of &#39;T2<br />&#160;&#160;| Choice3Of3 of &#39;T3<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4&gt; =<br />&#160;&#160;| Choice1Of4 of &#39;T1<br />&#160;&#160;| Choice2Of4 of &#39;T2<br />&#160;&#160;| Choice3Of4 of &#39;T3<br />&#160;&#160;| Choice4Of4 of &#39;T4<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5&gt; =<br />&#160;&#160;| Choice1Of5 of &#39;T1<br />&#160;&#160;| Choice2Of5 of &#39;T2<br />&#160;&#160;| Choice3Of5 of &#39;T3<br />&#160;&#160;| Choice4Of5 of &#39;T4<br />&#160;&#160;| Choice5Of5 of &#39;T5<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6&gt; =<br />&#160;&#160;| Choice1Of6 of &#39;T1<br />&#160;&#160;| Choice2Of6 of &#39;T2<br />&#160;&#160;| Choice3Of6 of &#39;T3<br />&#160;&#160;| Choice4Of6 of &#39;T4<br />&#160;&#160;| Choice5Of6 of &#39;T5<br />&#160;&#160;| Choice6Of6 of &#39;T6<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7&gt; =<br />&#160;&#160;| Choice1Of7 of &#39;T1<br />&#160;&#160;| Choice2Of7 of &#39;T2<br />&#160;&#160;| Choice3Of7 of &#39;T3<br />&#160;&#160;| Choice4Of7 of &#39;T4<br />&#160;&#160;| Choice5Of7 of &#39;T5<br />&#160;&#160;| Choice6Of7 of &#39;T6<br />&#160;&#160;| Choice7Of7 of &#39;T7<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_,_,_,_&gt;</div>
+<div class="tip" id="fs10">namespace System.Data</div>
+<div class="tip" id="fs11">val connectionString : string<br /><br />Full name: Db.connectionString</div>
+<div class="tip" id="fs12">val sprintf : format:Printf.StringFormat&lt;&#39;T&gt; -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.ExtraTopLevelOperators.sprintf</div>
+<div class="tip" id="fs13">val connection : obj<br /><br />Full name: Db.connection</div>
+<div class="tip" id="fs14">val updateAddrQuery : obj<br /><br />Full name: Db.updateAddrQuery</div>
+<div class="tip" id="fs15">type DbType =<br />&#160;&#160;| AnsiString = 0<br />&#160;&#160;| Binary = 1<br />&#160;&#160;| Byte = 2<br />&#160;&#160;| Boolean = 3<br />&#160;&#160;| Currency = 4<br />&#160;&#160;| Date = 5<br />&#160;&#160;| DateTime = 6<br />&#160;&#160;| Decimal = 7<br />&#160;&#160;| Double = 8<br />&#160;&#160;| Guid = 9<br />&#160;&#160;...<br /><br />Full name: System.Data.DbType</div>
+<div class="tip" id="fs16">field DbType.String = 16</div>
+<div class="tip" id="fs17">val ignore : value:&#39;T -&gt; unit<br /><br />Full name: Microsoft.FSharp.Core.Operators.ignore</div>
+<div class="tip" id="fs18">field DbType.Int32 = 11</div>
+<div class="tip" id="fs19">field DbType.DateTime = 6</div>
+<div class="tip" id="fs20">val updateAddr : addr:&#39;a -&gt; unit<br /><br />Full name: Db.updateAddr</div>
+<div class="tip" id="fs21">val addr : &#39;a</div>
+<div class="tip" id="fs22">type EndPoint =<br />&#160;&#160;member AddressFamily : AddressFamily<br />&#160;&#160;member Create : socketAddress:SocketAddress -&gt; EndPoint<br />&#160;&#160;member Serialize : unit -&gt; SocketAddress<br /><br />Full name: System.Net.EndPoint</div>
+<div class="tip" id="fs23">val dts : obj</div>
+<div class="tip" id="fs24">Multiple items<br />val int64 : value:&#39;T -&gt; int64 (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.int64<br /><br />--------------------<br />type int64 = Int64<br /><br />Full name: Microsoft.FSharp.Core.int64<br /><br />--------------------<br />type int64&lt;&#39;Measure&gt; = int64<br /><br />Full name: Microsoft.FSharp.Core.int64&lt;_&gt;</div>
+<div class="tip" id="fs25">val getPeers : unit -&gt; IPEndPoint list<br /><br />Full name: Db.getPeers</div>
+<div class="tip" id="fs26">val connection : IDisposable</div>
+<div class="tip" id="fs27">val command : obj</div>
+<div class="tip" id="fs28">val reader : IDisposable</div>
+<div class="tip" id="fs29">val host : string</div>
+<div class="tip" id="fs30">val port : int</div>
+<div class="tip" id="fs31">val ip : IPAddress</div>
+<div class="tip" id="fs32">Multiple items<br />type IPAddress =<br />&#160;&#160;new : newAddress:int64 -&gt; IPAddress + 2 overloads<br />&#160;&#160;member Address : int64 with get, set<br />&#160;&#160;member AddressFamily : AddressFamily<br />&#160;&#160;member Equals : comparand:obj -&gt; bool<br />&#160;&#160;member GetAddressBytes : unit -&gt; byte[]<br />&#160;&#160;member GetHashCode : unit -&gt; int<br />&#160;&#160;member IsIPv6LinkLocal : bool<br />&#160;&#160;member IsIPv6Multicast : bool<br />&#160;&#160;member IsIPv6SiteLocal : bool<br />&#160;&#160;member IsIPv6Teredo : bool<br />&#160;&#160;...<br /><br />Full name: System.Net.IPAddress<br /><br />--------------------<br />IPAddress(newAddress: int64) : unit<br />IPAddress(address: byte []) : unit<br />IPAddress(address: byte [], scopeid: int64) : unit</div>
+<div class="tip" id="fs33">IPAddress.Parse(ipString: string) : IPAddress</div>
+<div class="tip" id="fs34">val endpoint : IPEndPoint</div>
+<div class="tip" id="fs35">Multiple items<br />type IPEndPoint =<br />&#160;&#160;inherit EndPoint<br />&#160;&#160;new : address:int64 * port:int -&gt; IPEndPoint + 1 overload<br />&#160;&#160;member Address : IPAddress with get, set<br />&#160;&#160;member AddressFamily : AddressFamily<br />&#160;&#160;member Create : socketAddress:SocketAddress -&gt; EndPoint<br />&#160;&#160;member Equals : comparand:obj -&gt; bool<br />&#160;&#160;member GetHashCode : unit -&gt; int<br />&#160;&#160;member Port : int with get, set<br />&#160;&#160;member Serialize : unit -&gt; SocketAddress<br />&#160;&#160;member ToString : unit -&gt; string<br />&#160;&#160;static val MinPort : int<br />&#160;&#160;...<br /><br />Full name: System.Net.IPEndPoint<br /><br />--------------------<br />IPEndPoint(address: int64, port: int) : unit<br />IPEndPoint(address: IPAddress, port: int) : unit</div>
+<div class="tip" id="fs36">val getPeer : unit -&gt; IPEndPoint option<br /><br />Full name: Db.getPeer</div>
+<div class="tip" id="fs37">val peers : IPEndPoint list</div>
+<div class="tip" id="fs38">module Seq<br /><br />from Microsoft.FSharp.Collections</div>
+<div class="tip" id="fs39">val tryPick : chooser:(&#39;T -&gt; &#39;U option) -&gt; source:seq&lt;&#39;T&gt; -&gt; &#39;U option<br /><br />Full name: Microsoft.FSharp.Collections.Seq.tryPick</div>
+<div class="tip" id="fs40">union case Option.Some: Value: &#39;T -&gt; Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs41">val dropOldPeers : dts:&#39;a -&gt; unit<br /><br />Full name: Db.dropOldPeers</div>
+<div class="tip" id="fs42">val dts : &#39;a</div>
+<div class="tip" id="fs43">val resetState : unit -&gt; unit<br /><br />Full name: Db.resetState</div>
+<div class="tip" id="fs44">val updateState : peer:IPEndPoint * state:int -&gt; unit<br /><br />Full name: Db.updateState</div>
+<div class="tip" id="fs45">val peer : IPEndPoint</div>
+<div class="tip" id="fs46">val state : int</div>
+<div class="tip" id="fs47">Multiple items<br />val int : value:&#39;T -&gt; int (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.int<br /><br />--------------------<br />type int = int32<br /><br />Full name: Microsoft.FSharp.Core.int<br /><br />--------------------<br />type int&lt;&#39;Measure&gt; = int<br /><br />Full name: Microsoft.FSharp.Core.int&lt;_&gt;</div>
+<div class="tip" id="fs48">val query : obj</div>
+<div class="tip" id="fs49">property IPEndPoint.Address: IPAddress</div>
+<div class="tip" id="fs50">IPAddress.ToString() : string</div>
+<div class="tip" id="fs51">property IPEndPoint.Port: int</div>
+<div class="tip" id="fs52">val headerConnection : obj<br /><br />Full name: Db.headerConnection</div>
+<div class="tip" id="fs53">val command : obj<br /><br />Full name: Db.command</div>
+<div class="tip" id="fs54">field DbType.Binary = 1</div>
+<div class="tip" id="fs55">val readTip : unit -&gt; byte []<br /><br />Full name: Db.readTip</div>
+<div class="tip" id="fs56">Multiple items<br />val byte : value:&#39;T -&gt; byte (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.byte<br /><br />--------------------<br />type byte = Byte<br /><br />Full name: Microsoft.FSharp.Core.byte</div>
+<div class="tip" id="fs57">val tip : byte []</div>
+<div class="tip" id="fs58">type Array =<br />&#160;&#160;member Clone : unit -&gt; obj<br />&#160;&#160;member CopyTo : array:Array * index:int -&gt; unit + 1 overload<br />&#160;&#160;member GetEnumerator : unit -&gt; IEnumerator<br />&#160;&#160;member GetLength : dimension:int -&gt; int<br />&#160;&#160;member GetLongLength : dimension:int -&gt; int64<br />&#160;&#160;member GetLowerBound : dimension:int -&gt; int<br />&#160;&#160;member GetUpperBound : dimension:int -&gt; int<br />&#160;&#160;member GetValue : params indices:int[] -&gt; obj + 7 overloads<br />&#160;&#160;member Initialize : unit -&gt; unit<br />&#160;&#160;member IsFixedSize : bool<br />&#160;&#160;...<br /><br />Full name: System.Array</div>
+<div class="tip" id="fs59">val zeroCreate : count:int -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Array.zeroCreate</div>
+<div class="tip" id="fs60">Multiple items<br />type List&lt;&#39;T&gt; =<br />&#160;&#160;new : unit -&gt; List&lt;&#39;T&gt; + 2 overloads<br />&#160;&#160;member Add : item:&#39;T -&gt; unit<br />&#160;&#160;member AddRange : collection:IEnumerable&lt;&#39;T&gt; -&gt; unit<br />&#160;&#160;member AsReadOnly : unit -&gt; ReadOnlyCollection&lt;&#39;T&gt;<br />&#160;&#160;member BinarySearch : item:&#39;T -&gt; int + 2 overloads<br />&#160;&#160;member Capacity : int with get, set<br />&#160;&#160;member Clear : unit -&gt; unit<br />&#160;&#160;member Contains : item:&#39;T -&gt; bool<br />&#160;&#160;member ConvertAll&lt;&#39;TOutput&gt; : converter:Converter&lt;&#39;T, &#39;TOutput&gt; -&gt; List&lt;&#39;TOutput&gt;<br />&#160;&#160;member CopyTo : array:&#39;T[] -&gt; unit + 2 overloads<br />&#160;&#160;...<br />&#160;&#160;nested type Enumerator<br /><br />Full name: System.Collections.Generic.List&lt;_&gt;<br /><br />--------------------<br />List() : unit<br />List(capacity: int) : unit<br />List(collection: IEnumerable&lt;&#39;T&gt;) : unit</div>
+<div class="tip" id="fs61">val head : list:&#39;T list -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Collections.List.head</div>
+<div class="tip" id="fs62">val writeTip : tip:byte [] -&gt; unit<br /><br />Full name: Db.writeTip</div>
+<div class="tip" id="fs63">val getHeader : reader:&#39;a -&gt; &#39;b list<br /><br />Full name: Db.getHeader</div>
+<div class="tip" id="fs64">val reader : &#39;a</div>
+<div class="tip" id="fs65">val hash : obj []</div>
+<div class="tip" id="fs66">val height : obj</div>
+<div class="tip" id="fs67">val version : obj</div>
+<div class="tip" id="fs68">val prev_hash : obj []</div>
+<div class="tip" id="fs69">val merkle_root : obj []</div>
+<div class="tip" id="fs70">val ts : obj</div>
+<div class="tip" id="fs71">val bits : obj</div>
+<div class="tip" id="fs72">val nonce : obj</div>
+<div class="tip" id="fs73">val tx_count : obj</div>
+<div class="tip" id="fs74">val bh : &#39;b</div>
+<div class="tip" id="fs75">Multiple items<br />val uint32 : value:&#39;T -&gt; uint32 (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.uint32<br /><br />--------------------<br />type uint32 = UInt32<br /><br />Full name: Microsoft.FSharp.Core.uint32</div>
+<div class="tip" id="fs76">val readHeader : hash:byte [] -&gt; &#39;a<br /><br />Full name: Db.readHeader</div>
+<div class="tip" id="fs77">val hash : byte []</div>
+<div class="tip" id="fs78">val res : &#39;a list</div>
+<div class="tip" id="fs79">property List.Length: int</div>
+<div class="tip" id="fs80">val getNextHeader : hash:byte [] -&gt; &#39;a<br /><br />Full name: Db.getNextHeader</div>
+<div class="tip" id="fs81">val writeHeaders : header:&#39;a -&gt; unit<br /><br />Full name: Db.writeHeaders</div>
+<div class="tip" id="fs82">val header : &#39;a</div>
+<div class="tip" id="fs83">Multiple items<br />type Version =<br />&#160;&#160;new : unit -&gt; Version + 4 overloads<br />&#160;&#160;member Build : int<br />&#160;&#160;member Clone : unit -&gt; obj<br />&#160;&#160;member CompareTo : version:obj -&gt; int + 1 overload<br />&#160;&#160;member Equals : obj:obj -&gt; bool + 1 overload<br />&#160;&#160;member GetHashCode : unit -&gt; int<br />&#160;&#160;member Major : int<br />&#160;&#160;member MajorRevision : int16<br />&#160;&#160;member Minor : int<br />&#160;&#160;member MinorRevision : int16<br />&#160;&#160;...<br /><br />Full name: System.Version<br /><br />--------------------<br />Version() : unit<br />Version(version: string) : unit<br />Version(major: int, minor: int) : unit<br />Version(major: int, minor: int, build: int) : unit<br />Version(major: int, minor: int, build: int, revision: int) : unit</div>
+<div class="tip" id="fs84">type IUTXOAccessor =<br />&#160;&#160;interface<br />&#160;&#160;&#160;&#160;inherit IDisposable<br />&#160;&#160;&#160;&#160;abstract member AddUTXO : &#39;a0 * &#39;a1 -&gt; unit<br />&#160;&#160;&#160;&#160;abstract member DeleteUTXO : &#39;a0 -&gt; unit<br />&#160;&#160;&#160;&#160;abstract member GetCount : byte [] -&gt; int<br />&#160;&#160;&#160;&#160;abstract member GetUTXO : &#39;a0 -&gt; &#39;a1<br />&#160;&#160;end<br /><br />Full name: Db.IUTXOAccessor</div>
+<div class="tip" id="fs85">type IDisposable =<br />&#160;&#160;member Dispose : unit -&gt; unit<br /><br />Full name: System.IDisposable</div>
+<div class="tip" id="fs86">abstract member IUTXOAccessor.DeleteUTXO : &#39;a0 -&gt; unit<br /><br />Full name: Db.IUTXOAccessor.DeleteUTXO</div>
+<div class="tip" id="fs87">type unit = Unit<br /><br />Full name: Microsoft.FSharp.Core.unit</div>
+<div class="tip" id="fs88">abstract member IUTXOAccessor.AddUTXO : &#39;a0 * &#39;a1 -&gt; unit<br /><br />Full name: Db.IUTXOAccessor.AddUTXO</div>
+<div class="tip" id="fs89">abstract member IUTXOAccessor.GetUTXO : &#39;a0 -&gt; &#39;a1<br /><br />Full name: Db.IUTXOAccessor.GetUTXO</div>
+<div class="tip" id="fs90">module Option<br /><br />from Microsoft.FSharp.Core</div>
+<div class="tip" id="fs91">abstract member IUTXOAccessor.GetCount : byte [] -&gt; int<br /><br />Full name: Db.IUTXOAccessor.GetCount</div>
+<div class="tip" id="fs92">Multiple items<br />type LevelDBUTXOAccessor =<br />&#160;&#160;interface IUTXOAccessor<br />&#160;&#160;new : unit -&gt; LevelDBUTXOAccessor<br />&#160;&#160;new : db:obj -&gt; LevelDBUTXOAccessor<br />&#160;&#160;member Db : obj<br /><br />Full name: Db.LevelDBUTXOAccessor<br /><br />--------------------<br />new : unit -&gt; LevelDBUTXOAccessor<br />new : db:obj -&gt; LevelDBUTXOAccessor</div>
+<div class="tip" id="fs93">val db : obj</div>
+<div class="tip" id="fs94">val ro : obj</div>
+<div class="tip" id="fs95">val wo : obj</div>
+<div class="tip" id="fs96">val deleteUTXO : (&#39;a -&gt; &#39;b)</div>
+<div class="tip" id="fs97">val outpoint : &#39;a</div>
+<div class="tip" id="fs98">val k : obj</div>
+<div class="tip" id="fs99">val addUTXO : (&#39;a -&gt; &#39;b -&gt; &#39;c)</div>
+<div class="tip" id="fs100">val utxo : &#39;b</div>
+<div class="tip" id="fs101">val v : obj</div>
+<div class="tip" id="fs102">val getUTXO : (&#39;a -&gt; &#39;b option)</div>
+<div class="tip" id="fs103">union case Option.None: Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs104">val getCount : (byte [] -&gt; int)</div>
+<div class="tip" id="fs105">val txHash : byte []</div>
+<div class="tip" id="fs106">val cursor : obj</div>
+<div class="tip" id="fs107">val mutable count : int</div>
+<div class="tip" id="fs108">val getCountInner : (int -&gt; int)</div>
+<div class="tip" id="fs109">val count : int</div>
+<div class="tip" id="fs110">val k : byte []</div>
+<div class="tip" id="fs111">val take : count:int -&gt; array:&#39;T [] -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Array.take</div>
+<div class="tip" id="fs112">property Array.Length: int</div>
+<div class="tip" id="fs113">val options : obj</div>
+<div class="tip" id="fs114">val x : LevelDBUTXOAccessor</div>
+<div class="tip" id="fs115">override LevelDBUTXOAccessor.DeleteUTXO : outpoint:&#39;e -&gt; unit<br /><br />Full name: Db.LevelDBUTXOAccessor.DeleteUTXO</div>
+<div class="tip" id="fs116">val outpoint : &#39;e</div>
+<div class="tip" id="fs117">override LevelDBUTXOAccessor.AddUTXO : outpoint:&#39;c * txOut:&#39;d -&gt; unit<br /><br />Full name: Db.LevelDBUTXOAccessor.AddUTXO</div>
+<div class="tip" id="fs118">val outpoint : &#39;c</div>
+<div class="tip" id="fs119">val txOut : &#39;d</div>
+<div class="tip" id="fs120">override LevelDBUTXOAccessor.GetUTXO : outpoint:&#39;a -&gt; &#39;b<br /><br />Full name: Db.LevelDBUTXOAccessor.GetUTXO</div>
+<div class="tip" id="fs121">override LevelDBUTXOAccessor.GetCount : txHash:byte [] -&gt; int<br /><br />Full name: Db.LevelDBUTXOAccessor.GetCount</div>
+<div class="tip" id="fs122">override LevelDBUTXOAccessor.Dispose : unit -&gt; unit<br /><br />Full name: Db.LevelDBUTXOAccessor.Dispose</div>
+<div class="tip" id="fs123">val utxoAccessor : IUTXOAccessor<br /><br />Full name: Db.utxoAccessor</div>
+<div class="tip" id="fs124">type TxOperation =<br />&#160;&#160;| Add<br />&#160;&#160;| Delete<br /><br />Full name: Db.TxOperation</div>
+<div class="tip" id="fs125">union case TxOperation.Add: TxOperation</div>
+<div class="tip" id="fs126">union case TxOperation.Delete: TxOperation</div>
+<div class="tip" id="fs127">type IUTXOWriter =<br />&#160;&#160;interface<br />&#160;&#160;&#160;&#160;abstract member Write : TxOperation * &#39;a0 * &#39;a1 -&gt; unit<br />&#160;&#160;end<br /><br />Full name: Db.IUTXOWriter</div>
+<div class="tip" id="fs128">abstract member IUTXOWriter.Write : TxOperation * &#39;a0 * &#39;a1 -&gt; unit<br /><br />Full name: Db.IUTXOWriter.Write</div>
+<div class="tip" id="fs129">val checkMoney : v:int64 -&gt; int64 option<br /><br />Full name: Db.checkMoney</div>
+<div class="tip" id="fs130">val v : int64</div>
+<div class="tip" id="fs131">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; option:&#39;T option -&gt; &#39;U option<br /><br />Full name: Microsoft.FSharp.Core.Option.map</div>
+<div class="tip" id="fs132">val checkCoinbaseMaturity : utxo:&#39;a -&gt; height:int -&gt; &#39;a option<br /><br />Full name: Db.checkCoinbaseMaturity</div>
+<div class="tip" id="fs133">val utxo : &#39;a</div>
+<div class="tip" id="fs134">val height : int</div>
+<div class="tip" id="fs135">val OP_RETURN : byte<br /><br />Full name: Db.OP_RETURN</div>
+<div class="tip" id="fs136">val isRETURN : script:byte [] -&gt; bool<br /><br />Full name: Db.isRETURN</div>
+<div class="tip" id="fs137">val script : byte []</div>
+<div class="tip" id="fs138">val processUTXO : utxoAccessor:IUTXOAccessor -&gt; utxoWriter:IUTXOWriter -&gt; isCoinbase:bool -&gt; height:int -&gt; tx:&#39;a -&gt; &#39;b<br /><br />Full name: Db.processUTXO</div>
+<div class="tip" id="fs139">val utxoAccessor : IUTXOAccessor</div>
+<div class="tip" id="fs140">val utxoWriter : IUTXOWriter</div>
+<div class="tip" id="fs141">val isCoinbase : bool</div>
+<div class="tip" id="fs142">type bool = Boolean<br /><br />Full name: Microsoft.FSharp.Core.bool</div>
+<div class="tip" id="fs143">val tx : &#39;a</div>
+<div class="tip" id="fs144">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;U&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.map</div>
+<div class="tip" id="fs145">val not : value:bool -&gt; bool<br /><br />Full name: Microsoft.FSharp.Core.Operators.not</div>
+<div class="tip" id="fs146">abstract member IUTXOAccessor.GetUTXO : &#39;a0 -&gt; &#39;a1</div>
+<div class="tip" id="fs147">abstract member IUTXOAccessor.DeleteUTXO : &#39;a0 -&gt; unit</div>
+<div class="tip" id="fs148">abstract member IUTXOWriter.Write : TxOperation * &#39;a0 * &#39;a1 -&gt; unit</div>
+<div class="tip" id="fs149">val bind : binder:(&#39;T -&gt; &#39;U option) -&gt; option:&#39;T option -&gt; &#39;U option<br /><br />Full name: Microsoft.FSharp.Core.Option.bind</div>
+<div class="tip" id="fs150">val toList : source:seq&lt;&#39;T&gt; -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.Seq.toList</div>
+<div class="tip" id="fs151">val sum : source:seq&lt;&#39;T&gt; -&gt; &#39;T (requires member ( + ) and member get_Zero)<br /><br />Full name: Microsoft.FSharp.Collections.Seq.sum</div>
+<div class="tip" id="fs152">val mapi : mapping:(int -&gt; &#39;T -&gt; &#39;U) -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;U&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.mapi</div>
+<div class="tip" id="fs153">abstract member IUTXOAccessor.AddUTXO : &#39;a0 * &#39;a1 -&gt; unit</div>
+<div class="tip" id="fs154">val blocksBaseDir : string<br /><br />Full name: Db.blocksBaseDir</div>
+<div class="tip" id="fs155">val getBlockDir : bh:&#39;a -&gt; string<br /><br />Full name: Db.getBlockDir</div>
+<div class="tip" id="fs156">val bh : &#39;a</div>
+<div class="tip" id="fs157">val path : string</div>
+<div class="tip" id="fs158">type Directory =<br />&#160;&#160;static member CreateDirectory : path:string -&gt; DirectoryInfo + 1 overload<br />&#160;&#160;static member Delete : path:string -&gt; unit + 1 overload<br />&#160;&#160;static member EnumerateDirectories : path:string -&gt; IEnumerable&lt;string&gt; + 2 overloads<br />&#160;&#160;static member EnumerateFileSystemEntries : path:string -&gt; IEnumerable&lt;string&gt; + 2 overloads<br />&#160;&#160;static member EnumerateFiles : path:string -&gt; IEnumerable&lt;string&gt; + 2 overloads<br />&#160;&#160;static member Exists : path:string -&gt; bool<br />&#160;&#160;static member GetAccessControl : path:string -&gt; DirectorySecurity + 1 overload<br />&#160;&#160;static member GetCreationTime : path:string -&gt; DateTime<br />&#160;&#160;static member GetCreationTimeUtc : path:string -&gt; DateTime<br />&#160;&#160;static member GetCurrentDirectory : unit -&gt; string<br />&#160;&#160;...<br /><br />Full name: System.IO.Directory</div>
+<div class="tip" id="fs159">Directory.CreateDirectory(path: string) : DirectoryInfo<br />Directory.CreateDirectory(path: string, directorySecurity: Security.AccessControl.DirectorySecurity) : DirectoryInfo</div>
+<div class="tip" id="fs160">val hasBlock : bh:&#39;a -&gt; bool<br /><br />Full name: Db.hasBlock</div>
+<div class="tip" id="fs161">type File =<br />&#160;&#160;static member AppendAllLines : path:string * contents:IEnumerable&lt;string&gt; -&gt; unit + 1 overload<br />&#160;&#160;static member AppendAllText : path:string * contents:string -&gt; unit + 1 overload<br />&#160;&#160;static member AppendText : path:string -&gt; StreamWriter<br />&#160;&#160;static member Copy : sourceFileName:string * destFileName:string -&gt; unit + 1 overload<br />&#160;&#160;static member Create : path:string -&gt; FileStream + 3 overloads<br />&#160;&#160;static member CreateText : path:string -&gt; StreamWriter<br />&#160;&#160;static member Decrypt : path:string -&gt; unit<br />&#160;&#160;static member Delete : path:string -&gt; unit<br />&#160;&#160;static member Encrypt : path:string -&gt; unit<br />&#160;&#160;static member Exists : path:string -&gt; bool<br />&#160;&#160;...<br /><br />Full name: System.IO.File</div>
+<div class="tip" id="fs162">File.Exists(path: string) : bool</div>
+<div class="tip" id="fs163">val storeBlock : b:&#39;a -&gt; p:byte [] -&gt; unit<br /><br />Full name: Db.storeBlock</div>
+<div class="tip" id="fs164">val b : &#39;a</div>
+<div class="tip" id="fs165">val p : byte []</div>
+<div class="tip" id="fs166">val fs : FileStream</div>
+<div class="tip" id="fs167">Multiple items<br />type FileStream =<br />&#160;&#160;inherit Stream<br />&#160;&#160;new : path:string * mode:FileMode -&gt; FileStream + 14 overloads<br />&#160;&#160;member BeginRead : array:byte[] * offset:int * numBytes:int * userCallback:AsyncCallback * stateObject:obj -&gt; IAsyncResult<br />&#160;&#160;member BeginWrite : array:byte[] * offset:int * numBytes:int * userCallback:AsyncCallback * stateObject:obj -&gt; IAsyncResult<br />&#160;&#160;member CanRead : bool<br />&#160;&#160;member CanSeek : bool<br />&#160;&#160;member CanWrite : bool<br />&#160;&#160;member EndRead : asyncResult:IAsyncResult -&gt; int<br />&#160;&#160;member EndWrite : asyncResult:IAsyncResult -&gt; unit<br />&#160;&#160;member Flush : unit -&gt; unit + 1 overload<br />&#160;&#160;member GetAccessControl : unit -&gt; FileSecurity<br />&#160;&#160;...<br /><br />Full name: System.IO.FileStream<br /><br />--------------------<br />FileStream(path: string, mode: FileMode) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />FileStream(handle: Microsoft.Win32.SafeHandles.SafeFileHandle, access: FileAccess) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />FileStream(path: string, mode: FileMode, access: FileAccess) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />FileStream(handle: Microsoft.Win32.SafeHandles.SafeFileHandle, access: FileAccess, bufferSize: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />FileStream(path: string, mode: FileMode, access: FileAccess, share: FileShare) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />FileStream(handle: Microsoft.Win32.SafeHandles.SafeFileHandle, access: FileAccess, bufferSize: int, isAsync: bool) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />FileStream(path: string, mode: FileMode, access: FileAccess, share: FileShare, bufferSize: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />FileStream(path: string, mode: FileMode, access: FileAccess, share: FileShare, bufferSize: int, options: FileOptions) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />FileStream(path: string, mode: FileMode, access: FileAccess, share: FileShare, bufferSize: int, useAsync: bool) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />FileStream(path: string, mode: FileMode, rights: Security.AccessControl.FileSystemRights, share: FileShare, bufferSize: int, options: FileOptions) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em></div>
+<div class="tip" id="fs168">type FileMode =<br />&#160;&#160;| CreateNew = 1<br />&#160;&#160;| Create = 2<br />&#160;&#160;| Open = 3<br />&#160;&#160;| OpenOrCreate = 4<br />&#160;&#160;| Truncate = 5<br />&#160;&#160;| Append = 6<br /><br />Full name: System.IO.FileMode</div>
+<div class="tip" id="fs169">field FileMode.Create = 2</div>
+<div class="tip" id="fs170">val writer : BinaryWriter</div>
+<div class="tip" id="fs171">Multiple items<br />type BinaryWriter =<br />&#160;&#160;new : output:Stream -&gt; BinaryWriter + 1 overload<br />&#160;&#160;member BaseStream : Stream<br />&#160;&#160;member Close : unit -&gt; unit<br />&#160;&#160;member Dispose : unit -&gt; unit<br />&#160;&#160;member Flush : unit -&gt; unit<br />&#160;&#160;member Seek : offset:int * origin:SeekOrigin -&gt; int64<br />&#160;&#160;member Write : value:bool -&gt; unit + 17 overloads<br />&#160;&#160;static val Null : BinaryWriter<br /><br />Full name: System.IO.BinaryWriter<br /><br />--------------------<br />BinaryWriter(output: Stream) : unit<br />BinaryWriter(output: Stream, encoding: Text.Encoding) : unit</div>
+<div class="tip" id="fs172">BinaryWriter.Write(value: string) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: float32) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: uint64) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: int64) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: uint32) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: uint16) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: int16) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: decimal) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: float) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em></div>
+<div class="tip" id="fs173">val deleteBlock : bh:&#39;a -&gt; unit<br /><br />Full name: Db.deleteBlock</div>
+<div class="tip" id="fs174">File.Delete(path: string) : unit</div>
+<div class="tip" id="fs175">Multiple items<br />type UndoWriter =<br />&#160;&#160;interface IUTXOWriter<br />&#160;&#160;interface IDisposable<br />&#160;&#160;new : fs:FileStream -&gt; UndoWriter<br /><br />Full name: Db.UndoWriter<br /><br />--------------------<br />new : fs:FileStream -&gt; UndoWriter</div>
+<div class="tip" id="fs176">val x : UndoWriter</div>
+<div class="tip" id="fs177">override UndoWriter.Dispose : unit -&gt; unit<br /><br />Full name: Db.UndoWriter.Dispose</div>
+<div class="tip" id="fs178">BinaryWriter.Close() : unit</div>
+<div class="tip" id="fs179">Stream.Close() : unit</div>
+<div class="tip" id="fs180">override UndoWriter.Write : txOp:TxOperation * outpoint:&#39;a * utxo:&#39;b -&gt; unit<br /><br />Full name: Db.UndoWriter.Write</div>
+<div class="tip" id="fs181">val txOp : TxOperation</div>
+<div class="tip" id="fs182">val storeUndoBlock : b:&#39;a -&gt; UndoWriter<br /><br />Full name: Db.storeUndoBlock</div>
+<div class="tip" id="fs183">val loadBlock : bh:&#39;a -&gt; &#39;b<br /><br />Full name: Db.loadBlock</div>
+<div class="tip" id="fs184">field FileMode.Open = 3</div>
+<div class="tip" id="fs185">val reader : BinaryReader</div>
+<div class="tip" id="fs186">Multiple items<br />type BinaryReader =<br />&#160;&#160;new : input:Stream -&gt; BinaryReader + 1 overload<br />&#160;&#160;member BaseStream : Stream<br />&#160;&#160;member Close : unit -&gt; unit<br />&#160;&#160;member Dispose : unit -&gt; unit<br />&#160;&#160;member PeekChar : unit -&gt; int<br />&#160;&#160;member Read : unit -&gt; int + 2 overloads<br />&#160;&#160;member ReadBoolean : unit -&gt; bool<br />&#160;&#160;member ReadByte : unit -&gt; byte<br />&#160;&#160;member ReadBytes : count:int -&gt; byte[]<br />&#160;&#160;member ReadChar : unit -&gt; char<br />&#160;&#160;...<br /><br />Full name: System.IO.BinaryReader<br /><br />--------------------<br />BinaryReader(input: Stream) : unit<br />BinaryReader(input: Stream, encoding: Text.Encoding) : unit</div>
+<div class="tip" id="fs187">val block : &#39;b</div>
+<div class="tip" id="fs188">val undoBlock : utxoAccessor:IUTXOAccessor -&gt; bh:&#39;a -&gt; &#39;b<br /><br />Full name: Db.undoBlock</div>
+<div class="tip" id="fs189">val fsUndo : FileStream</div>
+<div class="tip" id="fs190">val fops : List&lt;(unit -&gt; unit)&gt;</div>
+<div class="tip" id="fs191">property FileStream.Position: int64</div>
+<div class="tip" id="fs192">property FileStream.Length: int64</div>
+<div class="tip" id="fs193">val op : byte</div>
+<div class="tip" id="fs194">BinaryReader.ReadByte() : byte</div>
+<div class="tip" id="fs195">val outpoint : obj</div>
+<div class="tip" id="fs196">val utxo : obj</div>
+<div class="tip" id="fs197">val fop : (unit -&gt; unit)</div>
+<div class="tip" id="fs198">List.Add(item: unit -&gt; unit) : unit</div>
+<div class="tip" id="fs199">val rev : list:&#39;T list -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.List.rev</div>
+<div class="tip" id="fs200">val iter : action:(&#39;T -&gt; unit) -&gt; list:&#39;T list -&gt; unit<br /><br />Full name: Microsoft.FSharp.Collections.List.iter</div>
+<div class="tip" id="fs201">val block : obj</div>
+          
+        </div>
+        <div class="span1"></div>
+      </div>
+    </div>
+  </body>
+</html>

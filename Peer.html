@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <!-- 
+      The Peers
+ parameters will be replaced with the 
+      document title extracted from the <h1> element or
+      file name, if there is no <h1> heading
+    -->
+    <title>Peers
+</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="http://code.jquery.com/jquery-1.8.0.js"></script>
+    <script src="http://code.jquery.com/ui/1.8.23/jquery-ui.js"></script>
+    <script src="http://netdna.bootstrapcdn.com/twitter-bootstrap/3.3.2/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link href="http://getbootstrap.com/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="content/style.css" />
+    <script src="content/tips.js" type="text/javascript"></script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="index.html">Bitcoin F#</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li><a href="index.html">Intro</a></li>
+            <li><a href="Protocol.html">Protocol</a></li>
+            <li><a href="DB.html">Persistence</a></li>
+            <li><a href="P2P.html">Peer to Peer</a></li>
+            <li><a href="Peer.html">Peer</a></li>
+            <li><a href="Tracker.html">Tracker</a></li>
+            <li><a href="Script.html">Script Interpreter</a></li>
+            <li><a href="Mempool.html">Mempool</a></li>
+            <li><a href="Checks.html">Validation</a></li>
+            <li><a href="Blockchain.html">Blockchain</a></li>
+            <li><a href="Main.html">Main</a></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </nav>
+    <div class="container">
+      <div class="row" style="margin-top:70px">
+        <div class="span1"></div>
+        <div class="span10" id="main">
+          <h1>Peers</h1>
+
+<p>This is the first of the tree modules that form the Peer-to-peer layer. It is also the lowest, i.e. the closest to
+the network layer and the farthest from the business logic.</p>
+
+<p>A peer is our side of the communication channel with a remote node of the Bitcoin network. It is responsible for
+handling the encoding/decoding and the transmission of messages with a single remote node. A peer is constructed 
+with a unique id and bound to single node. If the other side is not responsive or disconnects, the peer gets evicted.
+The tracker Tom fires Peter. Even if Peter comes back with a response later, Tom will disregard it.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">module</span> <span onmouseout="hideTip(event, 'fs1', 1)" onmouseover="showTip(event, 'fs1', 1)" class="i">Peer</span></pre>
+</td>
+</tr>
+</table>
+
+<h2>The state machines</h2>
+
+<p>A Peer goes through several steps as indicated by <code>PeerState</code>. <code>Closed</code> is its initial and final state.
+<code>Connected</code> means that it has connected to a remote node but hasn't gone through the handshake (where nodes exchange
+version information). A Peer is <code>Ready</code> when it can accept a command from Tom because it is not working already. Peers only
+work on one thing at a time and when they work they switch to <code>Busy</code>.
+<img src="uml/peer-state.png" alt="peer-states" /></p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs14', 27)" onmouseover="showTip(event, 'fs14', 27)" class="i">PeerState</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs15', 28)" onmouseover="showTip(event, 'fs15', 28)" class="i">Connected</span> | <span onmouseout="hideTip(event, 'fs16', 29)" onmouseover="showTip(event, 'fs16', 29)" class="i">Ready</span> | <span onmouseout="hideTip(event, 'fs17', 30)" onmouseover="showTip(event, 'fs17', 30)" class="i">Busy</span> | <span onmouseout="hideTip(event, 'fs18', 31)" onmouseover="showTip(event, 'fs18', 31)" class="i">Closed</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Tom keeps track of the peers as well but its view is somewhat different. It doesn't care about the details of the inner workings
+of Peter, whether he has shaken hands or not. For Tom, a peer is <code>Allocated</code> when he has hired him, <code>Ready</code> or <code>Busy</code> for the same
+reasons and <code>Free</code> when Tom has decided that he no longer needs Peter's services.</p>
+
+<p><img src="uml/tracker-peer-state.png" alt="tracker-peer-states" /></p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs19', 32)" onmouseover="showTip(event, 'fs19', 32)" class="i">TrackerPeerState</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs20', 33)" onmouseover="showTip(event, 'fs20', 33)" class="i">Allocated</span> | <span onmouseout="hideTip(event, 'fs21', 34)" onmouseover="showTip(event, 'fs21', 34)" class="i">Ready</span> | <span onmouseout="hideTip(event, 'fs22', 35)" onmouseover="showTip(event, 'fs22', 35)" class="i">Busy</span> |  <span onmouseout="hideTip(event, 'fs23', 36)" onmouseover="showTip(event, 'fs23', 36)" class="i">Free</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Busy/Ready states control the allocation of resources. Tom does not know exactly how much work is done by Peter. Neither does he know
+the nature of the work. It is controlled by whoever requested the work. Tom's responsibility is limited to finding a peer for Bob after that
+Peter and Bob talk directly. The Busy and Ready state are present in both Tom and Peter. Because they are different actors, there is no guarantee
+that these states will be synchronized. If Tom marks Peter as busy and then sends a message to Peter, Peter is not yet busy since he hasn't 
+received the message yet. It is normal but when Peter finishes his work and becomes available again, the reverse must happen. He must set his
+state to ready before he notifies Tom otherwise Tom could send him work before he becomes ready. Essentially, because work comes from Tom, it is ok
+if Tom thinks that Peter is busy when he is not, but it is bad if Tom thinks Peter is available when he is not.</p>
+
+<p><img src="uml/tracker-peer-seq.png" alt="tracker-peer-seq" /></p>
+
+<p>A holder for the incoming and outgoing channels from and to the remote node</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs27', 41)" onmouseover="showTip(event, 'fs27', 41)" class="i">PeerQueues</span>(<span onmouseout="hideTip(event, 'fs28', 42)" onmouseover="showTip(event, 'fs28', 42)" class="i">stream</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs29', 43)" onmouseover="showTip(event, 'fs29', 43)" class="i">NetworkStream</span>) <span class="o">=</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs30', 44)" onmouseover="showTip(event, 'fs30', 44)" class="i">fromPeer</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Subject</span><span class="o">&lt;</span><span class="i">BitcoinMessage</span><span class="o">&gt;</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs31', 45)" onmouseover="showTip(event, 'fs31', 45)" class="i">toPeer</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Subject</span><span class="o">&lt;</span><span class="i">BitcoinMessage</span><span class="o">&gt;</span>()
+
+    <span class="k">interface</span> <span onmouseout="hideTip(event, 'fs32', 46)" onmouseover="showTip(event, 'fs32', 46)" class="i">IDisposable</span> <span class="k">with</span>
+        <span class="k">override</span> <span onmouseout="hideTip(event, 'fs33', 47)" onmouseover="showTip(event, 'fs33', 47)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs34', 48)" onmouseover="showTip(event, 'fs34', 48)" class="i">Dispose</span>() <span class="o">=</span> 
+            <span onmouseout="hideTip(event, 'fs30', 49)" onmouseover="showTip(event, 'fs30', 49)" class="i">fromPeer</span><span class="o">.</span><span class="i">Dispose</span>()
+            <span onmouseout="hideTip(event, 'fs31', 50)" onmouseover="showTip(event, 'fs31', 50)" class="i">toPeer</span><span class="o">.</span><span class="i">Dispose</span>()
+            <span onmouseout="hideTip(event, 'fs28', 51)" onmouseover="showTip(event, 'fs28', 51)" class="i">stream</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs35', 52)" onmouseover="showTip(event, 'fs35', 52)" class="i">Close</span>()
+
+    <span class="k">member</span> <span onmouseout="hideTip(event, 'fs33', 53)" onmouseover="showTip(event, 'fs33', 53)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs36', 54)" onmouseover="showTip(event, 'fs36', 54)" class="i">From</span> <span class="k">with</span> <span class="i">get</span>() <span class="o">=</span> <span onmouseout="hideTip(event, 'fs30', 55)" onmouseover="showTip(event, 'fs30', 55)" class="i">fromPeer</span>
+    <span class="k">member</span> <span onmouseout="hideTip(event, 'fs33', 56)" onmouseover="showTip(event, 'fs33', 56)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs37', 57)" onmouseover="showTip(event, 'fs37', 57)" class="i">To</span> <span class="k">with</span> <span class="i">get</span>() <span class="o">=</span> <span onmouseout="hideTip(event, 'fs31', 58)" onmouseover="showTip(event, 'fs31', 58)" class="i">toPeer</span>
+
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs38', 59)" onmouseover="showTip(event, 'fs38', 59)" class="i">IPeer</span> <span class="o">=</span>
+    <span class="k">abstract</span> <span onmouseout="hideTip(event, 'fs39', 60)" onmouseover="showTip(event, 'fs39', 60)" class="i">Id</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs40', 61)" onmouseover="showTip(event, 'fs40', 61)" class="i">int</span> <span class="c">// the unique peer id</span>
+    <span class="k">abstract</span> <span onmouseout="hideTip(event, 'fs41', 62)" onmouseover="showTip(event, 'fs41', 62)" class="i">Ready</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs42', 63)" onmouseover="showTip(event, 'fs42', 63)" class="i">unit</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs42', 64)" onmouseover="showTip(event, 'fs42', 64)" class="i">unit</span> <span class="c">// call this to mark this peer ready. Used by Bob</span>
+    <span class="k">abstract</span> <span onmouseout="hideTip(event, 'fs43', 65)" onmouseover="showTip(event, 'fs43', 65)" class="i">Bad</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs42', 66)" onmouseover="showTip(event, 'fs42', 66)" class="i">unit</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs42', 67)" onmouseover="showTip(event, 'fs42', 67)" class="i">unit</span> <span class="c">// this peer behaved badly</span>
+    <span class="k">abstract</span> <span onmouseout="hideTip(event, 'fs44', 68)" onmouseover="showTip(event, 'fs44', 68)" class="i">Target</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs45', 69)" onmouseover="showTip(event, 'fs45', 69)" class="i">IPEndPoint</span> <span class="c">// the address of the remote node</span></pre>
+</td>
+</tr>
+</table>
+
+<h2>Commands</h2>
+
+<p>The communication queues have to be set up before they are used and their types must be provided.
+Because F# does not have forward declarations all the commands are listed here even if they are used only later.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="c">// Commands that the Peer can receive</span>
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs46', 70)" onmouseover="showTip(event, 'fs46', 70)" class="i">PeerCommand</span> <span class="o">=</span> 
+    | <span onmouseout="hideTip(event, 'fs47', 71)" onmouseover="showTip(event, 'fs47', 71)" class="i">Open</span> <span class="k">of</span> <span class="i">target</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs45', 72)" onmouseover="showTip(event, 'fs45', 72)" class="i">IPEndPoint</span> <span class="o">*</span> <span class="i">tip</span><span class="o">:</span> <span class="i">BlockHeader</span>
+    | <span onmouseout="hideTip(event, 'fs48', 73)" onmouseover="showTip(event, 'fs48', 73)" class="i">OpenStream</span> <span class="k">of</span> <span class="i">stream</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs29', 74)" onmouseover="showTip(event, 'fs29', 74)" class="i">NetworkStream</span> <span class="o">*</span> <span class="i">remote</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs45', 75)" onmouseover="showTip(event, 'fs45', 75)" class="i">IPEndPoint</span> <span class="o">*</span> <span class="i">tip</span><span class="o">:</span> <span class="i">BlockHeader</span>
+    | <span onmouseout="hideTip(event, 'fs49', 76)" onmouseover="showTip(event, 'fs49', 76)" class="i">Handshaked</span>
+    | <span onmouseout="hideTip(event, 'fs50', 77)" onmouseover="showTip(event, 'fs50', 77)" class="i">Execute</span> <span class="k">of</span> <span class="i">message</span><span class="o">:</span> <span class="i">BitcoinMessage</span>
+    | <span onmouseout="hideTip(event, 'fs51', 78)" onmouseover="showTip(event, 'fs51', 78)" class="i">GetHeaders</span> <span class="k">of</span> <span class="i">gh</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs51', 79)" onmouseover="showTip(event, 'fs51', 79)" class="i">GetHeaders</span> <span class="o">*</span> <span class="i">task</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs52', 80)" onmouseover="showTip(event, 'fs52', 80)" class="i">TaskCompletionSource</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs53', 81)" onmouseover="showTip(event, 'fs53', 81)" class="i">IObservable</span><span class="o">&lt;</span><span class="i">Headers</span><span class="o">&gt;</span><span class="o">&gt;</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs38', 82)" onmouseover="showTip(event, 'fs38', 82)" class="i">IPeer</span>
+    | <span onmouseout="hideTip(event, 'fs54', 83)" onmouseover="showTip(event, 'fs54', 83)" class="i">GetBlocks</span> <span class="k">of</span> <span class="i">gd</span><span class="o">:</span> <span class="i">GetData</span> <span class="o">*</span> <span class="i">task</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs52', 84)" onmouseover="showTip(event, 'fs52', 84)" class="i">TaskCompletionSource</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs38', 85)" onmouseover="showTip(event, 'fs38', 85)" class="i">IPeer</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs53', 86)" onmouseover="showTip(event, 'fs53', 86)" class="i">IObservable</span><span class="o">&lt;</span><span class="i">Block</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs55', 87)" onmouseover="showTip(event, 'fs55', 87)" class="i">byte</span>[]<span class="o">&gt;</span><span class="o">&gt;</span>
+    | <span onmouseout="hideTip(event, 'fs56', 88)" onmouseover="showTip(event, 'fs56', 88)" class="i">GetData</span> <span class="k">of</span> <span class="i">gd</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs56', 89)" onmouseover="showTip(event, 'fs56', 89)" class="i">GetData</span>
+    | <span onmouseout="hideTip(event, 'fs57', 90)" onmouseover="showTip(event, 'fs57', 90)" class="i">SetReady</span>
+    | <span onmouseout="hideTip(event, 'fs58', 91)" onmouseover="showTip(event, 'fs58', 91)" class="i">Close</span>
+    | <span onmouseout="hideTip(event, 'fs59', 92)" onmouseover="showTip(event, 'fs59', 92)" class="i">Closed</span>
+    | <span onmouseout="hideTip(event, 'fs60', 93)" onmouseover="showTip(event, 'fs60', 93)" class="i">UpdateScore</span> <span class="k">of</span> <span class="i">score</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs40', 94)" onmouseover="showTip(event, 'fs40', 94)" class="i">int</span>
+
+<span class="c">// Commands that the Tracker (Tom) can receive</span>
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs61', 95)" onmouseover="showTip(event, 'fs61', 95)" class="i">TrackerCommand</span> <span class="o">=</span> 
+    | <span onmouseout="hideTip(event, 'fs62', 96)" onmouseover="showTip(event, 'fs62', 96)" class="i">GetPeers</span>
+    | <span onmouseout="hideTip(event, 'fs63', 97)" onmouseover="showTip(event, 'fs63', 97)" class="i">Connect</span> <span class="k">of</span> <span class="i">target</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs45', 98)" onmouseover="showTip(event, 'fs45', 98)" class="i">IPEndPoint</span>
+    | <span onmouseout="hideTip(event, 'fs64', 99)" onmouseover="showTip(event, 'fs64', 99)" class="i">IncomingConnection</span> <span class="k">of</span> <span class="i">stream</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs29', 100)" onmouseover="showTip(event, 'fs29', 100)" class="i">NetworkStream</span> <span class="o">*</span> <span class="i">target</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs45', 101)" onmouseover="showTip(event, 'fs45', 101)" class="i">IPEndPoint</span>
+    | <span onmouseout="hideTip(event, 'fs65', 102)" onmouseover="showTip(event, 'fs65', 102)" class="i">SetReady</span> <span class="k">of</span> <span onmouseout="hideTip(event, 'fs66', 103)" onmouseover="showTip(event, 'fs66', 103)" class="i">id</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs40', 104)" onmouseover="showTip(event, 'fs40', 104)" class="i">int</span>
+    | <span onmouseout="hideTip(event, 'fs67', 105)" onmouseover="showTip(event, 'fs67', 105)" class="i">Close</span> <span class="k">of</span> <span onmouseout="hideTip(event, 'fs40', 106)" onmouseover="showTip(event, 'fs40', 106)" class="i">int</span>
+    | <span onmouseout="hideTip(event, 'fs68', 107)" onmouseover="showTip(event, 'fs68', 107)" class="i">BitcoinMessage</span> <span class="k">of</span> <span class="i">message</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs68', 108)" onmouseover="showTip(event, 'fs68', 108)" class="i">BitcoinMessage</span>
+    | <span onmouseout="hideTip(event, 'fs69', 109)" onmouseover="showTip(event, 'fs69', 109)" class="i">Command</span> <span class="k">of</span> <span class="i">command</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs46', 110)" onmouseover="showTip(event, 'fs46', 110)" class="i">PeerCommand</span>
+    | <span onmouseout="hideTip(event, 'fs70', 111)" onmouseover="showTip(event, 'fs70', 111)" class="i">SetTip</span> <span class="k">of</span> <span class="i">tip</span><span class="o">:</span> <span class="i">BlockHeader</span>
+
+<span class="c">// Commands for Bob</span>
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs71', 112)" onmouseover="showTip(event, 'fs71', 112)" class="i">BlockchainCommand</span> <span class="o">=</span>
+    | <span onmouseout="hideTip(event, 'fs72', 113)" onmouseover="showTip(event, 'fs72', 113)" class="i">GetBlock</span> <span class="k">of</span> <span class="i">InvEntry</span> <span onmouseout="hideTip(event, 'fs73', 114)" onmouseover="showTip(event, 'fs73', 114)" class="i">list</span> <span class="o">*</span> <span class="i">Subject</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs68', 115)" onmouseover="showTip(event, 'fs68', 115)" class="i">BitcoinMessage</span><span class="o">&gt;</span>
+    | <span onmouseout="hideTip(event, 'fs74', 116)" onmouseover="showTip(event, 'fs74', 116)" class="i">GetHeaders</span> <span class="k">of</span> <span onmouseout="hideTip(event, 'fs74', 117)" onmouseover="showTip(event, 'fs74', 117)" class="i">GetHeaders</span> <span class="o">*</span> <span class="i">Subject</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs68', 118)" onmouseover="showTip(event, 'fs68', 118)" class="i">BitcoinMessage</span><span class="o">&gt;</span>
+    | <span onmouseout="hideTip(event, 'fs75', 119)" onmouseover="showTip(event, 'fs75', 119)" class="i">Catchup</span> <span class="k">of</span> <span onmouseout="hideTip(event, 'fs38', 120)" onmouseover="showTip(event, 'fs38', 120)" class="i">IPeer</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs55', 121)" onmouseover="showTip(event, 'fs55', 121)" class="i">byte</span>[]
+    | <span onmouseout="hideTip(event, 'fs76', 122)" onmouseover="showTip(event, 'fs76', 122)" class="i">Ping</span> <span class="k">of</span> <span onmouseout="hideTip(event, 'fs76', 123)" onmouseover="showTip(event, 'fs76', 123)" class="i">Ping</span> <span class="o">*</span> <span class="i">Subject</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs68', 124)" onmouseover="showTip(event, 'fs68', 124)" class="i">BitcoinMessage</span><span class="o">&gt;</span>
+
+<span class="c">// Commands for the memory pool - the transactions that haven&#39;t been confirmed yet</span>
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs77', 125)" onmouseover="showTip(event, 'fs77', 125)" class="i">MempoolCommand</span> <span class="o">=</span>
+    | <span onmouseout="hideTip(event, 'fs78', 126)" onmouseover="showTip(event, 'fs78', 126)" class="i">Revalidate</span> <span class="k">of</span> <span onmouseout="hideTip(event, 'fs40', 127)" onmouseover="showTip(event, 'fs40', 127)" class="i">int</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs79', 128)" onmouseover="showTip(event, 'fs79', 128)" class="i">seq</span><span class="o">&lt;</span><span class="i">Tx</span>[]<span class="o">&gt;</span>
+    | <span onmouseout="hideTip(event, 'fs80', 129)" onmouseover="showTip(event, 'fs80', 129)" class="i">Tx</span> <span class="k">of</span> <span onmouseout="hideTip(event, 'fs80', 130)" onmouseover="showTip(event, 'fs80', 130)" class="i">Tx</span>
+    | <span onmouseout="hideTip(event, 'fs81', 131)" onmouseover="showTip(event, 'fs81', 131)" class="i">Inv</span> <span class="k">of</span> <span class="i">InvVector</span> <span class="o">*</span> <span class="i">Subject</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs46', 132)" onmouseover="showTip(event, 'fs46', 132)" class="i">PeerCommand</span><span class="o">&gt;</span>
+    | <span onmouseout="hideTip(event, 'fs82', 133)" onmouseover="showTip(event, 'fs82', 133)" class="i">GetTx</span> <span class="k">of</span> <span class="i">InvEntry</span> <span onmouseout="hideTip(event, 'fs73', 134)" onmouseover="showTip(event, 'fs73', 134)" class="i">list</span> <span class="o">*</span> <span class="i">Subject</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs68', 135)" onmouseover="showTip(event, 'fs68', 135)" class="i">BitcoinMessage</span><span class="o">&gt;</span>
+    | <span onmouseout="hideTip(event, 'fs83', 136)" onmouseover="showTip(event, 'fs83', 136)" class="i">Mempool</span> <span class="k">of</span> <span class="i">Subject</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs68', 137)" onmouseover="showTip(event, 'fs68', 137)" class="i">BitcoinMessage</span><span class="o">&gt;</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Finally the queues themselves</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs84', 138)" onmouseover="showTip(event, 'fs84', 138)" class="i">blockchainIncoming</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Subject</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs71', 139)" onmouseover="showTip(event, 'fs71', 139)" class="i">BlockchainCommand</span><span class="o">&gt;</span>()
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs85', 140)" onmouseover="showTip(event, 'fs85', 140)" class="i">trackerIncoming</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Subject</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs61', 141)" onmouseover="showTip(event, 'fs61', 141)" class="i">TrackerCommand</span><span class="o">&gt;</span>()
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs86', 142)" onmouseover="showTip(event, 'fs86', 142)" class="i">mempoolIncoming</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Subject</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs77', 143)" onmouseover="showTip(event, 'fs77', 143)" class="i">MempoolCommand</span><span class="o">&gt;</span>()</pre>
+</td>
+</tr>
+</table>
+
+<h2>The Peer implementation</h2>
+
+<h3>The peer's internal state</h3>
+
+<p>The peer changes its command handler as it changes state. Though a common pattern in actor frameworks, I have
+to emulate it because RX is not an actor framework. When an actor receives a message, a handler processes it and modifies
+the actor's internal state. Optionally, the handler can change for the subsequent messages.</p>
+
+<p>In the case of the peer, the command handler changes between the setup phase and the running phase, and once again during
+the running phase and the teardown phase. During the first and final phases, the peer will not process user requests.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs87', 144)" onmouseover="showTip(event, 'fs87', 144)" class="i">PeerData</span> <span class="o">=</span> {
+    <span onmouseout="hideTip(event, 'fs88', 145)" onmouseover="showTip(event, 'fs88', 145)" class="i">Queues</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs27', 146)" onmouseover="showTip(event, 'fs27', 146)" class="i">PeerQueues</span> <span onmouseout="hideTip(event, 'fs89', 147)" onmouseover="showTip(event, 'fs89', 147)" class="i">option</span>
+    <span onmouseout="hideTip(event, 'fs90', 148)" onmouseover="showTip(event, 'fs90', 148)" class="i">State</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 149)" onmouseover="showTip(event, 'fs14', 149)" class="i">PeerState</span>
+    <span onmouseout="hideTip(event, 'fs91', 150)" onmouseover="showTip(event, 'fs91', 150)" class="i">Score</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs40', 151)" onmouseover="showTip(event, 'fs40', 151)" class="i">int</span>
+    <span onmouseout="hideTip(event, 'fs92', 152)" onmouseover="showTip(event, 'fs92', 152)" class="i">CommandHandler</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs87', 153)" onmouseover="showTip(event, 'fs87', 153)" class="i">PeerData</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs46', 154)" onmouseover="showTip(event, 'fs46', 154)" class="i">PeerCommand</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs87', 155)" onmouseover="showTip(event, 'fs87', 155)" class="i">PeerData</span>
+    }
+
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs93', 156)" onmouseover="showTip(event, 'fs93', 156)" class="i">Peer</span>(<span onmouseout="hideTip(event, 'fs94', 157)" onmouseover="showTip(event, 'fs94', 157)" class="i">id</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs40', 158)" onmouseover="showTip(event, 'fs40', 158)" class="i">int</span>) <span class="k">as</span> <span onmouseout="hideTip(event, 'fs95', 159)" onmouseover="showTip(event, 'fs95', 159)" class="i">self</span> <span class="o">=</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs96', 160)" onmouseover="showTip(event, 'fs96', 160)" class="i">disposable</span> <span class="o">=</span> <span class="k">new</span> <span class="i">CompositeDisposable</span>()
+    
+    <span class="k">let</span> <span class="k">mutable</span> <span onmouseout="hideTip(event, 'fs97', 161)" onmouseover="showTip(event, 'fs97', 161)" class="i">target</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs45', 162)" onmouseover="showTip(event, 'fs45', 162)" class="i">IPEndPoint</span> <span class="o">=</span> <span class="k">null</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs98', 163)" onmouseover="showTip(event, 'fs98', 163)" class="i">scheduler</span> <span class="o">=</span> <span class="k">new</span> <span class="i">EventLoopScheduler</span>() <span class="c">// A dedicated thread per peer but peers could share threads too</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Peers take input from 3 distinct sources</p>
+
+<ul>
+<li>commands from the Tracker</li>
+<li>header messages from the remote node</li>
+<li>block messages from the remote node</li>
+</ul>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs99', 164)" onmouseover="showTip(event, 'fs99', 164)" class="i">incoming</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Subject</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs46', 165)" onmouseover="showTip(event, 'fs46', 165)" class="i">PeerCommand</span><span class="o">&gt;</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs100', 166)" onmouseover="showTip(event, 'fs100', 166)" class="i">headersIncoming</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Subject</span><span class="o">&lt;</span><span class="i">Headers</span><span class="o">&gt;</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs101', 167)" onmouseover="showTip(event, 'fs101', 167)" class="i">blockIncoming</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Subject</span><span class="o">&lt;</span><span class="i">Block</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs55', 168)" onmouseover="showTip(event, 'fs55', 168)" class="i">byte</span>[]<span class="o">&gt;</span>()</pre>
+</td>
+</tr>
+</table>
+
+<p>The workloop takes a network stream and continually grabs data from it and delivers them
+to the Observable.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs102', 169)" onmouseover="showTip(event, 'fs102', 169)" class="i">workLoop</span>(<span onmouseout="hideTip(event, 'fs28', 170)" onmouseover="showTip(event, 'fs28', 170)" class="i">stream</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs29', 171)" onmouseover="showTip(event, 'fs29', 171)" class="i">NetworkStream</span>) <span class="o">=</span> 
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs103', 172)" onmouseover="showTip(event, 'fs103', 172)" class="i">buffer</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs55', 173)" onmouseover="showTip(event, 'fs55', 173)" class="i">byte</span>[] <span class="o">=</span> <span onmouseout="hideTip(event, 'fs104', 174)" onmouseover="showTip(event, 'fs104', 174)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs105', 175)" onmouseover="showTip(event, 'fs105', 175)" class="i">zeroCreate</span> <span class="n">1000000</span> <span class="c">// network buffer</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs106', 176)" onmouseover="showTip(event, 'fs106', 176)" class="i">tf</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs107', 177)" onmouseover="showTip(event, 'fs107', 177)" class="i">TaskFactory</span>()
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs108', 178)" onmouseover="showTip(event, 'fs108', 178)" class="i">task</span>() <span class="o">=</span> 
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs109', 179)" onmouseover="showTip(event, 'fs109', 179)" class="i">t</span> <span class="o">=</span> 
+                <span onmouseout="hideTip(event, 'fs106', 180)" onmouseover="showTip(event, 'fs106', 180)" class="i">tf</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs110', 181)" onmouseover="showTip(event, 'fs110', 181)" class="i">FromAsync</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs55', 182)" onmouseover="showTip(event, 'fs55', 182)" class="i">byte</span> []<span class="o">&gt;</span>(
+                    (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs111', 183)" onmouseover="showTip(event, 'fs111', 183)" class="i">cb</span> (<span onmouseout="hideTip(event, 'fs112', 184)" onmouseover="showTip(event, 'fs112', 184)" class="i">state</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs113', 185)" onmouseover="showTip(event, 'fs113', 185)" class="i">obj</span>) <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs28', 186)" onmouseover="showTip(event, 'fs28', 186)" class="i">stream</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs114', 187)" onmouseover="showTip(event, 'fs114', 187)" class="i">BeginRead</span>(<span onmouseout="hideTip(event, 'fs103', 188)" onmouseover="showTip(event, 'fs103', 188)" class="i">buffer</span>, <span class="n">0</span>, <span onmouseout="hideTip(event, 'fs103', 189)" onmouseover="showTip(event, 'fs103', 189)" class="i">buffer</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs115', 190)" onmouseover="showTip(event, 'fs115', 190)" class="i">Length</span>, <span onmouseout="hideTip(event, 'fs111', 191)" onmouseover="showTip(event, 'fs111', 191)" class="i">cb</span>, <span onmouseout="hideTip(event, 'fs112', 192)" onmouseover="showTip(event, 'fs112', 192)" class="i">state</span>)), 
+                    (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs116', 193)" onmouseover="showTip(event, 'fs116', 193)" class="i">res</span> <span class="k">-&gt;</span> 
+                        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs117', 194)" onmouseover="showTip(event, 'fs117', 194)" class="i">c</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs28', 195)" onmouseover="showTip(event, 'fs28', 195)" class="i">stream</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs118', 196)" onmouseover="showTip(event, 'fs118', 196)" class="i">EndRead</span>(<span onmouseout="hideTip(event, 'fs116', 197)" onmouseover="showTip(event, 'fs116', 197)" class="i">res</span>)
+                        <span class="k">if</span> <span onmouseout="hideTip(event, 'fs117', 198)" onmouseover="showTip(event, 'fs117', 198)" class="i">c</span> <span class="o">=</span> <span class="n">0</span> <span class="k">then</span> <span class="c">// When the stream is closed, the read returns 0 byte</span>
+                            <span onmouseout="hideTip(event, 'fs119', 199)" onmouseover="showTip(event, 'fs119', 199)" class="i">raise</span> (<span class="k">new</span> <span onmouseout="hideTip(event, 'fs120', 200)" onmouseover="showTip(event, 'fs120', 200)" class="i">SocketException</span>())
+                        <span onmouseout="hideTip(event, 'fs103', 201)" onmouseover="showTip(event, 'fs103', 201)" class="i">buffer</span><span class="o">.</span>[<span class="n">0..</span><span onmouseout="hideTip(event, 'fs117', 202)" onmouseover="showTip(event, 'fs117', 202)" class="i">c</span><span class="o">-</span><span class="n">1</span>]), 
+                    <span class="k">null</span>)
+            <span onmouseout="hideTip(event, 'fs109', 203)" onmouseover="showTip(event, 'fs109', 203)" class="i">t</span><span class="o">.</span><span class="i">ToObservable</span>() <span class="c">// a task that grabs one read asynchronously</span>
+        <span onmouseout="hideTip(event, 'fs11', 204)" onmouseover="showTip(event, 'fs11', 204)" class="i">Observable</span><span class="o">.</span><span class="i">Repeat</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs55', 205)" onmouseover="showTip(event, 'fs55', 205)" class="i">byte</span>[]<span class="o">&gt;</span>(<span onmouseout="hideTip(event, 'fs11', 206)" onmouseover="showTip(event, 'fs11', 206)" class="i">Observable</span><span class="o">.</span><span class="i">Defer</span>(<span onmouseout="hideTip(event, 'fs108', 207)" onmouseover="showTip(event, 'fs108', 207)" class="i">task</span>)) <span class="c">// Keep doing the same task until the stream closes</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Helper functions to change the state of the peer. These functions work asynchronously and can be called from
+any thread.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+<span class="l">6: </span>
+<span class="l">7: </span>
+<span class="l">8: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs121', 208)" onmouseover="showTip(event, 'fs121', 208)" class="i">readyPeer</span>() <span class="o">=</span>
+        <span onmouseout="hideTip(event, 'fs99', 209)" onmouseover="showTip(event, 'fs99', 209)" class="i">incoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs46', 210)" onmouseover="showTip(event, 'fs46', 210)" class="i">PeerCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs57', 211)" onmouseover="showTip(event, 'fs57', 211)" class="i">SetReady</span>)
+
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs122', 212)" onmouseover="showTip(event, 'fs122', 212)" class="i">closePeer</span>() <span class="o">=</span>
+        <span onmouseout="hideTip(event, 'fs99', 213)" onmouseover="showTip(event, 'fs99', 213)" class="i">incoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs46', 214)" onmouseover="showTip(event, 'fs46', 214)" class="i">PeerCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs58', 215)" onmouseover="showTip(event, 'fs58', 215)" class="i">Close</span>)
+
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs123', 216)" onmouseover="showTip(event, 'fs123', 216)" class="i">badPeer</span>() <span class="o">=</span>
+        <span onmouseout="hideTip(event, 'fs99', 217)" onmouseover="showTip(event, 'fs99', 217)" class="i">incoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs60', 218)" onmouseover="showTip(event, 'fs60', 218)" class="i">UpdateScore</span> <span class="o">-</span><span class="n">100</span>) <span class="c">// lose 100 points - the banscore is not implemented yet</span></pre>
+</td>
+</tr>
+</table>
+
+<p>Another helper function that sends a message out and return an empty observable. By having it as
+an observable, the sending is part of the time out.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+<span class="l">6: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs124', 219)" onmouseover="showTip(event, 'fs124', 219)" class="i">sendMessageObs</span> (<span onmouseout="hideTip(event, 'fs125', 220)" onmouseover="showTip(event, 'fs125', 220)" class="i">peerQueues</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs27', 221)" onmouseover="showTip(event, 'fs27', 221)" class="i">PeerQueues</span>) (<span onmouseout="hideTip(event, 'fs126', 222)" onmouseover="showTip(event, 'fs126', 222)" class="i">message</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs68', 223)" onmouseover="showTip(event, 'fs68', 223)" class="i">BitcoinMessage</span>) <span class="o">=</span> 
+        <span onmouseout="hideTip(event, 'fs11', 224)" onmouseover="showTip(event, 'fs11', 224)" class="i">Observable</span><span class="o">.</span><span class="i">Defer</span>(
+            <span class="k">fun</span> () <span class="k">-&gt;</span> 
+                <span onmouseout="hideTip(event, 'fs125', 225)" onmouseover="showTip(event, 'fs125', 225)" class="i">peerQueues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs127', 226)" onmouseover="showTip(event, 'fs127', 226)" class="i">To</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs126', 227)" onmouseover="showTip(event, 'fs126', 227)" class="i">message</span>)
+                <span onmouseout="hideTip(event, 'fs11', 228)" onmouseover="showTip(event, 'fs11', 228)" class="i">Observable</span><span class="o">.</span><span class="i">Empty</span>()
+            )</pre>
+</td>
+</tr>
+</table>
+
+<p>Send the message out and catch any exception due to a communication problem with the remote node.
+It could have closed. The network stream has a WriteTimeOut set and will throw an exception if the message
+couldn't be sent during the allocated time. At this point, if an exception is raised I close the peer because
+there isn't much chance of making progress later.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+<span class="l">2: </span>
+<span class="l">3: </span>
+<span class="l">4: </span>
+<span class="l">5: </span>
+<span class="l">6: </span>
+<span class="l">7: </span>
+<span class="l">8: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs128', 229)" onmouseover="showTip(event, 'fs128', 229)" class="i">sendMessage</span> (<span onmouseout="hideTip(event, 'fs28', 230)" onmouseover="showTip(event, 'fs28', 230)" class="i">stream</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs29', 231)" onmouseover="showTip(event, 'fs29', 231)" class="i">NetworkStream</span>) (<span onmouseout="hideTip(event, 'fs126', 232)" onmouseover="showTip(event, 'fs126', 232)" class="i">message</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs68', 233)" onmouseover="showTip(event, 'fs68', 233)" class="i">BitcoinMessage</span>)<span class="o">=</span> 
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs129', 234)" onmouseover="showTip(event, 'fs129', 234)" class="i">messageBytes</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs126', 235)" onmouseover="showTip(event, 'fs126', 235)" class="i">message</span><span class="o">.</span><span class="i">ToByteArray</span>()
+        <span class="k">try</span>
+            <span onmouseout="hideTip(event, 'fs28', 236)" onmouseover="showTip(event, 'fs28', 236)" class="i">stream</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs130', 237)" onmouseover="showTip(event, 'fs130', 237)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs129', 238)" onmouseover="showTip(event, 'fs129', 238)" class="i">messageBytes</span>, <span class="n">0</span>, <span onmouseout="hideTip(event, 'fs129', 239)" onmouseover="showTip(event, 'fs129', 239)" class="i">messageBytes</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs115', 240)" onmouseover="showTip(event, 'fs115', 240)" class="i">Length</span>)
+        <span class="k">with</span>
+        | <span onmouseout="hideTip(event, 'fs131', 241)" onmouseover="showTip(event, 'fs131', 241)" class="i">e</span> <span class="k">-&gt;</span> 
+            <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Cannot</span><span class="s"> </span><span class="s">send</span><span class="s"> </span><span class="s">message</span><span class="s"> </span><span class="s">to</span><span class="s"> </span><span class="s">peer</span><span class="s">&quot;</span>
+            <span onmouseout="hideTip(event, 'fs122', 242)" onmouseover="showTip(event, 'fs122', 242)" class="i">closePeer</span>()</pre>
+</td>
+</tr>
+</table>
+
+<p><code>processMessage</code> handles messages incoming from the remote node. Generally speaking, it parses the payload of the message
+and routes it to the appropriate queue.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+<span class="l">40: </span>
+<span class="l">41: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs132', 243)" onmouseover="showTip(event, 'fs132', 243)" class="i">processMessage</span> (<span onmouseout="hideTip(event, 'fs125', 244)" onmouseover="showTip(event, 'fs125', 244)" class="i">peerQueues</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs27', 245)" onmouseover="showTip(event, 'fs27', 245)" class="i">PeerQueues</span>) (<span onmouseout="hideTip(event, 'fs126', 246)" onmouseover="showTip(event, 'fs126', 246)" class="i">message</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs68', 247)" onmouseover="showTip(event, 'fs68', 247)" class="i">BitcoinMessage</span>) <span class="o">=</span> 
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs133', 248)" onmouseover="showTip(event, 'fs133', 248)" class="i">command</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs126', 249)" onmouseover="showTip(event, 'fs126', 249)" class="i">message</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs69', 250)" onmouseover="showTip(event, 'fs69', 250)" class="i">Command</span>
+        <span class="k">match</span> <span onmouseout="hideTip(event, 'fs133', 251)" onmouseover="showTip(event, 'fs133', 251)" class="i">command</span> <span class="k">with</span>
+        | <span class="s">&quot;</span><span class="s">version</span><span class="s">&quot;</span> 
+        | <span class="s">&quot;</span><span class="s">verack</span><span class="s">&quot;</span> <span class="k">-&gt;</span>
+            <span onmouseout="hideTip(event, 'fs125', 252)" onmouseover="showTip(event, 'fs125', 252)" class="i">peerQueues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs134', 253)" onmouseover="showTip(event, 'fs134', 253)" class="i">From</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs126', 254)" onmouseover="showTip(event, 'fs126', 254)" class="i">message</span>)
+        | <span class="s">&quot;</span><span class="s">getaddr</span><span class="s">&quot;</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs135', 255)" onmouseover="showTip(event, 'fs135', 255)" class="i">ignore</span>()
+        | <span class="s">&quot;</span><span class="s">getdata</span><span class="s">&quot;</span> <span class="k">-&gt;</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs136', 256)" onmouseover="showTip(event, 'fs136', 256)" class="i">gd</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs126', 257)" onmouseover="showTip(event, 'fs126', 257)" class="i">message</span><span class="o">.</span><span class="i">ParsePayload</span>() <span class="o">:?&gt;</span> <span onmouseout="hideTip(event, 'fs56', 258)" onmouseover="showTip(event, 'fs56', 258)" class="i">GetData</span>
+            <span onmouseout="hideTip(event, 'fs86', 259)" onmouseover="showTip(event, 'fs86', 259)" class="i">mempoolIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs82', 260)" onmouseover="showTip(event, 'fs82', 260)" class="i">GetTx</span> (<span onmouseout="hideTip(event, 'fs136', 261)" onmouseover="showTip(event, 'fs136', 261)" class="i">gd</span><span class="o">.</span><span class="i">Invs</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs137', 262)" onmouseover="showTip(event, 'fs137', 262)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs138', 263)" onmouseover="showTip(event, 'fs138', 263)" class="i">filter</span> (<span class="k">fun</span> <span class="i">inv</span> <span class="k">-&gt;</span> <span class="i">inv</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs139', 264)" onmouseover="showTip(event, 'fs139', 264)" class="i">Type</span> <span class="o">=</span> <span class="i">txInvType</span>), <span onmouseout="hideTip(event, 'fs125', 265)" onmouseover="showTip(event, 'fs125', 265)" class="i">peerQueues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs127', 266)" onmouseover="showTip(event, 'fs127', 266)" class="i">To</span>))
+            <span onmouseout="hideTip(event, 'fs84', 267)" onmouseover="showTip(event, 'fs84', 267)" class="i">blockchainIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs72', 268)" onmouseover="showTip(event, 'fs72', 268)" class="i">GetBlock</span> (<span onmouseout="hideTip(event, 'fs136', 269)" onmouseover="showTip(event, 'fs136', 269)" class="i">gd</span><span class="o">.</span><span class="i">Invs</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs137', 270)" onmouseover="showTip(event, 'fs137', 270)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs138', 271)" onmouseover="showTip(event, 'fs138', 271)" class="i">filter</span> (<span class="k">fun</span> <span class="i">inv</span> <span class="k">-&gt;</span> <span class="i">inv</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs139', 272)" onmouseover="showTip(event, 'fs139', 272)" class="i">Type</span> <span class="o">=</span> <span class="i">blockInvType</span>), <span onmouseout="hideTip(event, 'fs125', 273)" onmouseover="showTip(event, 'fs125', 273)" class="i">peerQueues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs127', 274)" onmouseover="showTip(event, 'fs127', 274)" class="i">To</span>))
+        | <span class="s">&quot;</span><span class="s">getheaders</span><span class="s">&quot;</span> <span class="k">-&gt;</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs140', 275)" onmouseover="showTip(event, 'fs140', 275)" class="i">gh</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs126', 276)" onmouseover="showTip(event, 'fs126', 276)" class="i">message</span><span class="o">.</span><span class="i">ParsePayload</span>() <span class="o">:?&gt;</span> <span onmouseout="hideTip(event, 'fs74', 277)" onmouseover="showTip(event, 'fs74', 277)" class="i">GetHeaders</span>
+            <span onmouseout="hideTip(event, 'fs84', 278)" onmouseover="showTip(event, 'fs84', 278)" class="i">blockchainIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs74', 279)" onmouseover="showTip(event, 'fs74', 279)" class="i">GetHeaders</span> (<span onmouseout="hideTip(event, 'fs140', 280)" onmouseover="showTip(event, 'fs140', 280)" class="i">gh</span>, <span onmouseout="hideTip(event, 'fs125', 281)" onmouseover="showTip(event, 'fs125', 281)" class="i">peerQueues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs127', 282)" onmouseover="showTip(event, 'fs127', 282)" class="i">To</span>))
+        | <span class="s">&quot;</span><span class="s">addr</span><span class="s">&quot;</span> <span class="k">-&gt;</span> 
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs141', 283)" onmouseover="showTip(event, 'fs141', 283)" class="i">addr</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs126', 284)" onmouseover="showTip(event, 'fs126', 284)" class="i">message</span><span class="o">.</span><span class="i">ParsePayload</span>() <span class="o">:?&gt;</span> <span class="i">Addr</span>
+            <span onmouseout="hideTip(event, 'fs26', 285)" onmouseover="showTip(event, 'fs26', 285)" class="i">addrTopic</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs141', 286)" onmouseover="showTip(event, 'fs141', 286)" class="i">addr</span>)
+        | <span class="s">&quot;</span><span class="s">headers</span><span class="s">&quot;</span> <span class="k">-&gt;</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs142', 287)" onmouseover="showTip(event, 'fs142', 287)" class="i">headers</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs126', 288)" onmouseover="showTip(event, 'fs126', 288)" class="i">message</span><span class="o">.</span><span class="i">ParsePayload</span>() <span class="o">:?&gt;</span> <span class="i">Headers</span>
+            <span onmouseout="hideTip(event, 'fs100', 289)" onmouseover="showTip(event, 'fs100', 289)" class="i">headersIncoming</span><span class="o">.</span><span class="i">OnNext</span> <span onmouseout="hideTip(event, 'fs142', 290)" onmouseover="showTip(event, 'fs142', 290)" class="i">headers</span>
+        | <span class="s">&quot;</span><span class="s">block</span><span class="s">&quot;</span> <span class="k">-&gt;</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs143', 291)" onmouseover="showTip(event, 'fs143', 291)" class="i">block</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs126', 292)" onmouseover="showTip(event, 'fs126', 292)" class="i">message</span><span class="o">.</span><span class="i">ParsePayload</span>() <span class="o">:?&gt;</span> <span class="i">Block</span>
+            <span onmouseout="hideTip(event, 'fs101', 293)" onmouseover="showTip(event, 'fs101', 293)" class="i">blockIncoming</span><span class="o">.</span><span class="i">OnNext</span> (<span onmouseout="hideTip(event, 'fs143', 294)" onmouseover="showTip(event, 'fs143', 294)" class="i">block</span>, <span onmouseout="hideTip(event, 'fs126', 295)" onmouseover="showTip(event, 'fs126', 295)" class="i">message</span><span class="o">.</span><span class="i">Payload</span>)
+        | <span class="s">&quot;</span><span class="s">inv</span><span class="s">&quot;</span> <span class="k">-&gt;</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs144', 296)" onmouseover="showTip(event, 'fs144', 296)" class="i">inv</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs126', 297)" onmouseover="showTip(event, 'fs126', 297)" class="i">message</span><span class="o">.</span><span class="i">ParsePayload</span>() <span class="o">:?&gt;</span> <span class="i">InvVector</span>
+            <span class="k">if</span> <span onmouseout="hideTip(event, 'fs144', 298)" onmouseover="showTip(event, 'fs144', 298)" class="i">inv</span><span class="o">.</span><span class="i">Invs</span><span class="o">.</span><span class="i">IsEmpty</span> <span class="k">then</span> <span onmouseout="hideTip(event, 'fs135', 299)" onmouseover="showTip(event, 'fs135', 299)" class="i">ignore</span>() <span class="c">// empty inv</span>
+            <span class="k">elif</span> <span onmouseout="hideTip(event, 'fs144', 300)" onmouseover="showTip(event, 'fs144', 300)" class="i">inv</span><span class="o">.</span><span class="i">Invs</span><span class="o">.</span><span class="i">Length</span> <span class="o">&gt;</span> <span class="n">1</span> <span class="o">||</span> <span onmouseout="hideTip(event, 'fs144', 301)" onmouseover="showTip(event, 'fs144', 301)" class="i">inv</span><span class="o">.</span><span class="i">Invs</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span onmouseout="hideTip(event, 'fs139', 302)" onmouseover="showTip(event, 'fs139', 302)" class="i">Type</span> <span class="o">&lt;&gt;</span> <span class="i">blockInvType</span> <span class="k">then</span> <span class="c">// many invs or not a block inv</span>
+                <span onmouseout="hideTip(event, 'fs86', 303)" onmouseover="showTip(event, 'fs86', 303)" class="i">mempoolIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs81', 304)" onmouseover="showTip(event, 'fs81', 304)" class="i">Inv</span>(<span onmouseout="hideTip(event, 'fs144', 305)" onmouseover="showTip(event, 'fs144', 305)" class="i">inv</span>, <span onmouseout="hideTip(event, 'fs99', 306)" onmouseover="showTip(event, 'fs99', 306)" class="i">incoming</span>)) <span class="c">// send to mempool</span>
+            <span class="k">elif</span> <span onmouseout="hideTip(event, 'fs144', 307)" onmouseover="showTip(event, 'fs144', 307)" class="i">inv</span><span class="o">.</span><span class="i">Invs</span><span class="o">.</span><span class="i">Length</span> <span class="o">=</span> <span class="n">1</span> <span class="o">&amp;&amp;</span> <span onmouseout="hideTip(event, 'fs144', 308)" onmouseover="showTip(event, 'fs144', 308)" class="i">inv</span><span class="o">.</span><span class="i">Invs</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span onmouseout="hideTip(event, 'fs139', 309)" onmouseover="showTip(event, 'fs139', 309)" class="i">Type</span> <span class="o">=</span> <span class="i">blockInvType</span> <span class="k">then</span> <span class="c">// a block inv, send to blockchain</span>
+                <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Catchup</span><span class="s"> </span><span class="s">requested</span><span class="s"> </span><span class="s">for</span><span class="s"> </span><span class="s">%</span><span class="s">d</span><span class="s"> </span><span class="s">%</span><span class="s">s</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs94', 310)" onmouseover="showTip(event, 'fs94', 310)" class="i">id</span> (<span class="i">hashToHex</span> <span onmouseout="hideTip(event, 'fs144', 311)" onmouseover="showTip(event, 'fs144', 311)" class="i">inv</span><span class="o">.</span><span class="i">Invs</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">Hash</span>)
+                <span onmouseout="hideTip(event, 'fs84', 312)" onmouseover="showTip(event, 'fs84', 312)" class="i">blockchainIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs75', 313)" onmouseover="showTip(event, 'fs75', 313)" class="i">Catchup</span>(<span onmouseout="hideTip(event, 'fs95', 314)" onmouseover="showTip(event, 'fs95', 314)" class="i">self</span>, <span onmouseout="hideTip(event, 'fs144', 315)" onmouseover="showTip(event, 'fs144', 315)" class="i">inv</span><span class="o">.</span><span class="i">Invs</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">Hash</span>))
+        | <span class="s">&quot;</span><span class="s">tx</span><span class="s">&quot;</span> <span class="k">-&gt;</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs145', 316)" onmouseover="showTip(event, 'fs145', 316)" class="i">tx</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs126', 317)" onmouseover="showTip(event, 'fs126', 317)" class="i">message</span><span class="o">.</span><span class="i">ParsePayload</span>() <span class="o">:?&gt;</span> <span onmouseout="hideTip(event, 'fs80', 318)" onmouseover="showTip(event, 'fs80', 318)" class="i">Tx</span>
+            <span onmouseout="hideTip(event, 'fs86', 319)" onmouseover="showTip(event, 'fs86', 319)" class="i">mempoolIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs80', 320)" onmouseover="showTip(event, 'fs80', 320)" class="i">Tx</span> <span onmouseout="hideTip(event, 'fs145', 321)" onmouseover="showTip(event, 'fs145', 321)" class="i">tx</span>)
+        | <span class="s">&quot;</span><span class="s">ping</span><span class="s">&quot;</span> <span class="k">-&gt;</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs146', 322)" onmouseover="showTip(event, 'fs146', 322)" class="i">ping</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs126', 323)" onmouseover="showTip(event, 'fs126', 323)" class="i">message</span><span class="o">.</span><span class="i">ParsePayload</span>() <span class="o">:?&gt;</span> <span onmouseout="hideTip(event, 'fs76', 324)" onmouseover="showTip(event, 'fs76', 324)" class="i">Ping</span> <span class="c">// send to blockchain because tests use pings to sync with catchup</span>
+            <span onmouseout="hideTip(event, 'fs84', 325)" onmouseover="showTip(event, 'fs84', 325)" class="i">blockchainIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs71', 326)" onmouseover="showTip(event, 'fs71', 326)" class="i">BlockchainCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs76', 327)" onmouseover="showTip(event, 'fs76', 327)" class="i">Ping</span>(<span onmouseout="hideTip(event, 'fs146', 328)" onmouseover="showTip(event, 'fs146', 328)" class="i">ping</span>, <span onmouseout="hideTip(event, 'fs125', 329)" onmouseover="showTip(event, 'fs125', 329)" class="i">peerQueues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs127', 330)" onmouseover="showTip(event, 'fs127', 330)" class="i">To</span>))
+        | <span class="s">&quot;</span><span class="s">mempool</span><span class="s">&quot;</span> <span class="k">-&gt;</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs147', 331)" onmouseover="showTip(event, 'fs147', 331)" class="i">mempool</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs126', 332)" onmouseover="showTip(event, 'fs126', 332)" class="i">message</span><span class="o">.</span><span class="i">ParsePayload</span>() <span class="o">:?&gt;</span> <span onmouseout="hideTip(event, 'fs83', 333)" onmouseover="showTip(event, 'fs83', 333)" class="i">Mempool</span>
+            <span onmouseout="hideTip(event, 'fs86', 334)" onmouseover="showTip(event, 'fs86', 334)" class="i">mempoolIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs77', 335)" onmouseover="showTip(event, 'fs77', 335)" class="i">MempoolCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs83', 336)" onmouseover="showTip(event, 'fs83', 336)" class="i">Mempool</span> <span onmouseout="hideTip(event, 'fs125', 337)" onmouseover="showTip(event, 'fs125', 337)" class="i">peerQueues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs127', 338)" onmouseover="showTip(event, 'fs127', 338)" class="i">To</span>)
+        | _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs135', 339)" onmouseover="showTip(event, 'fs135', 339)" class="i">ignore</span>()</pre>
+</td>
+</tr>
+</table>
+
+<p><code>processConnection</code> is the handler active during connection. It replies to <code>Open</code>, <code>OpenStream</code>, <code>Handshake</code> and <code>Closing</code>.
+Every handler needs to support <code>Closing</code> because it may happen at any time. The other messages are specific to the state of the peer.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+<span class="l">40: </span>
+<span class="l">41: </span>
+<span class="l">42: </span>
+<span class="l">43: </span>
+<span class="l">44: </span>
+<span class="l">45: </span>
+<span class="l">46: </span>
+<span class="l">47: </span>
+<span class="l">48: </span>
+<span class="l">49: </span>
+<span class="l">50: </span>
+<span class="l">51: </span>
+<span class="l">52: </span>
+<span class="l">53: </span>
+<span class="l">54: </span>
+<span class="l">55: </span>
+<span class="l">56: </span>
+<span class="l">57: </span>
+<span class="l">58: </span>
+<span class="l">59: </span>
+<span class="l">60: </span>
+<span class="l">61: </span>
+<span class="l">62: </span>
+<span class="l">63: </span>
+<span class="l">64: </span>
+<span class="l">65: </span>
+<span class="l">66: </span>
+<span class="l">67: </span>
+<span class="l">68: </span>
+<span class="l">69: </span>
+<span class="l">70: </span>
+<span class="l">71: </span>
+<span class="l">72: </span>
+<span class="l">73: </span>
+<span class="l">74: </span>
+<span class="l">75: </span>
+<span class="l">76: </span>
+<span class="l">77: </span>
+<span class="l">78: </span>
+<span class="l">79: </span>
+<span class="l">80: </span>
+<span class="l">81: </span>
+<span class="l">82: </span>
+<span class="l">83: </span>
+<span class="l">84: </span>
+<span class="l">85: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+    <span class="k">let</span> <span class="k">rec</span> <span onmouseout="hideTip(event, 'fs148', 340)" onmouseover="showTip(event, 'fs148', 340)" class="i">processConnection</span> (<span onmouseout="hideTip(event, 'fs149', 341)" onmouseover="showTip(event, 'fs149', 341)" class="i">data</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs87', 342)" onmouseover="showTip(event, 'fs87', 342)" class="i">PeerData</span>) (<span onmouseout="hideTip(event, 'fs150', 343)" onmouseover="showTip(event, 'fs150', 343)" class="i">command</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs46', 344)" onmouseover="showTip(event, 'fs46', 344)" class="i">PeerCommand</span>)<span class="o">:</span> <span onmouseout="hideTip(event, 'fs87', 345)" onmouseover="showTip(event, 'fs87', 345)" class="i">PeerData</span> <span class="o">=</span> 
+        <span class="k">match</span> <span onmouseout="hideTip(event, 'fs150', 346)" onmouseover="showTip(event, 'fs150', 346)" class="i">command</span> <span class="k">with</span>
+        | <span onmouseout="hideTip(event, 'fs47', 347)" onmouseover="showTip(event, 'fs47', 347)" class="i">Open</span> (<span onmouseout="hideTip(event, 'fs151', 348)" onmouseover="showTip(event, 'fs151', 348)" class="i">t</span>, <span onmouseout="hideTip(event, 'fs152', 349)" onmouseover="showTip(event, 'fs152', 349)" class="i">tip</span>) <span class="k">-&gt;</span> <span class="c">// Got a outgoing connection request</span>
+            <span onmouseout="hideTip(event, 'fs97', 350)" onmouseover="showTip(event, 'fs97', 350)" class="i">target</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs151', 351)" onmouseover="showTip(event, 'fs151', 351)" class="i">t</span>
+            <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Connect</span><span class="s"> </span><span class="s">to</span><span class="s"> </span><span class="s">%</span><span class="s">s</span><span class="s">&quot;</span> (<span onmouseout="hideTip(event, 'fs97', 352)" onmouseover="showTip(event, 'fs97', 352)" class="i">target</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs153', 353)" onmouseover="showTip(event, 'fs153', 353)" class="i">ToString</span>())
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs154', 354)" onmouseover="showTip(event, 'fs154', 354)" class="i">connect</span> <span class="o">=</span> 
+                <span onmouseout="hideTip(event, 'fs155', 355)" onmouseover="showTip(event, 'fs155', 355)" class="i">async</span> {
+                    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs156', 356)" onmouseover="showTip(event, 'fs156', 356)" class="i">client</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs6', 357)" onmouseover="showTip(event, 'fs6', 357)" class="i">Sockets</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs157', 358)" onmouseover="showTip(event, 'fs157', 358)" class="i">TcpClient</span>()
+                    <span class="k">do!</span> <span onmouseout="hideTip(event, 'fs158', 359)" onmouseover="showTip(event, 'fs158', 359)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs159', 360)" onmouseover="showTip(event, 'fs159', 360)" class="i">FromBeginEnd</span>(
+                            <span onmouseout="hideTip(event, 'fs97', 361)" onmouseover="showTip(event, 'fs97', 361)" class="i">target</span>, 
+                            (<span class="k">fun</span> (<span onmouseout="hideTip(event, 'fs160', 362)" onmouseover="showTip(event, 'fs160', 362)" class="i">target</span>, <span onmouseout="hideTip(event, 'fs111', 363)" onmouseover="showTip(event, 'fs111', 363)" class="i">cb</span>, <span onmouseout="hideTip(event, 'fs112', 364)" onmouseover="showTip(event, 'fs112', 364)" class="i">state</span>) <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs156', 365)" onmouseover="showTip(event, 'fs156', 365)" class="i">client</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs161', 366)" onmouseover="showTip(event, 'fs161', 366)" class="i">BeginConnect</span>(<span onmouseout="hideTip(event, 'fs160', 367)" onmouseover="showTip(event, 'fs160', 367)" class="i">target</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs162', 368)" onmouseover="showTip(event, 'fs162', 368)" class="i">Address</span>, <span onmouseout="hideTip(event, 'fs160', 369)" onmouseover="showTip(event, 'fs160', 369)" class="i">target</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs163', 370)" onmouseover="showTip(event, 'fs163', 370)" class="i">Port</span>, <span onmouseout="hideTip(event, 'fs111', 371)" onmouseover="showTip(event, 'fs111', 371)" class="i">cb</span>, <span onmouseout="hideTip(event, 'fs112', 372)" onmouseover="showTip(event, 'fs112', 372)" class="i">state</span>)),
+                            <span onmouseout="hideTip(event, 'fs156', 373)" onmouseover="showTip(event, 'fs156', 373)" class="i">client</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs164', 374)" onmouseover="showTip(event, 'fs164', 374)" class="i">EndConnect</span>)
+                    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs28', 375)" onmouseover="showTip(event, 'fs28', 375)" class="i">stream</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs156', 376)" onmouseover="showTip(event, 'fs156', 376)" class="i">client</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs165', 377)" onmouseover="showTip(event, 'fs165', 377)" class="i">GetStream</span>()
+                    <span class="k">return</span> <span onmouseout="hideTip(event, 'fs48', 378)" onmouseover="showTip(event, 'fs48', 378)" class="i">OpenStream</span> (<span onmouseout="hideTip(event, 'fs28', 379)" onmouseover="showTip(event, 'fs28', 379)" class="i">stream</span>, <span onmouseout="hideTip(event, 'fs97', 380)" onmouseover="showTip(event, 'fs97', 380)" class="i">target</span>, <span onmouseout="hideTip(event, 'fs152', 381)" onmouseover="showTip(event, 'fs152', 381)" class="i">tip</span>)
+                    }
+
+            <span class="c">// Connect to the node and bail out if it fails or the timeout expires</span>
+            <span onmouseout="hideTip(event, 'fs11', 382)" onmouseover="showTip(event, 'fs11', 382)" class="i">Observable</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs166', 383)" onmouseover="showTip(event, 'fs166', 383)" class="i">Timeout</span>(<span onmouseout="hideTip(event, 'fs158', 384)" onmouseover="showTip(event, 'fs158', 384)" class="i">Async</span><span class="o">.</span><span class="i">AsObservable</span> <span onmouseout="hideTip(event, 'fs154', 385)" onmouseover="showTip(event, 'fs154', 385)" class="i">connect</span>, <span class="i">connectTimeout</span>)<span class="o">.</span><span class="i">ObserveOn</span>(<span onmouseout="hideTip(event, 'fs98', 386)" onmouseover="showTip(event, 'fs98', 386)" class="i">scheduler</span>)<span class="o">.</span><span class="i">Subscribe</span>(
+                <span class="i">onNext</span> <span class="o">=</span> (<span class="k">fun</span> <span class="i">c</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs99', 387)" onmouseover="showTip(event, 'fs99', 387)" class="i">incoming</span><span class="o">.</span><span class="i">OnNext</span> <span class="i">c</span>), <span class="c">// If connected, grab the stream</span>
+                <span class="i">onError</span> <span class="o">=</span> (<span class="k">fun</span> <span class="i">ex</span> <span class="k">-&gt;</span> 
+                    <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Connect</span><span class="s"> </span><span class="s">failed</span><span class="s">&gt;</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s"> </span><span class="s">%</span><span class="s">s</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs151', 388)" onmouseover="showTip(event, 'fs151', 388)" class="i">t</span> (<span class="i">ex</span><span class="o">.</span><span class="i">ToString</span>())
+                    <span onmouseout="hideTip(event, 'fs122', 389)" onmouseover="showTip(event, 'fs122', 389)" class="i">closePeer</span>())
+            ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs135', 390)" onmouseover="showTip(event, 'fs135', 390)" class="i">ignore</span>
+            <span onmouseout="hideTip(event, 'fs149', 391)" onmouseover="showTip(event, 'fs149', 391)" class="i">data</span>
+        | <span onmouseout="hideTip(event, 'fs48', 392)" onmouseover="showTip(event, 'fs48', 392)" class="i">OpenStream</span> (<span onmouseout="hideTip(event, 'fs28', 393)" onmouseover="showTip(event, 'fs28', 393)" class="i">stream</span>, <span onmouseout="hideTip(event, 'fs151', 394)" onmouseover="showTip(event, 'fs151', 394)" class="i">t</span>, <span onmouseout="hideTip(event, 'fs152', 395)" onmouseover="showTip(event, 'fs152', 395)" class="i">tip</span>) <span class="k">-&gt;</span> <span class="c">// Got a stream from a successful connection (in or out)</span>
+            <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">OpenStream</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs151', 396)" onmouseover="showTip(event, 'fs151', 396)" class="i">t</span>
+            <span onmouseout="hideTip(event, 'fs97', 397)" onmouseover="showTip(event, 'fs97', 397)" class="i">target</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs151', 398)" onmouseover="showTip(event, 'fs151', 398)" class="i">t</span>
+            <span onmouseout="hideTip(event, 'fs28', 399)" onmouseover="showTip(event, 'fs28', 399)" class="i">stream</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs167', 400)" onmouseover="showTip(event, 'fs167', 400)" class="i">WriteTimeout</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs40', 401)" onmouseover="showTip(event, 'fs40', 401)" class="i">int</span>(<span class="i">commandTimeout</span><span class="o">.</span><span class="i">Ticks</span> <span class="o">/</span> <span onmouseout="hideTip(event, 'fs168', 402)" onmouseover="showTip(event, 'fs168', 402)" class="i">TimeSpan</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs169', 403)" onmouseover="showTip(event, 'fs169', 403)" class="i">TicksPerMillisecond</span>)
+            <span class="c">// Setup the queues and the network to bitcoin message parser</span>
+            <span class="c">// Observables are created but not subscribed to, so in fact nothing is consumed from the stream yet</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs125', 404)" onmouseover="showTip(event, 'fs125', 404)" class="i">peerQueues</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs27', 405)" onmouseover="showTip(event, 'fs27', 405)" class="i">PeerQueues</span>(<span onmouseout="hideTip(event, 'fs28', 406)" onmouseover="showTip(event, 'fs28', 406)" class="i">stream</span>)
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs170', 407)" onmouseover="showTip(event, 'fs170', 407)" class="i">parser</span> <span class="o">=</span> <span class="k">new</span> <span class="i">BitcoinMessageParser</span>(<span onmouseout="hideTip(event, 'fs102', 408)" onmouseover="showTip(event, 'fs102', 408)" class="i">workLoop</span>(<span onmouseout="hideTip(event, 'fs28', 409)" onmouseover="showTip(event, 'fs28', 409)" class="i">stream</span>))
+            <span class="c">// Subscribe the outgoing queue, it&#39;s ready to send out messages</span>
+            <span onmouseout="hideTip(event, 'fs96', 410)" onmouseover="showTip(event, 'fs96', 410)" class="i">disposable</span><span class="o">.</span><span class="i">Add</span>(<span onmouseout="hideTip(event, 'fs125', 411)" onmouseover="showTip(event, 'fs125', 411)" class="i">peerQueues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs127', 412)" onmouseover="showTip(event, 'fs127', 412)" class="i">To</span><span class="o">.</span><span class="i">Subscribe</span>(<span class="i">onNext</span> <span class="o">=</span> (<span class="k">fun</span> <span class="i">m</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs128', 413)" onmouseover="showTip(event, 'fs128', 413)" class="i">sendMessage</span> <span onmouseout="hideTip(event, 'fs28', 414)" onmouseover="showTip(event, 'fs28', 414)" class="i">stream</span> <span class="i">m</span>), <span class="i">onError</span> <span class="o">=</span> (<span class="k">fun</span> <span class="i">e</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs122', 415)" onmouseover="showTip(event, 'fs122', 415)" class="i">closePeer</span>())))
+            <span onmouseout="hideTip(event, 'fs96', 416)" onmouseover="showTip(event, 'fs96', 416)" class="i">disposable</span><span class="o">.</span><span class="i">Add</span>(<span onmouseout="hideTip(event, 'fs125', 417)" onmouseover="showTip(event, 'fs125', 417)" class="i">peerQueues</span>)
+            <span onmouseout="hideTip(event, 'fs96', 418)" onmouseover="showTip(event, 'fs96', 418)" class="i">disposable</span><span class="o">.</span><span class="i">Add</span>(<span onmouseout="hideTip(event, 'fs28', 419)" onmouseover="showTip(event, 'fs28', 419)" class="i">stream</span>)
+
+            <span class="c">// Prepare and send out my version message</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs171', 420)" onmouseover="showTip(event, 'fs171', 420)" class="i">version</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs172', 421)" onmouseover="showTip(event, 'fs172', 421)" class="i">Version</span><span class="o">.</span><span class="i">Create</span>(<span class="i">SystemClock</span><span class="o">.</span><span class="i">Instance</span><span class="o">.</span><span class="i">Now</span>, <span onmouseout="hideTip(event, 'fs97', 422)" onmouseover="showTip(event, 'fs97', 422)" class="i">target</span>, <span class="i">NetworkAddr</span><span class="o">.</span><span class="i">MyAddress</span>, <span onmouseout="hideTip(event, 'fs173', 423)" onmouseover="showTip(event, 'fs173', 423)" class="i">int64</span>(<span class="i">random</span><span class="o">.</span><span class="i">Next</span>()), <span class="s">&quot;</span><span class="s">Satoshi</span><span class="s"> </span><span class="s">YOLO</span><span class="s"> </span><span class="s">1</span><span class="s">.</span><span class="s">0</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs152', 424)" onmouseover="showTip(event, 'fs152', 424)" class="i">tip</span><span class="o">.</span><span class="i">Height</span>, <span class="n">1uy</span>)
+            <span onmouseout="hideTip(event, 'fs125', 425)" onmouseover="showTip(event, 'fs125', 425)" class="i">peerQueues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs127', 426)" onmouseover="showTip(event, 'fs127', 426)" class="i">To</span><span class="o">.</span><span class="i">OnNext</span>(<span class="k">new</span> <span onmouseout="hideTip(event, 'fs68', 427)" onmouseover="showTip(event, 'fs68', 427)" class="i">BitcoinMessage</span>(<span class="s">&quot;</span><span class="s">version</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs171', 428)" onmouseover="showTip(event, 'fs171', 428)" class="i">version</span><span class="o">.</span><span class="i">ToByteArray</span>()))
+
+            <span class="c">// The handshake observable waits for the verack and the version response from the other side. When both parties have</span>
+            <span class="c">// exchanged their version/verack, it will deliver a single event &quot;Handshaked&quot;</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs174', 429)" onmouseover="showTip(event, 'fs174', 429)" class="i">handshakeObs</span> <span class="o">=</span> 
+                <span onmouseout="hideTip(event, 'fs125', 430)" onmouseover="showTip(event, 'fs125', 430)" class="i">peerQueues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs134', 431)" onmouseover="showTip(event, 'fs134', 431)" class="i">From</span><span class="o">.</span><span class="i">ObserveOn</span>(<span onmouseout="hideTip(event, 'fs98', 432)" onmouseover="showTip(event, 'fs98', 432)" class="i">scheduler</span>)
+                    <span class="o">.</span><span class="i">Scan</span>((<span class="k">false</span>, <span class="k">false</span>), <span class="k">fun</span> (<span class="i">versionReceived</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs175', 433)" onmouseover="showTip(event, 'fs175', 433)" class="i">bool</span>, <span class="i">verackReceived</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs175', 434)" onmouseover="showTip(event, 'fs175', 434)" class="i">bool</span>) (<span class="i">m</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs68', 435)" onmouseover="showTip(event, 'fs68', 435)" class="i">BitcoinMessage</span>) <span class="k">-&gt;</span>
+                    <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">HS</span><span class="s">&gt;</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span class="i">m</span>
+                    <span class="k">match</span> <span class="i">m</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs69', 436)" onmouseover="showTip(event, 'fs69', 436)" class="i">Command</span> <span class="k">with</span>
+                    | <span class="s">&quot;</span><span class="s">version</span><span class="s">&quot;</span> <span class="k">-&gt;</span> 
+                        <span onmouseout="hideTip(event, 'fs125', 437)" onmouseover="showTip(event, 'fs125', 437)" class="i">peerQueues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs127', 438)" onmouseover="showTip(event, 'fs127', 438)" class="i">To</span><span class="o">.</span><span class="i">OnNext</span>(<span class="k">new</span> <span onmouseout="hideTip(event, 'fs68', 439)" onmouseover="showTip(event, 'fs68', 439)" class="i">BitcoinMessage</span>(<span class="s">&quot;</span><span class="s">verack</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs104', 440)" onmouseover="showTip(event, 'fs104', 440)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs176', 441)" onmouseover="showTip(event, 'fs176', 441)" class="i">empty</span>))
+                        (<span class="k">true</span>, <span class="i">verackReceived</span>)
+                    | <span class="s">&quot;</span><span class="s">verack</span><span class="s">&quot;</span> <span class="k">-&gt;</span> (<span class="i">versionReceived</span>, <span class="k">true</span>)
+                    | _ <span class="k">-&gt;</span> (<span class="i">versionReceived</span>, <span class="i">verackReceived</span>))
+                    <span class="o">.</span><span class="i">SkipWhile</span>(<span class="k">fun</span> (<span class="i">versionReceived</span>, <span class="i">verackReceived</span>) <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs177', 442)" onmouseover="showTip(event, 'fs177', 442)" class="i">not</span> <span class="i">versionReceived</span> <span class="o">||</span> <span onmouseout="hideTip(event, 'fs177', 443)" onmouseover="showTip(event, 'fs177', 443)" class="i">not</span> <span class="i">verackReceived</span>)
+                    <span class="o">.</span><span class="i">Take</span>(<span class="n">1</span>)
+                    <span class="o">.</span><span class="i">Select</span>(<span class="k">fun</span> _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs49', 444)" onmouseover="showTip(event, 'fs49', 444)" class="i">Handshaked</span>)
+
+            <span class="c">// Give that observable a certain time to finish</span>
+            <span onmouseout="hideTip(event, 'fs11', 445)" onmouseover="showTip(event, 'fs11', 445)" class="i">Observable</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs166', 446)" onmouseover="showTip(event, 'fs166', 446)" class="i">Timeout</span>(<span onmouseout="hideTip(event, 'fs174', 447)" onmouseover="showTip(event, 'fs174', 447)" class="i">handshakeObs</span>, <span class="i">handshakeTimeout</span>)<span class="o">.</span><span class="i">Subscribe</span>(
+                <span class="i">onNext</span> <span class="o">=</span> (<span class="k">fun</span> <span class="i">c</span> <span class="k">-&gt;</span> 
+                    <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">A</span><span class="s"> </span><span class="s">Handshaked</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs151', 448)" onmouseover="showTip(event, 'fs151', 448)" class="i">t</span>
+                    <span onmouseout="hideTip(event, 'fs99', 449)" onmouseover="showTip(event, 'fs99', 449)" class="i">incoming</span><span class="o">.</span><span class="i">OnNext</span> <span class="i">c</span>),
+                <span class="i">onError</span> <span class="o">=</span> (<span class="k">fun</span> <span class="i">ex</span> <span class="k">-&gt;</span> 
+                    <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Handshake</span><span class="s"> </span><span class="s">failed</span><span class="s">&gt;</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s"> </span><span class="s">%</span><span class="s">s</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs97', 450)" onmouseover="showTip(event, 'fs97', 450)" class="i">target</span> (<span class="i">ex</span><span class="o">.</span><span class="i">ToString</span>())
+                    <span onmouseout="hideTip(event, 'fs122', 451)" onmouseover="showTip(event, 'fs122', 451)" class="i">closePeer</span>())
+            ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs135', 452)" onmouseover="showTip(event, 'fs135', 452)" class="i">ignore</span>
+
+            <span class="c">// Finally subscribe and start consuming the responses from the remote side</span>
+            <span class="c">// Any exception closes the peer</span>
+            <span onmouseout="hideTip(event, 'fs96', 453)" onmouseover="showTip(event, 'fs96', 453)" class="i">disposable</span><span class="o">.</span><span class="i">Add</span>(<span onmouseout="hideTip(event, 'fs170', 454)" onmouseover="showTip(event, 'fs170', 454)" class="i">parser</span><span class="o">.</span><span class="i">BitcoinMessages</span><span class="o">.</span><span class="i">Subscribe</span>(<span class="i">onNext</span> <span class="o">=</span> (<span class="k">fun</span> <span class="i">m</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs132', 455)" onmouseover="showTip(event, 'fs132', 455)" class="i">processMessage</span> <span onmouseout="hideTip(event, 'fs125', 456)" onmouseover="showTip(event, 'fs125', 456)" class="i">peerQueues</span> <span class="i">m</span>), <span class="i">onError</span> <span class="o">=</span> (<span class="k">fun</span> <span class="i">e</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs122', 457)" onmouseover="showTip(event, 'fs122', 457)" class="i">closePeer</span>())))
+            <span class="c">// But if it goes well, </span>
+            { <span onmouseout="hideTip(event, 'fs149', 458)" onmouseover="showTip(event, 'fs149', 458)" class="i">data</span> <span class="k">with</span> <span class="i">Queues</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs178', 459)" onmouseover="showTip(event, 'fs178', 459)" class="i">Some</span>(<span onmouseout="hideTip(event, 'fs125', 460)" onmouseover="showTip(event, 'fs125', 460)" class="i">peerQueues</span>) }
+        | <span onmouseout="hideTip(event, 'fs49', 461)" onmouseover="showTip(event, 'fs49', 461)" class="i">Handshaked</span> <span class="k">-&gt;</span>
+            <span class="c">// Got the handshake, the peer is ready</span>
+            <span onmouseout="hideTip(event, 'fs85', 462)" onmouseover="showTip(event, 'fs85', 462)" class="i">trackerIncoming</span><span class="o">.</span><span class="i">OnNext</span> (<span onmouseout="hideTip(event, 'fs61', 463)" onmouseover="showTip(event, 'fs61', 463)" class="i">TrackerCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs65', 464)" onmouseover="showTip(event, 'fs65', 464)" class="i">SetReady</span> <span onmouseout="hideTip(event, 'fs94', 465)" onmouseover="showTip(event, 'fs94', 465)" class="i">id</span>)
+            { <span onmouseout="hideTip(event, 'fs149', 466)" onmouseover="showTip(event, 'fs149', 466)" class="i">data</span> <span class="k">with</span> <span class="i">State</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs15', 467)" onmouseover="showTip(event, 'fs15', 467)" class="i">Connected</span>; <span class="i">CommandHandler</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs179', 468)" onmouseover="showTip(event, 'fs179', 468)" class="i">processCommand</span> }
+        | <span onmouseout="hideTip(event, 'fs46', 469)" onmouseover="showTip(event, 'fs46', 469)" class="i">PeerCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs58', 470)" onmouseover="showTip(event, 'fs58', 470)" class="i">Close</span> <span class="k">-&gt;</span> 
+            <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Closing</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs97', 471)" onmouseover="showTip(event, 'fs97', 471)" class="i">target</span>
+            <span class="c">// Tell the Tracker that the peer is finished but don&#39;t leave yet. Tom will do the paperwork and </span>
+            <span class="c">// give the severance package</span>
+            <span onmouseout="hideTip(event, 'fs85', 472)" onmouseover="showTip(event, 'fs85', 472)" class="i">trackerIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs61', 473)" onmouseover="showTip(event, 'fs61', 473)" class="i">TrackerCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs67', 474)" onmouseover="showTip(event, 'fs67', 474)" class="i">Close</span> <span onmouseout="hideTip(event, 'fs94', 475)" onmouseover="showTip(event, 'fs94', 475)" class="i">id</span>)
+            { <span onmouseout="hideTip(event, 'fs149', 476)" onmouseover="showTip(event, 'fs149', 476)" class="i">data</span> <span class="k">with</span> <span class="i">CommandHandler</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs180', 477)" onmouseover="showTip(event, 'fs180', 477)" class="i">processClosing</span> }
+        | _ <span class="k">-&gt;</span> 
+            <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Ignoring</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s"> </span><span class="s">because</span><span class="s"> </span><span class="s">the</span><span class="s"> </span><span class="s">peer</span><span class="s"> </span><span class="s">is</span><span class="s"> </span><span class="s">not</span><span class="s"> </span><span class="s">connected</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs150', 478)" onmouseover="showTip(event, 'fs150', 478)" class="i">command</span>
+            <span onmouseout="hideTip(event, 'fs149', 479)" onmouseover="showTip(event, 'fs149', 479)" class="i">data</span></pre>
+</td>
+</tr>
+</table>
+
+<p>`processCommand is the handler for normal state. The request can be either</p>
+
+<ul>
+<li>For the remote node. In which case, it's simply forwarded.</li>
+<li>A getheader/getblock. These come from Bob and Bob wants the response directly. The message came with a <code>TaskCompletionSource</code> for
+an observable. The peer creates the observable and notifies Bob of its availability.</li>
+<li>A request for the remote node like getdata. They come from the memory pool.</li>
+<li>or some state management message</li>
+</ul>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+<span class="l">40: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+    <span class="k">and</span> <span onmouseout="hideTip(event, 'fs179', 480)" onmouseover="showTip(event, 'fs179', 480)" class="i">processCommand</span> (<span onmouseout="hideTip(event, 'fs149', 481)" onmouseover="showTip(event, 'fs149', 481)" class="i">data</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs87', 482)" onmouseover="showTip(event, 'fs87', 482)" class="i">PeerData</span>) (<span onmouseout="hideTip(event, 'fs150', 483)" onmouseover="showTip(event, 'fs150', 483)" class="i">command</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs46', 484)" onmouseover="showTip(event, 'fs46', 484)" class="i">PeerCommand</span>)<span class="o">:</span> <span onmouseout="hideTip(event, 'fs87', 485)" onmouseover="showTip(event, 'fs87', 485)" class="i">PeerData</span> <span class="o">=</span> 
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs125', 486)" onmouseover="showTip(event, 'fs125', 486)" class="i">peerQueues</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs149', 487)" onmouseover="showTip(event, 'fs149', 487)" class="i">data</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs88', 488)" onmouseover="showTip(event, 'fs88', 488)" class="i">Queues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs181', 489)" onmouseover="showTip(event, 'fs181', 489)" class="i">Value</span>
+        <span class="k">match</span> <span onmouseout="hideTip(event, 'fs150', 490)" onmouseover="showTip(event, 'fs150', 490)" class="i">command</span> <span class="k">with</span>
+        | <span onmouseout="hideTip(event, 'fs50', 491)" onmouseover="showTip(event, 'fs50', 491)" class="i">Execute</span> <span onmouseout="hideTip(event, 'fs182', 492)" onmouseover="showTip(event, 'fs182', 492)" class="i">message</span> <span class="k">-&gt;</span> 
+            <span onmouseout="hideTip(event, 'fs125', 493)" onmouseover="showTip(event, 'fs125', 493)" class="i">peerQueues</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs127', 494)" onmouseover="showTip(event, 'fs127', 494)" class="i">To</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs182', 495)" onmouseover="showTip(event, 'fs182', 495)" class="i">message</span>)
+            <span onmouseout="hideTip(event, 'fs149', 496)" onmouseover="showTip(event, 'fs149', 496)" class="i">data</span>
+        | <span onmouseout="hideTip(event, 'fs46', 497)" onmouseover="showTip(event, 'fs46', 497)" class="i">PeerCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs51', 498)" onmouseover="showTip(event, 'fs51', 498)" class="i">GetHeaders</span> (<span onmouseout="hideTip(event, 'fs140', 499)" onmouseover="showTip(event, 'fs140', 499)" class="i">gh</span>, <span onmouseout="hideTip(event, 'fs183', 500)" onmouseover="showTip(event, 'fs183', 500)" class="i">ts</span>, _) <span class="k">-&gt;</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs184', 501)" onmouseover="showTip(event, 'fs184', 501)" class="i">sendObs</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs124', 502)" onmouseover="showTip(event, 'fs124', 502)" class="i">sendMessageObs</span> <span onmouseout="hideTip(event, 'fs125', 503)" onmouseover="showTip(event, 'fs125', 503)" class="i">peerQueues</span> (<span class="k">new</span> <span onmouseout="hideTip(event, 'fs68', 504)" onmouseover="showTip(event, 'fs68', 504)" class="i">BitcoinMessage</span>(<span class="s">&quot;</span><span class="s">getheaders</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs140', 505)" onmouseover="showTip(event, 'fs140', 505)" class="i">gh</span><span class="o">.</span><span class="i">ToByteArray</span>()))
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs185', 506)" onmouseover="showTip(event, 'fs185', 506)" class="i">obs</span> <span class="o">=</span> 
+                <span onmouseout="hideTip(event, 'fs11', 507)" onmouseover="showTip(event, 'fs11', 507)" class="i">Observable</span>
+                    <span class="o">.</span><span onmouseout="hideTip(event, 'fs166', 508)" onmouseover="showTip(event, 'fs166', 508)" class="i">Timeout</span>(<span onmouseout="hideTip(event, 'fs184', 509)" onmouseover="showTip(event, 'fs184', 509)" class="i">sendObs</span><span class="o">.</span><span class="i">Concat</span>(<span onmouseout="hideTip(event, 'fs100', 510)" onmouseover="showTip(event, 'fs100', 510)" class="i">headersIncoming</span>), <span class="i">commandTimeout</span>)
+            <span onmouseout="hideTip(event, 'fs183', 511)" onmouseover="showTip(event, 'fs183', 511)" class="i">ts</span><span class="o">.</span><span class="i">SetResult</span>(<span onmouseout="hideTip(event, 'fs185', 512)" onmouseover="showTip(event, 'fs185', 512)" class="i">obs</span>)
+            { <span onmouseout="hideTip(event, 'fs149', 513)" onmouseover="showTip(event, 'fs149', 513)" class="i">data</span> <span class="k">with</span> <span class="i">State</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs14', 514)" onmouseover="showTip(event, 'fs14', 514)" class="i">PeerState</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs17', 515)" onmouseover="showTip(event, 'fs17', 515)" class="i">Busy</span> }
+        | <span onmouseout="hideTip(event, 'fs54', 516)" onmouseover="showTip(event, 'fs54', 516)" class="i">GetBlocks</span> (<span onmouseout="hideTip(event, 'fs136', 517)" onmouseover="showTip(event, 'fs136', 517)" class="i">gd</span>, <span onmouseout="hideTip(event, 'fs186', 518)" onmouseover="showTip(event, 'fs186', 518)" class="i">ts</span>) <span class="k">-&gt;</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs187', 519)" onmouseover="showTip(event, 'fs187', 519)" class="i">blocksPending</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs188', 520)" onmouseover="showTip(event, 'fs188', 520)" class="i">HashSet</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs55', 521)" onmouseover="showTip(event, 'fs55', 521)" class="i">byte</span>[]<span class="o">&gt;</span>(<span onmouseout="hideTip(event, 'fs136', 522)" onmouseover="showTip(event, 'fs136', 522)" class="i">gd</span><span class="o">.</span><span class="i">Invs</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs189', 523)" onmouseover="showTip(event, 'fs189', 523)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs190', 524)" onmouseover="showTip(event, 'fs190', 524)" class="i">map</span>(<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs144', 525)" onmouseover="showTip(event, 'fs144', 525)" class="i">inv</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs144', 526)" onmouseover="showTip(event, 'fs144', 526)" class="i">inv</span><span class="o">.</span><span class="i">Hash</span>), <span class="k">new</span> <span class="i">HashCompare</span>())
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs184', 527)" onmouseover="showTip(event, 'fs184', 527)" class="i">sendObs</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs124', 528)" onmouseover="showTip(event, 'fs124', 528)" class="i">sendMessageObs</span> <span onmouseout="hideTip(event, 'fs125', 529)" onmouseover="showTip(event, 'fs125', 529)" class="i">peerQueues</span> (<span class="k">new</span> <span onmouseout="hideTip(event, 'fs68', 530)" onmouseover="showTip(event, 'fs68', 530)" class="i">BitcoinMessage</span>(<span class="s">&quot;</span><span class="s">getdata</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs136', 531)" onmouseover="showTip(event, 'fs136', 531)" class="i">gd</span><span class="o">.</span><span class="i">ToByteArray</span>()))
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs191', 532)" onmouseover="showTip(event, 'fs191', 532)" class="i">count</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs187', 533)" onmouseover="showTip(event, 'fs187', 533)" class="i">blocksPending</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs192', 534)" onmouseover="showTip(event, 'fs192', 534)" class="i">Count</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs193', 535)" onmouseover="showTip(event, 'fs193', 535)" class="i">obs</span> <span class="o">=</span> 
+                <span onmouseout="hideTip(event, 'fs11', 536)" onmouseover="showTip(event, 'fs11', 536)" class="i">Observable</span>
+                    <span class="o">.</span><span onmouseout="hideTip(event, 'fs166', 537)" onmouseover="showTip(event, 'fs166', 537)" class="i">Timeout</span>(<span onmouseout="hideTip(event, 'fs184', 538)" onmouseover="showTip(event, 'fs184', 538)" class="i">sendObs</span><span class="o">.</span><span class="i">Concat</span>(<span onmouseout="hideTip(event, 'fs101', 539)" onmouseover="showTip(event, 'fs101', 539)" class="i">blockIncoming</span>), <span class="i">commandTimeout</span>)
+                    <span class="o">.</span><span class="i">Where</span>(<span class="k">fun</span> (<span class="i">b</span>, _) <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs187', 540)" onmouseover="showTip(event, 'fs187', 540)" class="i">blocksPending</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs194', 541)" onmouseover="showTip(event, 'fs194', 541)" class="i">Contains</span> <span class="i">b</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Hash</span>)
+                    <span class="o">.</span><span class="i">Take</span>(<span onmouseout="hideTip(event, 'fs191', 542)" onmouseover="showTip(event, 'fs191', 542)" class="i">count</span>)
+            <span onmouseout="hideTip(event, 'fs186', 543)" onmouseover="showTip(event, 'fs186', 543)" class="i">ts</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs195', 544)" onmouseover="showTip(event, 'fs195', 544)" class="i">SetResult</span>(<span onmouseout="hideTip(event, 'fs95', 545)" onmouseover="showTip(event, 'fs95', 545)" class="i">self</span> <span class="o">:&gt;</span> <span onmouseout="hideTip(event, 'fs38', 546)" onmouseover="showTip(event, 'fs38', 546)" class="i">IPeer</span>, <span onmouseout="hideTip(event, 'fs193', 547)" onmouseover="showTip(event, 'fs193', 547)" class="i">obs</span>)
+            { <span onmouseout="hideTip(event, 'fs149', 548)" onmouseover="showTip(event, 'fs149', 548)" class="i">data</span> <span class="k">with</span> <span class="i">State</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs14', 549)" onmouseover="showTip(event, 'fs14', 549)" class="i">PeerState</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs17', 550)" onmouseover="showTip(event, 'fs17', 550)" class="i">Busy</span> }
+        | <span onmouseout="hideTip(event, 'fs46', 551)" onmouseover="showTip(event, 'fs46', 551)" class="i">PeerCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs57', 552)" onmouseover="showTip(event, 'fs57', 552)" class="i">SetReady</span> <span class="k">-&gt;</span> 
+            <span class="k">if</span> <span onmouseout="hideTip(event, 'fs149', 553)" onmouseover="showTip(event, 'fs149', 553)" class="i">data</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs90', 554)" onmouseover="showTip(event, 'fs90', 554)" class="i">State</span> <span class="o">&lt;&gt;</span> <span onmouseout="hideTip(event, 'fs14', 555)" onmouseover="showTip(event, 'fs14', 555)" class="i">PeerState</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs16', 556)" onmouseover="showTip(event, 'fs16', 556)" class="i">Ready</span> <span class="k">then</span>
+                <span onmouseout="hideTip(event, 'fs85', 557)" onmouseover="showTip(event, 'fs85', 557)" class="i">trackerIncoming</span><span class="o">.</span><span class="i">OnNext</span> (<span onmouseout="hideTip(event, 'fs61', 558)" onmouseover="showTip(event, 'fs61', 558)" class="i">TrackerCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs65', 559)" onmouseover="showTip(event, 'fs65', 559)" class="i">SetReady</span> <span onmouseout="hideTip(event, 'fs94', 560)" onmouseover="showTip(event, 'fs94', 560)" class="i">id</span>)
+            { <span onmouseout="hideTip(event, 'fs149', 561)" onmouseover="showTip(event, 'fs149', 561)" class="i">data</span> <span class="k">with</span> <span class="i">State</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs14', 562)" onmouseover="showTip(event, 'fs14', 562)" class="i">PeerState</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs16', 563)" onmouseover="showTip(event, 'fs16', 563)" class="i">Ready</span> }
+        | <span onmouseout="hideTip(event, 'fs56', 564)" onmouseover="showTip(event, 'fs56', 564)" class="i">GetData</span> (<span onmouseout="hideTip(event, 'fs136', 565)" onmouseover="showTip(event, 'fs136', 565)" class="i">gd</span>) <span class="k">-&gt;</span> 
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs184', 566)" onmouseover="showTip(event, 'fs184', 566)" class="i">sendObs</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs124', 567)" onmouseover="showTip(event, 'fs124', 567)" class="i">sendMessageObs</span> <span onmouseout="hideTip(event, 'fs125', 568)" onmouseover="showTip(event, 'fs125', 568)" class="i">peerQueues</span> (<span class="k">new</span> <span onmouseout="hideTip(event, 'fs68', 569)" onmouseover="showTip(event, 'fs68', 569)" class="i">BitcoinMessage</span>(<span class="s">&quot;</span><span class="s">getdata</span><span class="s">&quot;</span>, <span onmouseout="hideTip(event, 'fs136', 570)" onmouseover="showTip(event, 'fs136', 570)" class="i">gd</span><span class="o">.</span><span class="i">ToByteArray</span>()))
+            <span onmouseout="hideTip(event, 'fs11', 571)" onmouseover="showTip(event, 'fs11', 571)" class="i">Observable</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs166', 572)" onmouseover="showTip(event, 'fs166', 572)" class="i">Timeout</span>(<span onmouseout="hideTip(event, 'fs184', 573)" onmouseover="showTip(event, 'fs184', 573)" class="i">sendObs</span>, <span class="i">commandTimeout</span>)<span class="o">.</span><span class="i">Subscribe</span>(<span class="i">onNext</span> <span class="o">=</span> (<span class="k">fun</span> _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs135', 574)" onmouseover="showTip(event, 'fs135', 574)" class="i">ignore</span>()), <span class="i">onError</span> <span class="o">=</span> (<span class="k">fun</span> _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs123', 575)" onmouseover="showTip(event, 'fs123', 575)" class="i">badPeer</span>())) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs135', 576)" onmouseover="showTip(event, 'fs135', 576)" class="i">ignore</span>
+            <span onmouseout="hideTip(event, 'fs149', 577)" onmouseover="showTip(event, 'fs149', 577)" class="i">data</span>
+        | <span onmouseout="hideTip(event, 'fs60', 578)" onmouseover="showTip(event, 'fs60', 578)" class="i">UpdateScore</span> <span onmouseout="hideTip(event, 'fs196', 579)" onmouseover="showTip(event, 'fs196', 579)" class="i">score</span> <span class="k">-&gt;</span> 
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs197', 580)" onmouseover="showTip(event, 'fs197', 580)" class="i">newData</span> <span class="o">=</span> { <span onmouseout="hideTip(event, 'fs149', 581)" onmouseover="showTip(event, 'fs149', 581)" class="i">data</span> <span class="k">with</span> <span class="i">Score</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs149', 582)" onmouseover="showTip(event, 'fs149', 582)" class="i">data</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs91', 583)" onmouseover="showTip(event, 'fs91', 583)" class="i">Score</span> <span class="o">+</span> <span onmouseout="hideTip(event, 'fs196', 584)" onmouseover="showTip(event, 'fs196', 584)" class="i">score</span> }
+            <span class="k">if</span> <span onmouseout="hideTip(event, 'fs197', 585)" onmouseover="showTip(event, 'fs197', 585)" class="i">newData</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs91', 586)" onmouseover="showTip(event, 'fs91', 586)" class="i">Score</span> <span class="o">&lt;=</span> <span class="n">0</span> <span class="k">then</span> <span onmouseout="hideTip(event, 'fs99', 587)" onmouseover="showTip(event, 'fs99', 587)" class="i">incoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs46', 588)" onmouseover="showTip(event, 'fs46', 588)" class="i">PeerCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs58', 589)" onmouseover="showTip(event, 'fs58', 589)" class="i">Close</span>)
+            <span onmouseout="hideTip(event, 'fs197', 590)" onmouseover="showTip(event, 'fs197', 590)" class="i">newData</span>
+        | <span onmouseout="hideTip(event, 'fs46', 591)" onmouseover="showTip(event, 'fs46', 591)" class="i">PeerCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs58', 592)" onmouseover="showTip(event, 'fs58', 592)" class="i">Close</span> <span class="k">-&gt;</span> 
+            <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Closing</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs97', 593)" onmouseover="showTip(event, 'fs97', 593)" class="i">target</span>
+            <span onmouseout="hideTip(event, 'fs85', 594)" onmouseover="showTip(event, 'fs85', 594)" class="i">trackerIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs61', 595)" onmouseover="showTip(event, 'fs61', 595)" class="i">TrackerCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs67', 596)" onmouseover="showTip(event, 'fs67', 596)" class="i">Close</span> <span onmouseout="hideTip(event, 'fs94', 597)" onmouseover="showTip(event, 'fs94', 597)" class="i">id</span>)
+            { <span onmouseout="hideTip(event, 'fs149', 598)" onmouseover="showTip(event, 'fs149', 598)" class="i">data</span> <span class="k">with</span> <span class="i">CommandHandler</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs180', 599)" onmouseover="showTip(event, 'fs180', 599)" class="i">processClosing</span> }</pre>
+</td>
+</tr>
+</table>
+
+<p>Finally, <code>processClosing</code> handles the cleanup. Tom will not send further requests to this peer but there still may be 
+outstanding message in the pipeline. They must be cleared gracefully otherwise someone could end up waiting for their 
+result forever.</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+<span class="l">40: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+    <span class="k">and</span> <span onmouseout="hideTip(event, 'fs180', 600)" onmouseover="showTip(event, 'fs180', 600)" class="i">processClosing</span> (<span onmouseout="hideTip(event, 'fs149', 601)" onmouseover="showTip(event, 'fs149', 601)" class="i">data</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs87', 602)" onmouseover="showTip(event, 'fs87', 602)" class="i">PeerData</span>) (<span onmouseout="hideTip(event, 'fs150', 603)" onmouseover="showTip(event, 'fs150', 603)" class="i">command</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs46', 604)" onmouseover="showTip(event, 'fs46', 604)" class="i">PeerCommand</span>)<span class="o">:</span> <span onmouseout="hideTip(event, 'fs87', 605)" onmouseover="showTip(event, 'fs87', 605)" class="i">PeerData</span> <span class="o">=</span>
+        <span class="k">match</span> <span onmouseout="hideTip(event, 'fs150', 606)" onmouseover="showTip(event, 'fs150', 606)" class="i">command</span> <span class="k">with</span>
+        | <span onmouseout="hideTip(event, 'fs59', 607)" onmouseover="showTip(event, 'fs59', 607)" class="i">Closed</span> <span class="k">-&gt;</span> 
+            (<span onmouseout="hideTip(event, 'fs95', 608)" onmouseover="showTip(event, 'fs95', 608)" class="i">self</span> <span class="o">:&gt;</span> <span onmouseout="hideTip(event, 'fs32', 609)" onmouseover="showTip(event, 'fs32', 609)" class="i">IDisposable</span>)<span class="o">.</span><span class="i">Dispose</span>() <span class="c">// Dispose completes the queues</span>
+            { <span onmouseout="hideTip(event, 'fs149', 610)" onmouseover="showTip(event, 'fs149', 610)" class="i">data</span> <span class="k">with</span> <span class="i">State</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs14', 611)" onmouseover="showTip(event, 'fs14', 611)" class="i">PeerState</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 612)" onmouseover="showTip(event, 'fs18', 612)" class="i">Closed</span>; <span class="i">Queues</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs198', 613)" onmouseover="showTip(event, 'fs198', 613)" class="i">None</span>; <span class="i">CommandHandler</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs148', 614)" onmouseover="showTip(event, 'fs148', 614)" class="i">processConnection</span> }
+        | <span onmouseout="hideTip(event, 'fs46', 615)" onmouseover="showTip(event, 'fs46', 615)" class="i">PeerCommand</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs51', 616)" onmouseover="showTip(event, 'fs51', 616)" class="i">GetHeaders</span> (<span onmouseout="hideTip(event, 'fs140', 617)" onmouseover="showTip(event, 'fs140', 617)" class="i">gh</span>, <span onmouseout="hideTip(event, 'fs183', 618)" onmouseover="showTip(event, 'fs183', 618)" class="i">ts</span>, _) <span class="k">-&gt;</span>
+            <span onmouseout="hideTip(event, 'fs183', 619)" onmouseover="showTip(event, 'fs183', 619)" class="i">ts</span><span class="o">.</span><span class="i">SetResult</span>(<span onmouseout="hideTip(event, 'fs11', 620)" onmouseover="showTip(event, 'fs11', 620)" class="i">Observable</span><span class="o">.</span><span class="i">Empty</span>())
+            <span onmouseout="hideTip(event, 'fs149', 621)" onmouseover="showTip(event, 'fs149', 621)" class="i">data</span>
+        | <span onmouseout="hideTip(event, 'fs54', 622)" onmouseover="showTip(event, 'fs54', 622)" class="i">GetBlocks</span> (<span onmouseout="hideTip(event, 'fs136', 623)" onmouseover="showTip(event, 'fs136', 623)" class="i">gd</span>, <span onmouseout="hideTip(event, 'fs186', 624)" onmouseover="showTip(event, 'fs186', 624)" class="i">ts</span>) <span class="k">-&gt;</span>
+            <span onmouseout="hideTip(event, 'fs186', 625)" onmouseover="showTip(event, 'fs186', 625)" class="i">ts</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs195', 626)" onmouseover="showTip(event, 'fs195', 626)" class="i">SetResult</span>(<span onmouseout="hideTip(event, 'fs95', 627)" onmouseover="showTip(event, 'fs95', 627)" class="i">self</span> <span class="o">:&gt;</span> <span onmouseout="hideTip(event, 'fs38', 628)" onmouseover="showTip(event, 'fs38', 628)" class="i">IPeer</span>, <span onmouseout="hideTip(event, 'fs11', 629)" onmouseover="showTip(event, 'fs11', 629)" class="i">Observable</span><span class="o">.</span><span class="i">Empty</span>())
+            <span onmouseout="hideTip(event, 'fs149', 630)" onmouseover="showTip(event, 'fs149', 630)" class="i">data</span>
+        | _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs149', 631)" onmouseover="showTip(event, 'fs149', 631)" class="i">data</span>
+
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs199', 632)" onmouseover="showTip(event, 'fs199', 632)" class="i">initialState</span> <span class="o">=</span> { <span class="i">State</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs14', 633)" onmouseover="showTip(event, 'fs14', 633)" class="i">PeerState</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 634)" onmouseover="showTip(event, 'fs18', 634)" class="i">Closed</span>; <span class="i">Score</span> <span class="o">=</span> <span class="n">100</span>; <span class="i">Queues</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs198', 635)" onmouseover="showTip(event, 'fs198', 635)" class="i">None</span>; <span class="i">CommandHandler</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs148', 636)" onmouseover="showTip(event, 'fs148', 636)" class="i">processConnection</span> }
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs200', 637)" onmouseover="showTip(event, 'fs200', 637)" class="i">runHandler</span> (<span onmouseout="hideTip(event, 'fs149', 638)" onmouseover="showTip(event, 'fs149', 638)" class="i">data</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs87', 639)" onmouseover="showTip(event, 'fs87', 639)" class="i">PeerData</span>) (<span onmouseout="hideTip(event, 'fs150', 640)" onmouseover="showTip(event, 'fs150', 640)" class="i">command</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs46', 641)" onmouseover="showTip(event, 'fs46', 641)" class="i">PeerCommand</span>) <span class="o">=</span> 
+        <span class="c">// logger.DebugF &quot;PeerCommand&gt; %A&quot; command</span>
+        <span onmouseout="hideTip(event, 'fs149', 642)" onmouseover="showTip(event, 'fs149', 642)" class="i">data</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs92', 643)" onmouseover="showTip(event, 'fs92', 643)" class="i">CommandHandler</span> <span onmouseout="hideTip(event, 'fs149', 644)" onmouseover="showTip(event, 'fs149', 644)" class="i">data</span> <span onmouseout="hideTip(event, 'fs150', 645)" onmouseover="showTip(event, 'fs150', 645)" class="i">command</span>
+
+    <span class="k">do</span>
+        <span onmouseout="hideTip(event, 'fs96', 646)" onmouseover="showTip(event, 'fs96', 646)" class="i">disposable</span><span class="o">.</span><span class="i">Add</span>(
+            <span onmouseout="hideTip(event, 'fs99', 647)" onmouseover="showTip(event, 'fs99', 647)" class="i">incoming</span>
+                <span class="o">.</span><span class="i">ObserveOn</span>(<span onmouseout="hideTip(event, 'fs98', 648)" onmouseover="showTip(event, 'fs98', 648)" class="i">scheduler</span>)
+                <span class="o">.</span><span class="i">Scan</span>(<span onmouseout="hideTip(event, 'fs199', 649)" onmouseover="showTip(event, 'fs199', 649)" class="i">initialState</span>, <span class="k">new</span> <span onmouseout="hideTip(event, 'fs201', 650)" onmouseover="showTip(event, 'fs201', 650)" class="i">Func</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs87', 651)" onmouseover="showTip(event, 'fs87', 651)" class="i">PeerData</span>, <span onmouseout="hideTip(event, 'fs46', 652)" onmouseover="showTip(event, 'fs46', 652)" class="i">PeerCommand</span>, <span onmouseout="hideTip(event, 'fs87', 653)" onmouseover="showTip(event, 'fs87', 653)" class="i">PeerData</span><span class="o">&gt;</span>(<span class="i">runHandler</span>))
+                <span class="o">.</span><span class="i">Subscribe</span>(<span class="i">onNext</span> <span class="o">=</span> (<span class="k">fun</span> _ <span class="k">-&gt;</span> ()), <span class="i">onCompleted</span> <span class="o">=</span> (<span class="k">fun</span> () <span class="k">-&gt;</span> 
+                    <span onmouseout="hideTip(event, 'fs98', 654)" onmouseover="showTip(event, 'fs98', 654)" class="i">scheduler</span><span class="o">.</span><span class="i">Dispose</span>() <span class="c">// On completion, dispose of the final resources</span>
+                    <span onmouseout="hideTip(event, 'fs96', 655)" onmouseover="showTip(event, 'fs96', 655)" class="i">disposable</span><span class="o">.</span><span class="i">Dispose</span>()
+                    )))
+
+    <span class="k">interface</span> <span onmouseout="hideTip(event, 'fs32', 656)" onmouseover="showTip(event, 'fs32', 656)" class="i">IDisposable</span> <span class="k">with</span>
+        <span class="k">member</span> <span onmouseout="hideTip(event, 'fs202', 657)" onmouseover="showTip(event, 'fs202', 657)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs203', 658)" onmouseover="showTip(event, 'fs203', 658)" class="i">Dispose</span>() <span class="o">=</span> 
+            <span onmouseout="hideTip(event, 'fs99', 659)" onmouseover="showTip(event, 'fs99', 659)" class="i">incoming</span><span class="o">.</span><span class="i">OnCompleted</span>()
+
+    <span class="k">interface</span> <span onmouseout="hideTip(event, 'fs38', 660)" onmouseover="showTip(event, 'fs38', 660)" class="i">IPeer</span> <span class="k">with</span>
+        <span class="k">member</span> <span onmouseout="hideTip(event, 'fs202', 661)" onmouseover="showTip(event, 'fs202', 661)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs204', 662)" onmouseover="showTip(event, 'fs204', 662)" class="i">Ready</span>() <span class="o">=</span> <span onmouseout="hideTip(event, 'fs121', 663)" onmouseover="showTip(event, 'fs121', 663)" class="i">readyPeer</span>()
+        <span class="k">member</span> <span class="k">val</span> <span class="i">Id</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs94', 664)" onmouseover="showTip(event, 'fs94', 664)" class="i">id</span> <span class="k">with</span> <span class="i">get</span>
+        <span class="k">member</span> <span onmouseout="hideTip(event, 'fs202', 665)" onmouseover="showTip(event, 'fs202', 665)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs205', 666)" onmouseover="showTip(event, 'fs205', 666)" class="i">Target</span> <span class="k">with</span> <span class="i">get</span>() <span class="o">=</span> <span onmouseout="hideTip(event, 'fs97', 667)" onmouseover="showTip(event, 'fs97', 667)" class="i">target</span> <span class="c">// For diagnostics only</span>
+        <span class="k">member</span> <span onmouseout="hideTip(event, 'fs202', 668)" onmouseover="showTip(event, 'fs202', 668)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs206', 669)" onmouseover="showTip(event, 'fs206', 669)" class="i">Bad</span>() <span class="o">=</span> <span onmouseout="hideTip(event, 'fs135', 670)" onmouseover="showTip(event, 'fs135', 670)" class="i">ignore</span>() <span class="c">// TODO: Renable badPeer()</span>
+
+    <span class="k">override</span> <span onmouseout="hideTip(event, 'fs202', 671)" onmouseover="showTip(event, 'fs202', 671)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs207', 672)" onmouseover="showTip(event, 'fs207', 672)" class="i">ToString</span>() <span class="o">=</span> <span onmouseout="hideTip(event, 'fs208', 673)" onmouseover="showTip(event, 'fs208', 673)" class="i">sprintf</span> <span class="s">&quot;</span><span class="s">Peer</span><span class="s">(</span><span class="s">%</span><span class="s">d</span><span class="s">,</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">)</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs94', 674)" onmouseover="showTip(event, 'fs94', 674)" class="i">id</span> <span onmouseout="hideTip(event, 'fs97', 675)" onmouseover="showTip(event, 'fs97', 675)" class="i">target</span>
+    <span class="k">member</span> <span onmouseout="hideTip(event, 'fs202', 676)" onmouseover="showTip(event, 'fs202', 676)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs209', 677)" onmouseover="showTip(event, 'fs209', 677)" class="i">Incoming</span> <span class="k">with</span> <span class="i">get</span>() <span class="o">=</span> <span onmouseout="hideTip(event, 'fs99', 678)" onmouseover="showTip(event, 'fs99', 678)" class="i">incoming</span></pre>
+</td>
+</tr>
+</table>
+
+<h3>Bootstrap from DNS</h3>
+
+<p>Clear peers that are older than 3h and do a DNS request to the known seed nodes if the database has less than 1000 peers</p>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs210', 679)" onmouseover="showTip(event, 'fs210', 679)" class="i">dropOldPeers</span>() <span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs211', 680)" onmouseover="showTip(event, 'fs211', 680)" class="i">dts</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs212', 681)" onmouseover="showTip(event, 'fs212', 681)" class="i">DateTime</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs213', 682)" onmouseover="showTip(event, 'fs213', 682)" class="i">UtcNow</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs214', 683)" onmouseover="showTip(event, 'fs214', 683)" class="i">AddHours</span>(<span class="o">-</span><span class="n">3.0</span>)
+    <span class="i">Db</span><span class="o">.</span><span class="i">dropOldPeers</span> <span onmouseout="hideTip(event, 'fs211', 684)" onmouseover="showTip(event, 'fs211', 684)" class="i">dts</span>
+    <span class="i">Db</span><span class="o">.</span><span class="i">resetState</span>()
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs215', 685)" onmouseover="showTip(event, 'fs215', 685)" class="i">bootstrapPeers</span>() <span class="o">=</span>
+    <span onmouseout="hideTip(event, 'fs155', 686)" onmouseover="showTip(event, 'fs155', 686)" class="i">async</span> {
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs216', 687)" onmouseover="showTip(event, 'fs216', 687)" class="i">now</span> <span class="o">=</span> <span class="i">NodaTime</span><span class="o">.</span><span class="i">Instant</span><span class="o">.</span><span class="i">FromDateTimeUtc</span>(<span onmouseout="hideTip(event, 'fs212', 688)" onmouseover="showTip(event, 'fs212', 688)" class="i">DateTime</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs213', 689)" onmouseover="showTip(event, 'fs213', 689)" class="i">UtcNow</span>)
+        
+        <span class="k">let!</span> <span onmouseout="hideTip(event, 'fs217', 690)" onmouseover="showTip(event, 'fs217', 690)" class="i">entry</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs158', 691)" onmouseover="showTip(event, 'fs158', 691)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs218', 692)" onmouseover="showTip(event, 'fs218', 692)" class="i">AwaitTask</span>(<span onmouseout="hideTip(event, 'fs219', 693)" onmouseover="showTip(event, 'fs219', 693)" class="i">Dns</span><span class="o">.</span><span class="i">GetHostEntryAsync</span>(<span class="s">&quot;</span><span class="s">seed</span><span class="s">.</span><span class="s">bitnodes</span><span class="s">.</span><span class="s">io</span><span class="s">&quot;</span>))
+        <span class="k">for</span> <span onmouseout="hideTip(event, 'fs220', 694)" onmouseover="showTip(event, 'fs220', 694)" class="i">peer</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs217', 695)" onmouseover="showTip(event, 'fs217', 695)" class="i">entry</span><span class="o">.</span><span class="i">AddressList</span> <span class="k">do</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs141', 696)" onmouseover="showTip(event, 'fs141', 696)" class="i">addr</span> <span class="o">=</span> { <span class="i">Timestamp</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs40', 697)" onmouseover="showTip(event, 'fs40', 697)" class="i">int</span> (<span onmouseout="hideTip(event, 'fs216', 698)" onmouseover="showTip(event, 'fs216', 698)" class="i">now</span><span class="o">.</span><span class="i">Ticks</span> <span class="o">/</span> <span class="i">NodaConstants</span><span class="o">.</span><span class="i">TicksPerSecond</span>); <span class="i">Address</span> <span class="o">=</span> <span class="k">new</span> <span class="i">NetworkAddr</span>(<span class="k">new</span> <span onmouseout="hideTip(event, 'fs45', 699)" onmouseover="showTip(event, 'fs45', 699)" class="i">IPEndPoint</span>(<span onmouseout="hideTip(event, 'fs220', 700)" onmouseover="showTip(event, 'fs220', 700)" class="i">peer</span><span class="o">.</span><span class="i">MapToIPv4</span>(), <span onmouseout="hideTip(event, 'fs13', 701)" onmouseover="showTip(event, 'fs13', 701)" class="i">defaultPort</span>)) }
+            <span class="i">Db</span><span class="o">.</span><span class="i">updateAddr</span> <span onmouseout="hideTip(event, 'fs141', 702)" onmouseover="showTip(event, 'fs141', 702)" class="i">addr</span>
+        <span onmouseout="hideTip(event, 'fs85', 703)" onmouseover="showTip(event, 'fs85', 703)" class="i">trackerIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span onmouseout="hideTip(event, 'fs62', 704)" onmouseover="showTip(event, 'fs62', 704)" class="i">GetPeers</span>)
+        } <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs158', 705)" onmouseover="showTip(event, 'fs158', 705)" class="i">Async</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs221', 706)" onmouseover="showTip(event, 'fs221', 706)" class="i">StartImmediate</span>
+
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs222', 707)" onmouseover="showTip(event, 'fs222', 707)" class="i">initPeers</span>() <span class="o">=</span>
+    <span onmouseout="hideTip(event, 'fs210', 708)" onmouseover="showTip(event, 'fs210', 708)" class="i">dropOldPeers</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs223', 709)" onmouseover="showTip(event, 'fs223', 709)" class="i">peers</span> <span class="o">=</span> <span class="i">Db</span><span class="o">.</span><span class="i">getPeers</span>()
+    <span class="k">if</span> <span onmouseout="hideTip(event, 'fs223', 710)" onmouseover="showTip(event, 'fs223', 710)" class="i">peers</span><span class="o">.</span><span class="i">Length</span> <span class="o">&lt;</span> <span class="n">1000</span> <span class="k">then</span>
+        <span onmouseout="hideTip(event, 'fs215', 711)" onmouseover="showTip(event, 'fs215', 711)" class="i">bootstrapPeers</span>()</pre>
+</td>
+</tr>
+</table>
+
+          <div class="tip" id="fs1">module Peer</div>
+<div class="tip" id="fs2">namespace System</div>
+<div class="tip" id="fs3">namespace System.Collections</div>
+<div class="tip" id="fs4">namespace System.Collections.Generic</div>
+<div class="tip" id="fs5">namespace System.Net</div>
+<div class="tip" id="fs6">namespace System.Net.Sockets</div>
+<div class="tip" id="fs7">Multiple items<br />namespace System.Linq<br /><br />--------------------<br />namespace Microsoft.FSharp.Linq</div>
+<div class="tip" id="fs8">namespace System.Threading</div>
+<div class="tip" id="fs9">namespace System.Threading.Tasks</div>
+<div class="tip" id="fs10">namespace Microsoft.FSharp.Control</div>
+<div class="tip" id="fs11">module Observable<br /><br />from Microsoft.FSharp.Control</div>
+<div class="tip" id="fs12">Multiple items<br />type Choice&lt;&#39;T1,&#39;T2&gt; =<br />&#160;&#160;| Choice1Of2 of &#39;T1<br />&#160;&#160;| Choice2Of2 of &#39;T2<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3&gt; =<br />&#160;&#160;| Choice1Of3 of &#39;T1<br />&#160;&#160;| Choice2Of3 of &#39;T2<br />&#160;&#160;| Choice3Of3 of &#39;T3<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4&gt; =<br />&#160;&#160;| Choice1Of4 of &#39;T1<br />&#160;&#160;| Choice2Of4 of &#39;T2<br />&#160;&#160;| Choice3Of4 of &#39;T3<br />&#160;&#160;| Choice4Of4 of &#39;T4<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5&gt; =<br />&#160;&#160;| Choice1Of5 of &#39;T1<br />&#160;&#160;| Choice2Of5 of &#39;T2<br />&#160;&#160;| Choice3Of5 of &#39;T3<br />&#160;&#160;| Choice4Of5 of &#39;T4<br />&#160;&#160;| Choice5Of5 of &#39;T5<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6&gt; =<br />&#160;&#160;| Choice1Of6 of &#39;T1<br />&#160;&#160;| Choice2Of6 of &#39;T2<br />&#160;&#160;| Choice3Of6 of &#39;T3<br />&#160;&#160;| Choice4Of6 of &#39;T4<br />&#160;&#160;| Choice5Of6 of &#39;T5<br />&#160;&#160;| Choice6Of6 of &#39;T6<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Choice&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7&gt; =<br />&#160;&#160;| Choice1Of7 of &#39;T1<br />&#160;&#160;| Choice2Of7 of &#39;T2<br />&#160;&#160;| Choice3Of7 of &#39;T3<br />&#160;&#160;| Choice4Of7 of &#39;T4<br />&#160;&#160;| Choice5Of7 of &#39;T5<br />&#160;&#160;| Choice6Of7 of &#39;T6<br />&#160;&#160;| Choice7Of7 of &#39;T7<br /><br />Full name: Microsoft.FSharp.Core.Choice&lt;_,_,_,_,_,_,_&gt;</div>
+<div class="tip" id="fs13">val defaultPort : obj<br /><br />Full name: Peer.defaultPort</div>
+<div class="tip" id="fs14">type PeerState =<br />&#160;&#160;| Connected<br />&#160;&#160;| Ready<br />&#160;&#160;| Busy<br />&#160;&#160;| Closed<br /><br />Full name: Peer.PeerState</div>
+<div class="tip" id="fs15">union case PeerState.Connected: PeerState</div>
+<div class="tip" id="fs16">union case PeerState.Ready: PeerState</div>
+<div class="tip" id="fs17">union case PeerState.Busy: PeerState</div>
+<div class="tip" id="fs18">union case PeerState.Closed: PeerState</div>
+<div class="tip" id="fs19">type TrackerPeerState =<br />&#160;&#160;| Allocated<br />&#160;&#160;| Ready<br />&#160;&#160;| Busy<br />&#160;&#160;| Free<br /><br />Full name: Peer.TrackerPeerState</div>
+<div class="tip" id="fs20">union case TrackerPeerState.Allocated: TrackerPeerState</div>
+<div class="tip" id="fs21">union case TrackerPeerState.Ready: TrackerPeerState</div>
+<div class="tip" id="fs22">union case TrackerPeerState.Busy: TrackerPeerState</div>
+<div class="tip" id="fs23">union case TrackerPeerState.Free: TrackerPeerState</div>
+<div class="tip" id="fs24">type GetResult&lt;&#39;a&gt; = Choice&lt;&#39;a,exn&gt;<br /><br />Full name: Peer.GetResult&lt;_&gt;</div>
+<div class="tip" id="fs25">type exn = Exception<br /><br />Full name: Microsoft.FSharp.Core.exn</div>
+<div class="tip" id="fs26">val addrTopic : obj<br /><br />Full name: Peer.addrTopic</div>
+<div class="tip" id="fs27">Multiple items<br />type PeerQueues =<br />&#160;&#160;interface IDisposable<br />&#160;&#160;new : stream:NetworkStream -&gt; PeerQueues<br />&#160;&#160;member From : obj<br />&#160;&#160;member To : obj<br /><br />Full name: Peer.PeerQueues<br /><br />--------------------<br />new : stream:NetworkStream -&gt; PeerQueues</div>
+<div class="tip" id="fs28">val stream : NetworkStream</div>
+<div class="tip" id="fs29">Multiple items<br />type NetworkStream =<br />&#160;&#160;inherit Stream<br />&#160;&#160;new : socket:Socket -&gt; NetworkStream + 3 overloads<br />&#160;&#160;member BeginRead : buffer:byte[] * offset:int * size:int * callback:AsyncCallback * state:obj -&gt; IAsyncResult<br />&#160;&#160;member BeginWrite : buffer:byte[] * offset:int * size:int * callback:AsyncCallback * state:obj -&gt; IAsyncResult<br />&#160;&#160;member CanRead : bool<br />&#160;&#160;member CanSeek : bool<br />&#160;&#160;member CanTimeout : bool<br />&#160;&#160;member CanWrite : bool<br />&#160;&#160;member Close : timeout:int -&gt; unit<br />&#160;&#160;member DataAvailable : bool<br />&#160;&#160;member EndRead : asyncResult:IAsyncResult -&gt; int<br />&#160;&#160;...<br /><br />Full name: System.Net.Sockets.NetworkStream<br /><br />--------------------<br />NetworkStream(socket: Socket) : unit<br />NetworkStream(socket: Socket, ownsSocket: bool) : unit<br />NetworkStream(socket: Socket, access: IO.FileAccess) : unit<br />NetworkStream(socket: Socket, access: IO.FileAccess, ownsSocket: bool) : unit</div>
+<div class="tip" id="fs30">val fromPeer : obj</div>
+<div class="tip" id="fs31">val toPeer : obj</div>
+<div class="tip" id="fs32">type IDisposable =<br />&#160;&#160;member Dispose : unit -&gt; unit<br /><br />Full name: System.IDisposable</div>
+<div class="tip" id="fs33">val x : PeerQueues</div>
+<div class="tip" id="fs34">override PeerQueues.Dispose : unit -&gt; unit<br /><br />Full name: Peer.PeerQueues.Dispose</div>
+<div class="tip" id="fs35">IO.Stream.Close() : unit<br />NetworkStream.Close(timeout: int) : unit</div>
+<div class="tip" id="fs36">member PeerQueues.From : obj<br /><br />Full name: Peer.PeerQueues.From</div>
+<div class="tip" id="fs37">member PeerQueues.To : obj<br /><br />Full name: Peer.PeerQueues.To</div>
+<div class="tip" id="fs38">type IPeer =<br />&#160;&#160;interface<br />&#160;&#160;&#160;&#160;abstract member Bad : unit -&gt; unit<br />&#160;&#160;&#160;&#160;abstract member Ready : unit -&gt; unit<br />&#160;&#160;&#160;&#160;abstract member Id : int<br />&#160;&#160;&#160;&#160;abstract member Target : IPEndPoint<br />&#160;&#160;end<br /><br />Full name: Peer.IPeer</div>
+<div class="tip" id="fs39">abstract member IPeer.Id : int<br /><br />Full name: Peer.IPeer.Id</div>
+<div class="tip" id="fs40">Multiple items<br />val int : value:&#39;T -&gt; int (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.int<br /><br />--------------------<br />type int = int32<br /><br />Full name: Microsoft.FSharp.Core.int<br /><br />--------------------<br />type int&lt;&#39;Measure&gt; = int<br /><br />Full name: Microsoft.FSharp.Core.int&lt;_&gt;</div>
+<div class="tip" id="fs41">abstract member IPeer.Ready : unit -&gt; unit<br /><br />Full name: Peer.IPeer.Ready</div>
+<div class="tip" id="fs42">type unit = Unit<br /><br />Full name: Microsoft.FSharp.Core.unit</div>
+<div class="tip" id="fs43">abstract member IPeer.Bad : unit -&gt; unit<br /><br />Full name: Peer.IPeer.Bad</div>
+<div class="tip" id="fs44">abstract member IPeer.Target : IPEndPoint<br /><br />Full name: Peer.IPeer.Target</div>
+<div class="tip" id="fs45">Multiple items<br />type IPEndPoint =<br />&#160;&#160;inherit EndPoint<br />&#160;&#160;new : address:int64 * port:int -&gt; IPEndPoint + 1 overload<br />&#160;&#160;member Address : IPAddress with get, set<br />&#160;&#160;member AddressFamily : AddressFamily<br />&#160;&#160;member Create : socketAddress:SocketAddress -&gt; EndPoint<br />&#160;&#160;member Equals : comparand:obj -&gt; bool<br />&#160;&#160;member GetHashCode : unit -&gt; int<br />&#160;&#160;member Port : int with get, set<br />&#160;&#160;member Serialize : unit -&gt; SocketAddress<br />&#160;&#160;member ToString : unit -&gt; string<br />&#160;&#160;static val MinPort : int<br />&#160;&#160;...<br /><br />Full name: System.Net.IPEndPoint<br /><br />--------------------<br />IPEndPoint(address: int64, port: int) : unit<br />IPEndPoint(address: IPAddress, port: int) : unit</div>
+<div class="tip" id="fs46">type PeerCommand =<br />&#160;&#160;| Open of target: IPEndPoint * tip: obj<br />&#160;&#160;| OpenStream of stream: NetworkStream * remote: IPEndPoint * tip: obj<br />&#160;&#160;| Handshaked<br />&#160;&#160;| Execute of message: obj<br />&#160;&#160;| GetHeaders of gh: obj * task: obj * IPeer<br />&#160;&#160;| GetBlocks of gd: obj * task: TaskCompletionSource&lt;IPeer * IObservable&lt;obj * byte []&gt;&gt;<br />&#160;&#160;| GetData of gd: obj<br />&#160;&#160;| SetReady<br />&#160;&#160;| Close<br />&#160;&#160;| Closed<br />&#160;&#160;...<br /><br />Full name: Peer.PeerCommand</div>
+<div class="tip" id="fs47">union case PeerCommand.Open: target: IPEndPoint * tip: obj -&gt; PeerCommand</div>
+<div class="tip" id="fs48">union case PeerCommand.OpenStream: stream: NetworkStream * remote: IPEndPoint * tip: obj -&gt; PeerCommand</div>
+<div class="tip" id="fs49">union case PeerCommand.Handshaked: PeerCommand</div>
+<div class="tip" id="fs50">union case PeerCommand.Execute: message: obj -&gt; PeerCommand</div>
+<div class="tip" id="fs51">union case PeerCommand.GetHeaders: gh: obj * task: obj * IPeer -&gt; PeerCommand</div>
+<div class="tip" id="fs52">Multiple items<br />type TaskCompletionSource&lt;&#39;TResult&gt; =<br />&#160;&#160;new : unit -&gt; TaskCompletionSource&lt;&#39;TResult&gt; + 3 overloads<br />&#160;&#160;member SetCanceled : unit -&gt; unit<br />&#160;&#160;member SetException : exception:Exception -&gt; unit + 1 overload<br />&#160;&#160;member SetResult : result:&#39;TResult -&gt; unit<br />&#160;&#160;member Task : Task&lt;&#39;TResult&gt;<br />&#160;&#160;member TrySetCanceled : unit -&gt; bool<br />&#160;&#160;member TrySetException : exception:Exception -&gt; bool + 1 overload<br />&#160;&#160;member TrySetResult : result:&#39;TResult -&gt; bool<br /><br />Full name: System.Threading.Tasks.TaskCompletionSource&lt;_&gt;<br /><br />--------------------<br />TaskCompletionSource() : unit<br />TaskCompletionSource(creationOptions: TaskCreationOptions) : unit<br />TaskCompletionSource(state: obj) : unit<br />TaskCompletionSource(state: obj, creationOptions: TaskCreationOptions) : unit</div>
+<div class="tip" id="fs53">type IObservable&lt;&#39;T&gt; =<br />&#160;&#160;member Subscribe : observer:IObserver&lt;&#39;T&gt; -&gt; IDisposable<br /><br />Full name: System.IObservable&lt;_&gt;</div>
+<div class="tip" id="fs54">union case PeerCommand.GetBlocks: gd: obj * task: TaskCompletionSource&lt;IPeer * IObservable&lt;obj * byte []&gt;&gt; -&gt; PeerCommand</div>
+<div class="tip" id="fs55">Multiple items<br />val byte : value:&#39;T -&gt; byte (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.byte<br /><br />--------------------<br />type byte = Byte<br /><br />Full name: Microsoft.FSharp.Core.byte</div>
+<div class="tip" id="fs56">union case PeerCommand.GetData: gd: obj -&gt; PeerCommand</div>
+<div class="tip" id="fs57">union case PeerCommand.SetReady: PeerCommand</div>
+<div class="tip" id="fs58">union case PeerCommand.Close: PeerCommand</div>
+<div class="tip" id="fs59">union case PeerCommand.Closed: PeerCommand</div>
+<div class="tip" id="fs60">union case PeerCommand.UpdateScore: score: int -&gt; PeerCommand</div>
+<div class="tip" id="fs61">type TrackerCommand =<br />&#160;&#160;| GetPeers<br />&#160;&#160;| Connect of target: IPEndPoint<br />&#160;&#160;| IncomingConnection of stream: NetworkStream * target: IPEndPoint<br />&#160;&#160;| SetReady of id: int<br />&#160;&#160;| Close of int<br />&#160;&#160;| BitcoinMessage of message: obj<br />&#160;&#160;| Command of command: PeerCommand<br />&#160;&#160;| SetTip of tip: obj<br /><br />Full name: Peer.TrackerCommand</div>
+<div class="tip" id="fs62">union case TrackerCommand.GetPeers: TrackerCommand</div>
+<div class="tip" id="fs63">union case TrackerCommand.Connect: target: IPEndPoint -&gt; TrackerCommand</div>
+<div class="tip" id="fs64">union case TrackerCommand.IncomingConnection: stream: NetworkStream * target: IPEndPoint -&gt; TrackerCommand</div>
+<div class="tip" id="fs65">union case TrackerCommand.SetReady: id: int -&gt; TrackerCommand</div>
+<div class="tip" id="fs66">val id : x:&#39;T -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.Operators.id</div>
+<div class="tip" id="fs67">union case TrackerCommand.Close: int -&gt; TrackerCommand</div>
+<div class="tip" id="fs68">union case TrackerCommand.BitcoinMessage: message: obj -&gt; TrackerCommand</div>
+<div class="tip" id="fs69">union case TrackerCommand.Command: command: PeerCommand -&gt; TrackerCommand</div>
+<div class="tip" id="fs70">union case TrackerCommand.SetTip: tip: obj -&gt; TrackerCommand</div>
+<div class="tip" id="fs71">type BlockchainCommand =<br />&#160;&#160;| GetBlock of obj * obj<br />&#160;&#160;| GetHeaders of obj * obj<br />&#160;&#160;| Catchup of IPeer * byte []<br />&#160;&#160;| Ping of obj * obj<br /><br />Full name: Peer.BlockchainCommand</div>
+<div class="tip" id="fs72">union case BlockchainCommand.GetBlock: obj * obj -&gt; BlockchainCommand</div>
+<div class="tip" id="fs73">type &#39;T list = List&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.list&lt;_&gt;</div>
+<div class="tip" id="fs74">union case BlockchainCommand.GetHeaders: obj * obj -&gt; BlockchainCommand</div>
+<div class="tip" id="fs75">union case BlockchainCommand.Catchup: IPeer * byte [] -&gt; BlockchainCommand</div>
+<div class="tip" id="fs76">union case BlockchainCommand.Ping: obj * obj -&gt; BlockchainCommand</div>
+<div class="tip" id="fs77">type MempoolCommand =<br />&#160;&#160;| Revalidate of int * seq&lt;obj []&gt;<br />&#160;&#160;| Tx of obj<br />&#160;&#160;| Inv of obj * obj<br />&#160;&#160;| GetTx of obj * obj<br />&#160;&#160;| Mempool of obj<br /><br />Full name: Peer.MempoolCommand</div>
+<div class="tip" id="fs78">union case MempoolCommand.Revalidate: int * seq&lt;obj []&gt; -&gt; MempoolCommand</div>
+<div class="tip" id="fs79">Multiple items<br />val seq : sequence:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Core.Operators.seq<br /><br />--------------------<br />type seq&lt;&#39;T&gt; = IEnumerable&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.seq&lt;_&gt;</div>
+<div class="tip" id="fs80">union case MempoolCommand.Tx: obj -&gt; MempoolCommand</div>
+<div class="tip" id="fs81">union case MempoolCommand.Inv: obj * obj -&gt; MempoolCommand</div>
+<div class="tip" id="fs82">union case MempoolCommand.GetTx: obj * obj -&gt; MempoolCommand</div>
+<div class="tip" id="fs83">union case MempoolCommand.Mempool: obj -&gt; MempoolCommand</div>
+<div class="tip" id="fs84">val blockchainIncoming : obj<br /><br />Full name: Peer.blockchainIncoming</div>
+<div class="tip" id="fs85">val trackerIncoming : obj<br /><br />Full name: Peer.trackerIncoming</div>
+<div class="tip" id="fs86">val mempoolIncoming : obj<br /><br />Full name: Peer.mempoolIncoming</div>
+<div class="tip" id="fs87">type PeerData =<br />&#160;&#160;{Queues: PeerQueues option;<br />&#160;&#160;&#160;State: PeerState;<br />&#160;&#160;&#160;Score: int;<br />&#160;&#160;&#160;CommandHandler: PeerData -&gt; PeerCommand -&gt; PeerData;}<br /><br />Full name: Peer.PeerData</div>
+<div class="tip" id="fs88">PeerData.Queues: PeerQueues option</div>
+<div class="tip" id="fs89">type &#39;T option = Option&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Core.option&lt;_&gt;</div>
+<div class="tip" id="fs90">PeerData.State: PeerState</div>
+<div class="tip" id="fs91">PeerData.Score: int</div>
+<div class="tip" id="fs92">PeerData.CommandHandler: PeerData -&gt; PeerCommand -&gt; PeerData</div>
+<div class="tip" id="fs93">Multiple items<br />type Peer =<br />&#160;&#160;interface IPeer<br />&#160;&#160;interface IDisposable<br />&#160;&#160;new : id:int -&gt; Peer<br />&#160;&#160;override ToString : unit -&gt; string<br />&#160;&#160;member Incoming : obj<br /><br />Full name: Peer.Peer<br /><br />--------------------<br />new : id:int -&gt; Peer</div>
+<div class="tip" id="fs94">val id : int</div>
+<div class="tip" id="fs95">val self : Peer</div>
+<div class="tip" id="fs96">val disposable : obj</div>
+<div class="tip" id="fs97">val mutable target : IPEndPoint</div>
+<div class="tip" id="fs98">val scheduler : obj</div>
+<div class="tip" id="fs99">val incoming : obj</div>
+<div class="tip" id="fs100">val headersIncoming : obj</div>
+<div class="tip" id="fs101">val blockIncoming : obj</div>
+<div class="tip" id="fs102">val workLoop : (NetworkStream -&gt; &#39;a)</div>
+<div class="tip" id="fs103">val buffer : byte []</div>
+<div class="tip" id="fs104">type Array =<br />&#160;&#160;member Clone : unit -&gt; obj<br />&#160;&#160;member CopyTo : array:Array * index:int -&gt; unit + 1 overload<br />&#160;&#160;member GetEnumerator : unit -&gt; IEnumerator<br />&#160;&#160;member GetLength : dimension:int -&gt; int<br />&#160;&#160;member GetLongLength : dimension:int -&gt; int64<br />&#160;&#160;member GetLowerBound : dimension:int -&gt; int<br />&#160;&#160;member GetUpperBound : dimension:int -&gt; int<br />&#160;&#160;member GetValue : params indices:int[] -&gt; obj + 7 overloads<br />&#160;&#160;member Initialize : unit -&gt; unit<br />&#160;&#160;member IsFixedSize : bool<br />&#160;&#160;...<br /><br />Full name: System.Array</div>
+<div class="tip" id="fs105">val zeroCreate : count:int -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Array.zeroCreate</div>
+<div class="tip" id="fs106">val tf : TaskFactory</div>
+<div class="tip" id="fs107">Multiple items<br />type TaskFactory =<br />&#160;&#160;new : unit -&gt; TaskFactory + 4 overloads<br />&#160;&#160;member CancellationToken : CancellationToken<br />&#160;&#160;member ContinuationOptions : TaskContinuationOptions<br />&#160;&#160;member ContinueWhenAll : tasks:Task[] * continuationAction:Action&lt;Task[]&gt; -&gt; Task + 15 overloads<br />&#160;&#160;member ContinueWhenAny : tasks:Task[] * continuationAction:Action&lt;Task&gt; -&gt; Task + 15 overloads<br />&#160;&#160;member CreationOptions : TaskCreationOptions<br />&#160;&#160;member FromAsync : asyncResult:IAsyncResult * endMethod:Action&lt;IAsyncResult&gt; -&gt; Task + 21 overloads<br />&#160;&#160;member Scheduler : TaskScheduler<br />&#160;&#160;member StartNew : action:Action -&gt; Task + 15 overloads<br /><br />Full name: System.Threading.Tasks.TaskFactory<br /><br />--------------------<br />type TaskFactory&lt;&#39;TResult&gt; =<br />&#160;&#160;new : unit -&gt; TaskFactory&lt;&#39;TResult&gt; + 4 overloads<br />&#160;&#160;member CancellationToken : CancellationToken<br />&#160;&#160;member ContinuationOptions : TaskContinuationOptions<br />&#160;&#160;member ContinueWhenAll : tasks:Task[] * continuationFunction:Func&lt;Task[], &#39;TResult&gt; -&gt; Task&lt;&#39;TResult&gt; + 7 overloads<br />&#160;&#160;member ContinueWhenAny : tasks:Task[] * continuationFunction:Func&lt;Task, &#39;TResult&gt; -&gt; Task&lt;&#39;TResult&gt; + 7 overloads<br />&#160;&#160;member CreationOptions : TaskCreationOptions<br />&#160;&#160;member FromAsync : asyncResult:IAsyncResult * endMethod:Func&lt;IAsyncResult, &#39;TResult&gt; -&gt; Task&lt;&#39;TResult&gt; + 10 overloads<br />&#160;&#160;member Scheduler : TaskScheduler<br />&#160;&#160;member StartNew : function:Func&lt;&#39;TResult&gt; -&gt; Task&lt;&#39;TResult&gt; + 7 overloads<br /><br />Full name: System.Threading.Tasks.TaskFactory&lt;_&gt;<br /><br />--------------------<br />TaskFactory() : unit<br />TaskFactory(cancellationToken: CancellationToken) : unit<br />TaskFactory(scheduler: TaskScheduler) : unit<br />TaskFactory(creationOptions: TaskCreationOptions, continuationOptions: TaskContinuationOptions) : unit<br />TaskFactory(cancellationToken: CancellationToken, creationOptions: TaskCreationOptions, continuationOptions: TaskContinuationOptions, scheduler: TaskScheduler) : unit<br /><br />--------------------<br />TaskFactory() : unit<br />TaskFactory(cancellationToken: CancellationToken) : unit<br />TaskFactory(scheduler: TaskScheduler) : unit<br />TaskFactory(creationOptions: TaskCreationOptions, continuationOptions: TaskContinuationOptions) : unit<br />TaskFactory(cancellationToken: CancellationToken, creationOptions: TaskCreationOptions, continuationOptions: TaskContinuationOptions, scheduler: TaskScheduler) : unit</div>
+<div class="tip" id="fs108">val task : (unit -&gt; &#39;b)</div>
+<div class="tip" id="fs109">val t : Task&lt;byte []&gt;</div>
+<div class="tip" id="fs110">TaskFactory.FromAsync&lt;&#39;TResult&gt;(asyncResult: IAsyncResult, endMethod: Func&lt;IAsyncResult,&#39;TResult&gt;) : Task&lt;&#39;TResult&gt;<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />TaskFactory.FromAsync(asyncResult: IAsyncResult, endMethod: Action&lt;IAsyncResult&gt;) : Task<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />TaskFactory.FromAsync&lt;&#39;TResult&gt;(beginMethod: Func&lt;AsyncCallback,obj,IAsyncResult&gt;, endMethod: Func&lt;IAsyncResult,&#39;TResult&gt;, state: obj) : Task&lt;&#39;TResult&gt;<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />TaskFactory.FromAsync&lt;&#39;TResult&gt;(asyncResult: IAsyncResult, endMethod: Func&lt;IAsyncResult,&#39;TResult&gt;, creationOptions: TaskCreationOptions) : Task&lt;&#39;TResult&gt;<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />TaskFactory.FromAsync(beginMethod: Func&lt;AsyncCallback,obj,IAsyncResult&gt;, endMethod: Action&lt;IAsyncResult&gt;, state: obj) : Task<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />TaskFactory.FromAsync(asyncResult: IAsyncResult, endMethod: Action&lt;IAsyncResult&gt;, creationOptions: TaskCreationOptions) : Task<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />TaskFactory.FromAsync&lt;&#39;TArg1,&#39;TResult&gt;(beginMethod: Func&lt;&#39;TArg1,AsyncCallback,obj,IAsyncResult&gt;, endMethod: Func&lt;IAsyncResult,&#39;TResult&gt;, arg1: &#39;TArg1, state: obj) : Task&lt;&#39;TResult&gt;<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />TaskFactory.FromAsync&lt;&#39;TResult&gt;(beginMethod: Func&lt;AsyncCallback,obj,IAsyncResult&gt;, endMethod: Func&lt;IAsyncResult,&#39;TResult&gt;, state: obj, creationOptions: TaskCreationOptions) : Task&lt;&#39;TResult&gt;<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />TaskFactory.FromAsync&lt;&#39;TResult&gt;(asyncResult: IAsyncResult, endMethod: Func&lt;IAsyncResult,&#39;TResult&gt;, creationOptions: TaskCreationOptions, scheduler: TaskScheduler) : Task&lt;&#39;TResult&gt;<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />TaskFactory.FromAsync&lt;&#39;TArg1&gt;(beginMethod: Func&lt;&#39;TArg1,AsyncCallback,obj,IAsyncResult&gt;, endMethod: Action&lt;IAsyncResult&gt;, arg1: &#39;TArg1, state: obj) : Task<br />&#160;&#160;&#160;<em>(+0 other overloads)</em></div>
+<div class="tip" id="fs111">val cb : AsyncCallback</div>
+<div class="tip" id="fs112">val state : obj</div>
+<div class="tip" id="fs113">type obj = Object<br /><br />Full name: Microsoft.FSharp.Core.obj</div>
+<div class="tip" id="fs114">NetworkStream.BeginRead(buffer: byte [], offset: int, size: int, callback: AsyncCallback, state: obj) : IAsyncResult</div>
+<div class="tip" id="fs115">property Array.Length: int</div>
+<div class="tip" id="fs116">val res : IAsyncResult</div>
+<div class="tip" id="fs117">val c : int</div>
+<div class="tip" id="fs118">NetworkStream.EndRead(asyncResult: IAsyncResult) : int</div>
+<div class="tip" id="fs119">val raise : exn:Exception -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.Operators.raise</div>
+<div class="tip" id="fs120">Multiple items<br />type SocketException =<br />&#160;&#160;inherit Win32Exception<br />&#160;&#160;new : unit -&gt; SocketException + 1 overload<br />&#160;&#160;member ErrorCode : int<br />&#160;&#160;member Message : string<br />&#160;&#160;member SocketErrorCode : SocketError<br /><br />Full name: System.Net.Sockets.SocketException<br /><br />--------------------<br />SocketException() : unit<br />SocketException(errorCode: int) : unit</div>
+<div class="tip" id="fs121">val readyPeer : (unit -&gt; &#39;a)</div>
+<div class="tip" id="fs122">val closePeer : (unit -&gt; &#39;a)</div>
+<div class="tip" id="fs123">val badPeer : (unit -&gt; &#39;a)</div>
+<div class="tip" id="fs124">val sendMessageObs : (PeerQueues -&gt; &#39;a -&gt; &#39;b)</div>
+<div class="tip" id="fs125">val peerQueues : PeerQueues</div>
+<div class="tip" id="fs126">val message : &#39;a</div>
+<div class="tip" id="fs127">property PeerQueues.To: obj</div>
+<div class="tip" id="fs128">val sendMessage : (NetworkStream -&gt; &#39;a -&gt; unit)</div>
+<div class="tip" id="fs129">val messageBytes : byte []</div>
+<div class="tip" id="fs130">NetworkStream.Write(buffer: byte [], offset: int, size: int) : unit</div>
+<div class="tip" id="fs131">val e : exn</div>
+<div class="tip" id="fs132">val processMessage : (PeerQueues -&gt; &#39;a -&gt; unit)</div>
+<div class="tip" id="fs133">val command : string</div>
+<div class="tip" id="fs134">property PeerQueues.From: obj</div>
+<div class="tip" id="fs135">val ignore : value:&#39;T -&gt; unit<br /><br />Full name: Microsoft.FSharp.Core.Operators.ignore</div>
+<div class="tip" id="fs136">val gd : obj</div>
+<div class="tip" id="fs137">Multiple items<br />type List&lt;&#39;T&gt; =<br />&#160;&#160;new : unit -&gt; List&lt;&#39;T&gt; + 2 overloads<br />&#160;&#160;member Add : item:&#39;T -&gt; unit<br />&#160;&#160;member AddRange : collection:IEnumerable&lt;&#39;T&gt; -&gt; unit<br />&#160;&#160;member AsReadOnly : unit -&gt; ReadOnlyCollection&lt;&#39;T&gt;<br />&#160;&#160;member BinarySearch : item:&#39;T -&gt; int + 2 overloads<br />&#160;&#160;member Capacity : int with get, set<br />&#160;&#160;member Clear : unit -&gt; unit<br />&#160;&#160;member Contains : item:&#39;T -&gt; bool<br />&#160;&#160;member ConvertAll&lt;&#39;TOutput&gt; : converter:Converter&lt;&#39;T, &#39;TOutput&gt; -&gt; List&lt;&#39;TOutput&gt;<br />&#160;&#160;member CopyTo : array:&#39;T[] -&gt; unit + 2 overloads<br />&#160;&#160;...<br />&#160;&#160;nested type Enumerator<br /><br />Full name: System.Collections.Generic.List&lt;_&gt;<br /><br />--------------------<br />List() : unit<br />List(capacity: int) : unit<br />List(collection: IEnumerable&lt;&#39;T&gt;) : unit</div>
+<div class="tip" id="fs138">val filter : predicate:(&#39;T -&gt; bool) -&gt; list:&#39;T list -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.List.filter</div>
+<div class="tip" id="fs139">type Type =<br />&#160;&#160;inherit MemberInfo<br />&#160;&#160;member Assembly : Assembly<br />&#160;&#160;member AssemblyQualifiedName : string<br />&#160;&#160;member Attributes : TypeAttributes<br />&#160;&#160;member BaseType : Type<br />&#160;&#160;member ContainsGenericParameters : bool<br />&#160;&#160;member DeclaringMethod : MethodBase<br />&#160;&#160;member DeclaringType : Type<br />&#160;&#160;member Equals : o:obj -&gt; bool + 1 overload<br />&#160;&#160;member FindInterfaces : filter:TypeFilter * filterCriteria:obj -&gt; Type[]<br />&#160;&#160;member FindMembers : memberType:MemberTypes * bindingAttr:BindingFlags * filter:MemberFilter * filterCriteria:obj -&gt; MemberInfo[]<br />&#160;&#160;...<br /><br />Full name: System.Type</div>
+<div class="tip" id="fs140">val gh : obj</div>
+<div class="tip" id="fs141">val addr : obj</div>
+<div class="tip" id="fs142">val headers : obj</div>
+<div class="tip" id="fs143">val block : obj</div>
+<div class="tip" id="fs144">val inv : obj</div>
+<div class="tip" id="fs145">val tx : obj</div>
+<div class="tip" id="fs146">val ping : obj</div>
+<div class="tip" id="fs147">val mempool : obj</div>
+<div class="tip" id="fs148">val processConnection : (PeerData -&gt; PeerCommand -&gt; PeerData)</div>
+<div class="tip" id="fs149">val data : PeerData</div>
+<div class="tip" id="fs150">val command : PeerCommand</div>
+<div class="tip" id="fs151">val t : IPEndPoint</div>
+<div class="tip" id="fs152">val tip : obj</div>
+<div class="tip" id="fs153">IPEndPoint.ToString() : string</div>
+<div class="tip" id="fs154">val connect : Async&lt;PeerCommand&gt;</div>
+<div class="tip" id="fs155">val async : AsyncBuilder<br /><br />Full name: Microsoft.FSharp.Core.ExtraTopLevelOperators.async</div>
+<div class="tip" id="fs156">val client : TcpClient</div>
+<div class="tip" id="fs157">Multiple items<br />type TcpClient =<br />&#160;&#160;new : unit -&gt; TcpClient + 3 overloads<br />&#160;&#160;member Available : int<br />&#160;&#160;member BeginConnect : host:string * port:int * requestCallback:AsyncCallback * state:obj -&gt; IAsyncResult + 2 overloads<br />&#160;&#160;member Client : Socket with get, set<br />&#160;&#160;member Close : unit -&gt; unit<br />&#160;&#160;member Connect : remoteEP:IPEndPoint -&gt; unit + 3 overloads<br />&#160;&#160;member Connected : bool<br />&#160;&#160;member EndConnect : asyncResult:IAsyncResult -&gt; unit<br />&#160;&#160;member ExclusiveAddressUse : bool with get, set<br />&#160;&#160;member GetStream : unit -&gt; NetworkStream<br />&#160;&#160;...<br /><br />Full name: System.Net.Sockets.TcpClient<br /><br />--------------------<br />TcpClient() : unit<br />TcpClient(localEP: IPEndPoint) : unit<br />TcpClient(family: AddressFamily) : unit<br />TcpClient(hostname: string, port: int) : unit</div>
+<div class="tip" id="fs158">Multiple items<br />type Async<br />static member AsBeginEnd : computation:(&#39;Arg -&gt; Async&lt;&#39;T&gt;) -&gt; (&#39;Arg * AsyncCallback * obj -&gt; IAsyncResult) * (IAsyncResult -&gt; &#39;T) * (IAsyncResult -&gt; unit)<br />static member AwaitEvent : event:IEvent&lt;&#39;Del,&#39;T&gt; * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt; (requires delegate and &#39;Del :&gt; Delegate)<br />static member AwaitIAsyncResult : iar:IAsyncResult * ?millisecondsTimeout:int -&gt; Async&lt;bool&gt;<br />static member AwaitTask : task:Task&lt;&#39;T&gt; -&gt; Async&lt;&#39;T&gt;<br />static member AwaitWaitHandle : waitHandle:WaitHandle * ?millisecondsTimeout:int -&gt; Async&lt;bool&gt;<br />static member CancelDefaultToken : unit -&gt; unit<br />static member Catch : computation:Async&lt;&#39;T&gt; -&gt; Async&lt;Choice&lt;&#39;T,exn&gt;&gt;<br />static member FromBeginEnd : beginAction:(AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member FromBeginEnd : arg:&#39;Arg1 * beginAction:(&#39;Arg1 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member FromBeginEnd : arg1:&#39;Arg1 * arg2:&#39;Arg2 * beginAction:(&#39;Arg1 * &#39;Arg2 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member FromBeginEnd : arg1:&#39;Arg1 * arg2:&#39;Arg2 * arg3:&#39;Arg3 * beginAction:(&#39;Arg1 * &#39;Arg2 * &#39;Arg3 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member FromContinuations : callback:((&#39;T -&gt; unit) * (exn -&gt; unit) * (OperationCanceledException -&gt; unit) -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member Ignore : computation:Async&lt;&#39;T&gt; -&gt; Async&lt;unit&gt;<br />static member OnCancel : interruption:(unit -&gt; unit) -&gt; Async&lt;IDisposable&gt;<br />static member Parallel : computations:seq&lt;Async&lt;&#39;T&gt;&gt; -&gt; Async&lt;&#39;T []&gt;<br />static member RunSynchronously : computation:Async&lt;&#39;T&gt; * ?timeout:int * ?cancellationToken:CancellationToken -&gt; &#39;T<br />static member Sleep : millisecondsDueTime:int -&gt; Async&lt;unit&gt;<br />static member Start : computation:Async&lt;unit&gt; * ?cancellationToken:CancellationToken -&gt; unit<br />static member StartAsTask : computation:Async&lt;&#39;T&gt; * ?taskCreationOptions:TaskCreationOptions * ?cancellationToken:CancellationToken -&gt; Task&lt;&#39;T&gt;<br />static member StartChild : computation:Async&lt;&#39;T&gt; * ?millisecondsTimeout:int -&gt; Async&lt;Async&lt;&#39;T&gt;&gt;<br />static member StartChildAsTask : computation:Async&lt;&#39;T&gt; * ?taskCreationOptions:TaskCreationOptions -&gt; Async&lt;Task&lt;&#39;T&gt;&gt;<br />static member StartImmediate : computation:Async&lt;unit&gt; * ?cancellationToken:CancellationToken -&gt; unit<br />static member StartWithContinuations : computation:Async&lt;&#39;T&gt; * continuation:(&#39;T -&gt; unit) * exceptionContinuation:(exn -&gt; unit) * cancellationContinuation:(OperationCanceledException -&gt; unit) * ?cancellationToken:CancellationToken -&gt; unit<br />static member SwitchToContext : syncContext:SynchronizationContext -&gt; Async&lt;unit&gt;<br />static member SwitchToNewThread : unit -&gt; Async&lt;unit&gt;<br />static member SwitchToThreadPool : unit -&gt; Async&lt;unit&gt;<br />static member TryCancelled : computation:Async&lt;&#39;T&gt; * compensation:(OperationCanceledException -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member CancellationToken : Async&lt;CancellationToken&gt;<br />static member DefaultCancellationToken : CancellationToken<br /><br />Full name: Microsoft.FSharp.Control.Async<br /><br />--------------------<br />type Async&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Control.Async&lt;_&gt;</div>
+<div class="tip" id="fs159">static member Async.FromBeginEnd : beginAction:(AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member Async.FromBeginEnd : arg:&#39;Arg1 * beginAction:(&#39;Arg1 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member Async.FromBeginEnd : arg1:&#39;Arg1 * arg2:&#39;Arg2 * beginAction:(&#39;Arg1 * &#39;Arg2 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;<br />static member Async.FromBeginEnd : arg1:&#39;Arg1 * arg2:&#39;Arg2 * arg3:&#39;Arg3 * beginAction:(&#39;Arg1 * &#39;Arg2 * &#39;Arg3 * AsyncCallback * obj -&gt; IAsyncResult) * endAction:(IAsyncResult -&gt; &#39;T) * ?cancelAction:(unit -&gt; unit) -&gt; Async&lt;&#39;T&gt;</div>
+<div class="tip" id="fs160">val target : IPEndPoint</div>
+<div class="tip" id="fs161">TcpClient.BeginConnect(addresses: IPAddress [], port: int, requestCallback: AsyncCallback, state: obj) : IAsyncResult<br />TcpClient.BeginConnect(address: IPAddress, port: int, requestCallback: AsyncCallback, state: obj) : IAsyncResult<br />TcpClient.BeginConnect(host: string, port: int, requestCallback: AsyncCallback, state: obj) : IAsyncResult</div>
+<div class="tip" id="fs162">property IPEndPoint.Address: IPAddress</div>
+<div class="tip" id="fs163">property IPEndPoint.Port: int</div>
+<div class="tip" id="fs164">TcpClient.EndConnect(asyncResult: IAsyncResult) : unit</div>
+<div class="tip" id="fs165">TcpClient.GetStream() : NetworkStream</div>
+<div class="tip" id="fs166">type Timeout =<br />&#160;&#160;static val Infinite : int<br /><br />Full name: System.Threading.Timeout</div>
+<div class="tip" id="fs167">property NetworkStream.WriteTimeout: int</div>
+<div class="tip" id="fs168">Multiple items<br />type TimeSpan =<br />&#160;&#160;struct<br />&#160;&#160;&#160;&#160;new : ticks:int64 -&gt; TimeSpan + 3 overloads<br />&#160;&#160;&#160;&#160;member Add : ts:TimeSpan -&gt; TimeSpan<br />&#160;&#160;&#160;&#160;member CompareTo : value:obj -&gt; int + 1 overload<br />&#160;&#160;&#160;&#160;member Days : int<br />&#160;&#160;&#160;&#160;member Duration : unit -&gt; TimeSpan<br />&#160;&#160;&#160;&#160;member Equals : value:obj -&gt; bool + 1 overload<br />&#160;&#160;&#160;&#160;member GetHashCode : unit -&gt; int<br />&#160;&#160;&#160;&#160;member Hours : int<br />&#160;&#160;&#160;&#160;member Milliseconds : int<br />&#160;&#160;&#160;&#160;member Minutes : int<br />&#160;&#160;&#160;&#160;...<br />&#160;&#160;end<br /><br />Full name: System.TimeSpan<br /><br />--------------------<br />TimeSpan()<br />TimeSpan(ticks: int64) : unit<br />TimeSpan(hours: int, minutes: int, seconds: int) : unit<br />TimeSpan(days: int, hours: int, minutes: int, seconds: int) : unit<br />TimeSpan(days: int, hours: int, minutes: int, seconds: int, milliseconds: int) : unit</div>
+<div class="tip" id="fs169">field TimeSpan.TicksPerMillisecond = 10000L</div>
+<div class="tip" id="fs170">val parser : obj</div>
+<div class="tip" id="fs171">val version : obj</div>
+<div class="tip" id="fs172">Multiple items<br />type Version =<br />&#160;&#160;new : unit -&gt; Version + 4 overloads<br />&#160;&#160;member Build : int<br />&#160;&#160;member Clone : unit -&gt; obj<br />&#160;&#160;member CompareTo : version:obj -&gt; int + 1 overload<br />&#160;&#160;member Equals : obj:obj -&gt; bool + 1 overload<br />&#160;&#160;member GetHashCode : unit -&gt; int<br />&#160;&#160;member Major : int<br />&#160;&#160;member MajorRevision : int16<br />&#160;&#160;member Minor : int<br />&#160;&#160;member MinorRevision : int16<br />&#160;&#160;...<br /><br />Full name: System.Version<br /><br />--------------------<br />Version() : unit<br />Version(version: string) : unit<br />Version(major: int, minor: int) : unit<br />Version(major: int, minor: int, build: int) : unit<br />Version(major: int, minor: int, build: int, revision: int) : unit</div>
+<div class="tip" id="fs173">Multiple items<br />val int64 : value:&#39;T -&gt; int64 (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.int64<br /><br />--------------------<br />type int64 = Int64<br /><br />Full name: Microsoft.FSharp.Core.int64<br /><br />--------------------<br />type int64&lt;&#39;Measure&gt; = int64<br /><br />Full name: Microsoft.FSharp.Core.int64&lt;_&gt;</div>
+<div class="tip" id="fs174">val handshakeObs : obj</div>
+<div class="tip" id="fs175">type bool = Boolean<br /><br />Full name: Microsoft.FSharp.Core.bool</div>
+<div class="tip" id="fs176">val empty&lt;&#39;T&gt; : &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Array.empty</div>
+<div class="tip" id="fs177">val not : value:bool -&gt; bool<br /><br />Full name: Microsoft.FSharp.Core.Operators.not</div>
+<div class="tip" id="fs178">union case Option.Some: Value: &#39;T -&gt; Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs179">val processCommand : (PeerData -&gt; PeerCommand -&gt; PeerData)</div>
+<div class="tip" id="fs180">val processClosing : (PeerData -&gt; PeerCommand -&gt; PeerData)</div>
+<div class="tip" id="fs181">property Option.Value: PeerQueues</div>
+<div class="tip" id="fs182">val message : obj</div>
+<div class="tip" id="fs183">val ts : obj</div>
+<div class="tip" id="fs184">val sendObs : obj</div>
+<div class="tip" id="fs185">val obs : obj</div>
+<div class="tip" id="fs186">val ts : TaskCompletionSource&lt;IPeer * IObservable&lt;obj * byte []&gt;&gt;</div>
+<div class="tip" id="fs187">val blocksPending : HashSet&lt;byte []&gt;</div>
+<div class="tip" id="fs188">Multiple items<br />type HashSet&lt;&#39;T&gt; =<br />&#160;&#160;new : unit -&gt; HashSet&lt;&#39;T&gt; + 3 overloads<br />&#160;&#160;member Add : item:&#39;T -&gt; bool<br />&#160;&#160;member Clear : unit -&gt; unit<br />&#160;&#160;member Comparer : IEqualityComparer&lt;&#39;T&gt;<br />&#160;&#160;member Contains : item:&#39;T -&gt; bool<br />&#160;&#160;member CopyTo : array:&#39;T[] -&gt; unit + 2 overloads<br />&#160;&#160;member Count : int<br />&#160;&#160;member ExceptWith : other:IEnumerable&lt;&#39;T&gt; -&gt; unit<br />&#160;&#160;member GetEnumerator : unit -&gt; Enumerator&lt;&#39;T&gt;<br />&#160;&#160;member GetObjectData : info:SerializationInfo * context:StreamingContext -&gt; unit<br />&#160;&#160;...<br />&#160;&#160;nested type Enumerator<br /><br />Full name: System.Collections.Generic.HashSet&lt;_&gt;<br /><br />--------------------<br />HashSet() : unit<br />HashSet(comparer: IEqualityComparer&lt;&#39;T&gt;) : unit<br />HashSet(collection: IEnumerable&lt;&#39;T&gt;) : unit<br />HashSet(collection: IEnumerable&lt;&#39;T&gt;, comparer: IEqualityComparer&lt;&#39;T&gt;) : unit</div>
+<div class="tip" id="fs189">module Seq<br /><br />from Microsoft.FSharp.Collections</div>
+<div class="tip" id="fs190">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; source:seq&lt;&#39;T&gt; -&gt; seq&lt;&#39;U&gt;<br /><br />Full name: Microsoft.FSharp.Collections.Seq.map</div>
+<div class="tip" id="fs191">val count : int</div>
+<div class="tip" id="fs192">property HashSet.Count: int</div>
+<div class="tip" id="fs193">val obs : IObservable&lt;obj * byte []&gt;</div>
+<div class="tip" id="fs194">HashSet.Contains(item: byte []) : bool</div>
+<div class="tip" id="fs195">TaskCompletionSource.SetResult(result: IPeer * IObservable&lt;obj * byte []&gt;) : unit</div>
+<div class="tip" id="fs196">val score : int</div>
+<div class="tip" id="fs197">val newData : PeerData</div>
+<div class="tip" id="fs198">union case Option.None: Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs199">val initialState : PeerData</div>
+<div class="tip" id="fs200">val runHandler : (PeerData -&gt; PeerCommand -&gt; PeerData)</div>
+<div class="tip" id="fs201">Multiple items<br />type Func&lt;&#39;TResult&gt; =<br />&#160;&#160;delegate of unit -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;T11,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 * &#39;T11 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;T11,&#39;T12,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 * &#39;T11 * &#39;T12 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;T11,&#39;T12,&#39;T13,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 * &#39;T11 * &#39;T12 * &#39;T13 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;T11,&#39;T12,&#39;T13,&#39;T14,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 * &#39;T11 * &#39;T12 * &#39;T13 * &#39;T14 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;T11,&#39;T12,&#39;T13,&#39;T14,&#39;T15,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 * &#39;T11 * &#39;T12 * &#39;T13 * &#39;T14 * &#39;T15 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_&gt;<br /><br />--------------------<br />type Func&lt;&#39;T1,&#39;T2,&#39;T3,&#39;T4,&#39;T5,&#39;T6,&#39;T7,&#39;T8,&#39;T9,&#39;T10,&#39;T11,&#39;T12,&#39;T13,&#39;T14,&#39;T15,&#39;T16,&#39;TResult&gt; =<br />&#160;&#160;delegate of &#39;T1 * &#39;T2 * &#39;T3 * &#39;T4 * &#39;T5 * &#39;T6 * &#39;T7 * &#39;T8 * &#39;T9 * &#39;T10 * &#39;T11 * &#39;T12 * &#39;T13 * &#39;T14 * &#39;T15 * &#39;T16 -&gt; &#39;TResult<br /><br />Full name: System.Func&lt;_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_&gt;</div>
+<div class="tip" id="fs202">val x : Peer</div>
+<div class="tip" id="fs203">override Peer.Dispose : unit -&gt; unit<br /><br />Full name: Peer.Peer.Dispose</div>
+<div class="tip" id="fs204">override Peer.Ready : unit -&gt; unit<br /><br />Full name: Peer.Peer.Ready</div>
+<div class="tip" id="fs205">override Peer.Target : IPEndPoint<br /><br />Full name: Peer.Peer.Target</div>
+<div class="tip" id="fs206">override Peer.Bad : unit -&gt; unit<br /><br />Full name: Peer.Peer.Bad</div>
+<div class="tip" id="fs207">override Peer.ToString : unit -&gt; string<br /><br />Full name: Peer.Peer.ToString</div>
+<div class="tip" id="fs208">val sprintf : format:Printf.StringFormat&lt;&#39;T&gt; -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.ExtraTopLevelOperators.sprintf</div>
+<div class="tip" id="fs209">member Peer.Incoming : obj<br /><br />Full name: Peer.Peer.Incoming</div>
+<div class="tip" id="fs210">val dropOldPeers : unit -&gt; &#39;a<br /><br />Full name: Peer.dropOldPeers</div>
+<div class="tip" id="fs211">val dts : DateTime</div>
+<div class="tip" id="fs212">Multiple items<br />type DateTime =<br />&#160;&#160;struct<br />&#160;&#160;&#160;&#160;new : ticks:int64 -&gt; DateTime + 10 overloads<br />&#160;&#160;&#160;&#160;member Add : value:TimeSpan -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddDays : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddHours : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddMilliseconds : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddMinutes : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddMonths : months:int -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddSeconds : value:float -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddTicks : value:int64 -&gt; DateTime<br />&#160;&#160;&#160;&#160;member AddYears : value:int -&gt; DateTime<br />&#160;&#160;&#160;&#160;...<br />&#160;&#160;end<br /><br />Full name: System.DateTime<br /><br />--------------------<br />DateTime()<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(ticks: int64) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(ticks: int64, kind: DateTimeKind) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, calendar: Globalization.Calendar) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int, kind: DateTimeKind) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int, calendar: Globalization.Calendar) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />DateTime(year: int, month: int, day: int, hour: int, minute: int, second: int, millisecond: int, kind: DateTimeKind) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em></div>
+<div class="tip" id="fs213">property DateTime.UtcNow: DateTime</div>
+<div class="tip" id="fs214">DateTime.AddHours(value: float) : DateTime</div>
+<div class="tip" id="fs215">val bootstrapPeers : unit -&gt; unit<br /><br />Full name: Peer.bootstrapPeers</div>
+<div class="tip" id="fs216">val now : obj</div>
+<div class="tip" id="fs217">val entry : obj</div>
+<div class="tip" id="fs218">static member Async.AwaitTask : task:Task&lt;&#39;T&gt; -&gt; Async&lt;&#39;T&gt;</div>
+<div class="tip" id="fs219">type Dns =<br />&#160;&#160;static member BeginGetHostAddresses : hostNameOrAddress:string * requestCallback:AsyncCallback * state:obj -&gt; IAsyncResult<br />&#160;&#160;static member BeginGetHostByName : hostName:string * requestCallback:AsyncCallback * stateObject:obj -&gt; IAsyncResult<br />&#160;&#160;static member BeginGetHostEntry : hostNameOrAddress:string * requestCallback:AsyncCallback * stateObject:obj -&gt; IAsyncResult + 1 overload<br />&#160;&#160;static member BeginResolve : hostName:string * requestCallback:AsyncCallback * stateObject:obj -&gt; IAsyncResult<br />&#160;&#160;static member EndGetHostAddresses : asyncResult:IAsyncResult -&gt; IPAddress[]<br />&#160;&#160;static member EndGetHostByName : asyncResult:IAsyncResult -&gt; IPHostEntry<br />&#160;&#160;static member EndGetHostEntry : asyncResult:IAsyncResult -&gt; IPHostEntry<br />&#160;&#160;static member EndResolve : asyncResult:IAsyncResult -&gt; IPHostEntry<br />&#160;&#160;static member GetHostAddresses : hostNameOrAddress:string -&gt; IPAddress[]<br />&#160;&#160;static member GetHostByAddress : address:string -&gt; IPHostEntry + 1 overload<br />&#160;&#160;...<br /><br />Full name: System.Net.Dns</div>
+<div class="tip" id="fs220">val peer : obj</div>
+<div class="tip" id="fs221">static member Async.StartImmediate : computation:Async&lt;unit&gt; * ?cancellationToken:CancellationToken -&gt; unit</div>
+<div class="tip" id="fs222">val initPeers : unit -&gt; unit<br /><br />Full name: Peer.initPeers</div>
+<div class="tip" id="fs223">val peers : obj</div>
+          
+        </div>
+        <div class="span1"></div>
+      </div>
+    </div>
+  </body>
+</html>
