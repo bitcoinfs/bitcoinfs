@@ -58,7 +58,8 @@
         <div class="span10" id="main">
           <h1>Bitcoin full node in F#</h1>
 
-<p>An alternative full node bitcoin implementation in F#</p>
+<p>An alternative full node bitcoin implementation in F#. The <a href="https://github.com/bitcoinfs/bitcoinfs">source code</a> is on GitHub and this documentation
+was generated directly from the code.</p>
 
 <h2>Introduction</h2>
 
@@ -81,6 +82,12 @@ implementation.</p>
 from extended period of time. It implements all the consensus rules including the bugs that 
 are now included in the blockchain since the genesis of Bitcoin.</p>
 
+<blockquote>
+  <p>However, Bitcoin F# has fully validated the existing mainnet blockchain and passes all the integration
+tests including large reorg tests. It is also the only implementation in a functional language and comes
+under 2.5 kLOC, making it the smallest client too.</p>
+</blockquote>
+
 <p>In writing this code, my goal was</p>
 
 <ul>
@@ -92,6 +99,9 @@ of the chain then it downloads the blocks from multiple peers in parallel. It dr
 synchronization.</li>
 <li>Easy pruning. Blocks are stored on disk in a normal directory fashion and can be removed by deleting
 files. Other implementations use a database or custom data files.</li>
+<li>I didn't want any wallet spending functionality even if I have included support for BIP32, Armory and Electrum style
+watch-only wallets.</li>
+<li>No JSON API either. I will prefer to extend the core.</li>
 </ul>
 
 <p>All in all, it is a small but working client that can be used as a relay for transactions since it
