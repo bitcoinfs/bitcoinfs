@@ -48,6 +48,8 @@
             <li><a href="Checks.html">Validation</a></li>
             <li><a href="Blockchain.html">Blockchain</a></li>
             <li><a href="Main.html">Main</a></li>
+            <li><a href="Test.html">Tests</a></li>
+            <li><a href="Building.html">Building and Running</a></li>
           </ul>
         </div><!--/.nav-collapse -->
       </div>
@@ -371,6 +373,8 @@ pick the first one who can do it</li>
 <span class="l">30: </span>
 <span class="l">31: </span>
 <span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
 </pre>
 </td>
 <td class="snippet"><pre class="fssnip">
@@ -395,7 +399,9 @@ pick the first one who can do it</li>
         <span onmouseout="hideTip(event, 'fs28', 188)" onmouseover="showTip(event, 'fs28', 188)" class="i">peerSlots</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs72', 189)" onmouseover="showTip(event, 'fs72', 189)" class="i">TryFind</span> <span onmouseout="hideTip(event, 'fs71', 190)" onmouseover="showTip(event, 'fs71', 190)" class="i">id</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs12', 191)" onmouseover="showTip(event, 'fs12', 191)" class="i">Option</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs63', 192)" onmouseover="showTip(event, 'fs63', 192)" class="i">iter</span>(<span class="k">fun</span> <span class="i">ps</span> <span class="k">-&gt;</span>
             <span class="k">let</span> <span class="i">peer</span> <span class="o">=</span> <span class="i">ps</span><span class="o">.</span><span class="i">Peer</span>
             <span class="k">let</span> <span class="i">oldState</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs37', 193)" onmouseover="showTip(event, 'fs37', 193)" class="i">changeState</span> <span onmouseout="hideTip(event, 'fs71', 194)" onmouseover="showTip(event, 'fs71', 194)" class="i">id</span> <span class="i">Ready</span>
-            <span class="c">// if oldState = Allocated then blockchainIncoming.OnNext(Catchup(peer, null)) // Disable if you want no catchup on connect</span>
+            <span class="k">if</span> <span class="i">oldState</span> <span class="o">=</span> <span class="i">Allocated</span> <span class="k">then</span> 
+                <span class="i">logger</span><span class="o">.</span><span class="i">InfoF</span> <span class="s">&quot;</span><span class="s">Connected</span><span class="s"> </span><span class="s">to</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span class="i">peer</span>
+                <span class="i">blockchainIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span class="i">Catchup</span>(<span class="i">peer</span>, <span class="k">null</span>)) <span class="c">// Disable if you want no catchup on connect</span>
             <span onmouseout="hideTip(event, 'fs42', 195)" onmouseover="showTip(event, 'fs42', 195)" class="i">dequeuePendingMessage</span>()
             )
     | <span class="i">Close</span> <span onmouseout="hideTip(event, 'fs71', 196)" onmouseover="showTip(event, 'fs71', 196)" class="i">id</span> <span class="k">-&gt;</span> 
@@ -498,7 +504,7 @@ On a connection, it sends a message to Tom. At this time, there is no limit to t
 </pre>
 </td>
 <td class="snippet"><pre class="fssnip">
-<span class="k">let</span> <span onmouseout="hideTip(event, 'fs98', 270)" onmouseover="showTip(event, 'fs98', 270)" class="i">port</span> <span class="o">=</span> <span class="i">settings</span><span class="o">.</span><span class="i">ServerPort</span>
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs98', 270)" onmouseover="showTip(event, 'fs98', 270)" class="i">port</span> <span class="o">=</span> <span class="i">defaultPort</span>
 <span class="k">let</span> <span onmouseout="hideTip(event, 'fs99', 271)" onmouseover="showTip(event, 'fs99', 271)" class="i">ipAddress</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs100', 272)" onmouseover="showTip(event, 'fs100', 272)" class="i">IPAddress</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs101', 273)" onmouseover="showTip(event, 'fs101', 273)" class="i">Any</span>
 <span class="k">let</span> <span onmouseout="hideTip(event, 'fs102', 274)" onmouseover="showTip(event, 'fs102', 274)" class="i">endpoint</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs103', 275)" onmouseover="showTip(event, 'fs103', 275)" class="i">IPEndPoint</span>(<span onmouseout="hideTip(event, 'fs99', 276)" onmouseover="showTip(event, 'fs99', 276)" class="i">ipAddress</span>, <span onmouseout="hideTip(event, 'fs98', 277)" onmouseover="showTip(event, 'fs98', 277)" class="i">port</span>)
 <span class="k">let</span> <span onmouseout="hideTip(event, 'fs104', 278)" onmouseover="showTip(event, 'fs104', 278)" class="i">cts</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs105', 279)" onmouseover="showTip(event, 'fs105', 279)" class="i">CancellationTokenSource</span>()

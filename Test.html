@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <!-- 
+      The Unit Tests from the Core Client
+ parameters will be replaced with the 
+      document title extracted from the <h1> element or
+      file name, if there is no <h1> heading
+    -->
+    <title>Unit Tests from the Core Client
+</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="http://code.jquery.com/jquery-1.11.2.js"></script>
+    <script src="http://code.jquery.com/ui/1.11.2/jquery-ui.js"></script>
+    <script src="http://getbootstrap.com/dist/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link href="http://getbootstrap.com/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link type="text/css" rel="stylesheet" href="content/style.css" />
+    <script src="content/tips.js" type="text/javascript"></script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <nav class="navbar navbar-default navbar-fixed-top">
+      <div class="container-fluid">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="index.html">Bitcoin F#</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li><a href="index.html">Intro</a></li>
+            <li><a href="Protocol.html">Protocol</a></li>
+            <li><a href="DB.html">Persistence</a></li>
+            <li><a href="P2P.html">Peer to Peer</a></li>
+            <li><a href="Peer.html">Peer</a></li>
+            <li><a href="Tracker.html">Tracker</a></li>
+            <li><a href="Script.html">Script Interpreter</a></li>
+            <li><a href="Mempool.html">Mempool</a></li>
+            <li><a href="Checks.html">Validation</a></li>
+            <li><a href="Blockchain.html">Blockchain</a></li>
+            <li><a href="Main.html">Main</a></li>
+            <li><a href="Test.html">Tests</a></li>
+            <li><a href="Building.html">Building and Running</a></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </nav>
+    <div class="container">
+      <div class="row" style="margin-top:70px">
+        <div class="span1"></div>
+        <div class="span10" id="main">
+          <h1>Unit Tests from the Core Client</h1>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l">1: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">module</span> <span onmouseout="hideTip(event, 'fs1', 1)" onmouseover="showTip(event, 'fs1', 1)" class="i">Test</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs2', 2)" onmouseover="showTip(event, 'fs2', 2)" class="i">Script</span></pre>
+</td>
+</tr>
+</table>
+
+<h2>Script tests</h2>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+<span class="l">40: </span>
+<span class="l">41: </span>
+<span class="l">42: </span>
+<span class="l">43: </span>
+<span class="l">44: </span>
+<span class="l">45: </span>
+<span class="l">46: </span>
+<span class="l">47: </span>
+<span class="l">48: </span>
+<span class="l">49: </span>
+<span class="l">50: </span>
+<span class="l">51: </span>
+<span class="l">52: </span>
+<span class="l">53: </span>
+<span class="l">54: </span>
+<span class="l">55: </span>
+<span class="l">56: </span>
+<span class="l">57: </span>
+<span class="l">58: </span>
+<span class="l">59: </span>
+<span class="l">60: </span>
+<span class="l">61: </span>
+<span class="l">62: </span>
+<span class="l">63: </span>
+<span class="l">64: </span>
+<span class="l">65: </span>
+<span class="l">66: </span>
+<span class="l">67: </span>
+<span class="l">68: </span>
+<span class="l">69: </span>
+<span class="l">70: </span>
+<span class="l">71: </span>
+<span class="l">72: </span>
+<span class="l">73: </span>
+<span class="l">74: </span>
+<span class="l">75: </span>
+<span class="l">76: </span>
+<span class="l">77: </span>
+<span class="l">78: </span>
+<span class="l">79: </span>
+<span class="l">80: </span>
+<span class="l">81: </span>
+<span class="l">82: </span>
+<span class="l">83: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs12', 15)" onmouseover="showTip(event, 'fs12', 15)" class="i">parseScript</span> (<span onmouseout="hideTip(event, 'fs13', 16)" onmouseover="showTip(event, 'fs13', 16)" class="i">scriptString</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 17)" onmouseover="showTip(event, 'fs14', 17)" class="i">string</span>) <span class="o">=</span> 
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs15', 18)" onmouseover="showTip(event, 'fs15', 18)" class="i">tokens</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs13', 19)" onmouseover="showTip(event, 'fs13', 19)" class="i">scriptString</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs16', 20)" onmouseover="showTip(event, 'fs16', 20)" class="i">Split</span>([|<span class="s">&#39; &#39;</span>|], <span onmouseout="hideTip(event, 'fs17', 21)" onmouseover="showTip(event, 'fs17', 21)" class="i">StringSplitOptions</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs18', 22)" onmouseover="showTip(event, 'fs18', 22)" class="i">RemoveEmptyEntries</span>) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs19', 23)" onmouseover="showTip(event, 'fs19', 23)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs20', 24)" onmouseover="showTip(event, 'fs20', 24)" class="i">toList</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs21', 25)" onmouseover="showTip(event, 'fs21', 25)" class="i">scriptBytes</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs22', 26)" onmouseover="showTip(event, 'fs22', 26)" class="i">MemoryStream</span>()
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs23', 27)" onmouseover="showTip(event, 'fs23', 27)" class="i">scriptWriter</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs24', 28)" onmouseover="showTip(event, 'fs24', 28)" class="i">BinaryWriter</span>(<span onmouseout="hideTip(event, 'fs21', 29)" onmouseover="showTip(event, 'fs21', 29)" class="i">scriptBytes</span>)
+
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs25', 30)" onmouseover="showTip(event, 'fs25', 30)" class="i">intToBytes</span> (<span onmouseout="hideTip(event, 'fs26', 31)" onmouseover="showTip(event, 'fs26', 31)" class="i">i</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs27', 32)" onmouseover="showTip(event, 'fs27', 32)" class="i">bigint</span>) <span class="o">=</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs28', 33)" onmouseover="showTip(event, 'fs28', 33)" class="i">pos</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs29', 34)" onmouseover="showTip(event, 'fs29', 34)" class="i">abs</span> <span onmouseout="hideTip(event, 'fs26', 35)" onmouseover="showTip(event, 'fs26', 35)" class="i">i</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs30', 36)" onmouseover="showTip(event, 'fs30', 36)" class="i">bi</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs28', 37)" onmouseover="showTip(event, 'fs28', 37)" class="i">pos</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs31', 38)" onmouseover="showTip(event, 'fs31', 38)" class="i">ToByteArray</span>()
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs32', 39)" onmouseover="showTip(event, 'fs32', 39)" class="i">posTrimIdx</span> <span class="o">=</span> <span class="i">revFind</span> <span onmouseout="hideTip(event, 'fs30', 40)" onmouseover="showTip(event, 'fs30', 40)" class="i">bi</span> (<span class="k">fun</span> <span class="i">b</span> <span class="k">-&gt;</span> <span class="i">b</span> <span class="o">&lt;&gt;</span> <span class="n">0uy</span>)
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs33', 41)" onmouseover="showTip(event, 'fs33', 41)" class="i">iTrimIdx</span> <span class="o">=</span> 
+            <span class="k">if</span> (<span onmouseout="hideTip(event, 'fs30', 42)" onmouseover="showTip(event, 'fs30', 42)" class="i">bi</span><span class="o">.</span>[<span onmouseout="hideTip(event, 'fs32', 43)" onmouseover="showTip(event, 'fs32', 43)" class="i">posTrimIdx</span>] <span class="o">&amp;&amp;&amp;</span> <span class="n">0x80uy</span>) <span class="o">&lt;&gt;</span> <span class="n">0uy</span>
+                <span class="k">then</span> <span onmouseout="hideTip(event, 'fs32', 44)" onmouseover="showTip(event, 'fs32', 44)" class="i">posTrimIdx</span> <span class="o">+</span> <span class="n">1</span>
+                <span class="k">else</span> <span onmouseout="hideTip(event, 'fs32', 45)" onmouseover="showTip(event, 'fs32', 45)" class="i">posTrimIdx</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs34', 46)" onmouseover="showTip(event, 'fs34', 46)" class="i">bytes</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs30', 47)" onmouseover="showTip(event, 'fs30', 47)" class="i">bi</span><span class="o">.</span>[<span class="n">0..</span><span onmouseout="hideTip(event, 'fs33', 48)" onmouseover="showTip(event, 'fs33', 48)" class="i">iTrimIdx</span>]
+        <span class="k">if</span> <span onmouseout="hideTip(event, 'fs26', 49)" onmouseover="showTip(event, 'fs26', 49)" class="i">i</span> <span class="o">&lt;</span> <span class="n">0I</span> <span class="k">then</span>
+            <span onmouseout="hideTip(event, 'fs34', 50)" onmouseover="showTip(event, 'fs34', 50)" class="i">bytes</span><span class="o">.</span>[<span onmouseout="hideTip(event, 'fs33', 51)" onmouseover="showTip(event, 'fs33', 51)" class="i">iTrimIdx</span>] <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs34', 52)" onmouseover="showTip(event, 'fs34', 52)" class="i">bytes</span><span class="o">.</span>[<span onmouseout="hideTip(event, 'fs33', 53)" onmouseover="showTip(event, 'fs33', 53)" class="i">iTrimIdx</span>] <span class="o">|||</span> <span class="n">0x80uy</span>
+        <span onmouseout="hideTip(event, 'fs34', 54)" onmouseover="showTip(event, 'fs34', 54)" class="i">bytes</span>
+
+    <span class="k">let</span> <span class="k">rec</span> <span onmouseout="hideTip(event, 'fs35', 55)" onmouseover="showTip(event, 'fs35', 55)" class="i">parseOne</span> (<span onmouseout="hideTip(event, 'fs15', 56)" onmouseover="showTip(event, 'fs15', 56)" class="i">tokens</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 57)" onmouseover="showTip(event, 'fs14', 57)" class="i">string</span> <span onmouseout="hideTip(event, 'fs36', 58)" onmouseover="showTip(event, 'fs36', 58)" class="i">list</span>) <span class="o">=</span>
+        <span class="k">match</span> <span onmouseout="hideTip(event, 'fs15', 59)" onmouseover="showTip(event, 'fs15', 59)" class="i">tokens</span> <span class="k">with</span> 
+        | [] <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs37', 60)" onmouseover="showTip(event, 'fs37', 60)" class="i">ignore</span>()
+        | <span onmouseout="hideTip(event, 'fs38', 61)" onmouseover="showTip(event, 'fs38', 61)" class="i">token</span><span class="o">::</span><span onmouseout="hideTip(event, 'fs39', 62)" onmouseover="showTip(event, 'fs39', 62)" class="i">rest</span> <span class="k">-&gt;</span> 
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs40', 63)" onmouseover="showTip(event, 'fs40', 63)" class="i">c</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs38', 64)" onmouseover="showTip(event, 'fs38', 64)" class="i">token</span><span class="o">.</span>[<span class="n">0</span>]
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs41', 65)" onmouseover="showTip(event, 'fs41', 65)" class="i">code</span> <span class="o">=</span> (<span onmouseout="hideTip(event, 'fs9', 66)" onmouseover="showTip(event, 'fs9', 66)" class="i">opCodes</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs10', 67)" onmouseover="showTip(event, 'fs10', 67)" class="i">Map</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs42', 68)" onmouseover="showTip(event, 'fs42', 68)" class="i">tryFind</span> (<span class="k">if</span> <span onmouseout="hideTip(event, 'fs38', 69)" onmouseover="showTip(event, 'fs38', 69)" class="i">token</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs43', 70)" onmouseover="showTip(event, 'fs43', 70)" class="i">StartsWith</span>(<span class="s">&quot;</span><span class="s">OP_</span><span class="s">&quot;</span>) <span class="k">then</span> <span onmouseout="hideTip(event, 'fs38', 71)" onmouseover="showTip(event, 'fs38', 71)" class="i">token</span><span class="o">.</span>[<span class="n">3..</span>] <span class="k">else</span> <span onmouseout="hideTip(event, 'fs38', 72)" onmouseover="showTip(event, 'fs38', 72)" class="i">token</span>))
+            <span class="k">if</span> <span onmouseout="hideTip(event, 'fs41', 73)" onmouseover="showTip(event, 'fs41', 73)" class="i">code</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs44', 74)" onmouseover="showTip(event, 'fs44', 74)" class="i">IsSome</span> <span class="k">then</span>
+                <span onmouseout="hideTip(event, 'fs23', 75)" onmouseover="showTip(event, 'fs23', 75)" class="i">scriptWriter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs45', 76)" onmouseover="showTip(event, 'fs45', 76)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs46', 77)" onmouseover="showTip(event, 'fs46', 77)" class="i">byte</span> <span onmouseout="hideTip(event, 'fs41', 78)" onmouseover="showTip(event, 'fs41', 78)" class="i">code</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs47', 79)" onmouseover="showTip(event, 'fs47', 79)" class="i">Value</span>)
+            <span class="k">elif</span> <span onmouseout="hideTip(event, 'fs40', 80)" onmouseover="showTip(event, 'fs40', 80)" class="i">c</span> <span class="o">=</span> <span class="s">&#39;\&#39;&#39;</span> <span class="k">then</span>
+                <span class="k">let</span> <span onmouseout="hideTip(event, 'fs48', 81)" onmouseover="showTip(event, 'fs48', 81)" class="i">message</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs49', 82)" onmouseover="showTip(event, 'fs49', 82)" class="i">ASCIIEncoding</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs50', 83)" onmouseover="showTip(event, 'fs50', 83)" class="i">ASCII</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs51', 84)" onmouseover="showTip(event, 'fs51', 84)" class="i">GetBytes</span> (<span onmouseout="hideTip(event, 'fs38', 85)" onmouseover="showTip(event, 'fs38', 85)" class="i">token</span><span class="o">.</span>[<span class="n">1..</span><span onmouseout="hideTip(event, 'fs38', 86)" onmouseover="showTip(event, 'fs38', 86)" class="i">token</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs52', 87)" onmouseover="showTip(event, 'fs52', 87)" class="i">Length</span><span class="o">-</span><span class="n">2</span>])
+                <span class="k">let</span> <span onmouseout="hideTip(event, 'fs53', 88)" onmouseover="showTip(event, 'fs53', 88)" class="i">len</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs48', 89)" onmouseover="showTip(event, 'fs48', 89)" class="i">message</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs54', 90)" onmouseover="showTip(event, 'fs54', 90)" class="i">Length</span>
+                <span class="k">if</span> <span onmouseout="hideTip(event, 'fs53', 91)" onmouseover="showTip(event, 'fs53', 91)" class="i">len</span> <span class="o">&lt;=</span> <span class="n">75</span>
+                <span class="k">then</span> <span onmouseout="hideTip(event, 'fs23', 92)" onmouseover="showTip(event, 'fs23', 92)" class="i">scriptWriter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs45', 93)" onmouseover="showTip(event, 'fs45', 93)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs46', 94)" onmouseover="showTip(event, 'fs46', 94)" class="i">byte</span> <span onmouseout="hideTip(event, 'fs48', 95)" onmouseover="showTip(event, 'fs48', 95)" class="i">message</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs54', 96)" onmouseover="showTip(event, 'fs54', 96)" class="i">Length</span>)
+                <span class="k">else</span> 
+                    <span onmouseout="hideTip(event, 'fs23', 97)" onmouseover="showTip(event, 'fs23', 97)" class="i">scriptWriter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs45', 98)" onmouseover="showTip(event, 'fs45', 98)" class="i">Write</span>(<span class="n">0x4dy</span>)
+                    <span onmouseout="hideTip(event, 'fs23', 99)" onmouseover="showTip(event, 'fs23', 99)" class="i">scriptWriter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs45', 100)" onmouseover="showTip(event, 'fs45', 100)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs55', 101)" onmouseover="showTip(event, 'fs55', 101)" class="i">uint16</span> <span onmouseout="hideTip(event, 'fs48', 102)" onmouseover="showTip(event, 'fs48', 102)" class="i">message</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs54', 103)" onmouseover="showTip(event, 'fs54', 103)" class="i">Length</span>)
+                <span onmouseout="hideTip(event, 'fs23', 104)" onmouseover="showTip(event, 'fs23', 104)" class="i">scriptWriter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs45', 105)" onmouseover="showTip(event, 'fs45', 105)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs48', 106)" onmouseover="showTip(event, 'fs48', 106)" class="i">message</span>)
+            <span class="k">elif</span> <span onmouseout="hideTip(event, 'fs38', 107)" onmouseover="showTip(event, 'fs38', 107)" class="i">token</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs43', 108)" onmouseover="showTip(event, 'fs43', 108)" class="i">StartsWith</span>(<span class="s">&quot;</span><span class="s">0</span><span class="s">x</span><span class="s">&quot;</span>)
+            <span class="k">then</span>
+                <span class="k">let</span> <span onmouseout="hideTip(event, 'fs56', 109)" onmouseover="showTip(event, 'fs56', 109)" class="i">hex</span> <span class="o">=</span> <span class="i">Hex</span><span class="o">.</span><span class="i">Decode</span> <span onmouseout="hideTip(event, 'fs38', 110)" onmouseover="showTip(event, 'fs38', 110)" class="i">token</span><span class="o">.</span>[<span class="n">2..</span>]
+                <span onmouseout="hideTip(event, 'fs23', 111)" onmouseover="showTip(event, 'fs23', 111)" class="i">scriptWriter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs45', 112)" onmouseover="showTip(event, 'fs45', 112)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs56', 113)" onmouseover="showTip(event, 'fs56', 113)" class="i">hex</span>)
+            <span class="k">else</span>
+                <span class="k">let</span> (<span onmouseout="hideTip(event, 'fs57', 114)" onmouseover="showTip(event, 'fs57', 114)" class="i">s</span>, <span onmouseout="hideTip(event, 'fs58', 115)" onmouseover="showTip(event, 'fs58', 115)" class="i">n</span>) <span class="o">=</span> <span onmouseout="hideTip(event, 'fs27', 116)" onmouseover="showTip(event, 'fs27', 116)" class="i">bigint</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs59', 117)" onmouseover="showTip(event, 'fs59', 117)" class="i">TryParse</span> <span onmouseout="hideTip(event, 'fs38', 118)" onmouseover="showTip(event, 'fs38', 118)" class="i">token</span>
+                <span class="k">assert</span> <span onmouseout="hideTip(event, 'fs57', 119)" onmouseover="showTip(event, 'fs57', 119)" class="i">s</span>
+                <span class="k">if</span> <span onmouseout="hideTip(event, 'fs58', 120)" onmouseover="showTip(event, 'fs58', 120)" class="i">n</span> <span class="o">&gt;</span><span class="o">=</span> <span class="n">0I</span> <span class="o">&amp;&amp;</span> <span onmouseout="hideTip(event, 'fs58', 121)" onmouseover="showTip(event, 'fs58', 121)" class="i">n</span> <span class="o">&lt;=</span> <span class="n">16I</span>
+                <span class="k">then</span> 
+                    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs60', 122)" onmouseover="showTip(event, 'fs60', 122)" class="i">code</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs46', 123)" onmouseover="showTip(event, 'fs46', 123)" class="i">byte</span> <span onmouseout="hideTip(event, 'fs9', 124)" onmouseover="showTip(event, 'fs9', 124)" class="i">opCodes</span><span class="o">.</span>[<span onmouseout="hideTip(event, 'fs38', 125)" onmouseover="showTip(event, 'fs38', 125)" class="i">token</span>]
+                    <span onmouseout="hideTip(event, 'fs23', 126)" onmouseover="showTip(event, 'fs23', 126)" class="i">scriptWriter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs45', 127)" onmouseover="showTip(event, 'fs45', 127)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs60', 128)" onmouseover="showTip(event, 'fs60', 128)" class="i">code</span>)
+                <span class="k">else</span>
+                    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs34', 129)" onmouseover="showTip(event, 'fs34', 129)" class="i">bytes</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs25', 130)" onmouseover="showTip(event, 'fs25', 130)" class="i">intToBytes</span> <span onmouseout="hideTip(event, 'fs58', 131)" onmouseover="showTip(event, 'fs58', 131)" class="i">n</span>
+                    <span onmouseout="hideTip(event, 'fs23', 132)" onmouseover="showTip(event, 'fs23', 132)" class="i">scriptWriter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs45', 133)" onmouseover="showTip(event, 'fs45', 133)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs46', 134)" onmouseover="showTip(event, 'fs46', 134)" class="i">byte</span> <span onmouseout="hideTip(event, 'fs34', 135)" onmouseover="showTip(event, 'fs34', 135)" class="i">bytes</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs54', 136)" onmouseover="showTip(event, 'fs54', 136)" class="i">Length</span>)
+                    <span onmouseout="hideTip(event, 'fs23', 137)" onmouseover="showTip(event, 'fs23', 137)" class="i">scriptWriter</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs45', 138)" onmouseover="showTip(event, 'fs45', 138)" class="i">Write</span>(<span onmouseout="hideTip(event, 'fs34', 139)" onmouseover="showTip(event, 'fs34', 139)" class="i">bytes</span>)
+            <span onmouseout="hideTip(event, 'fs35', 140)" onmouseover="showTip(event, 'fs35', 140)" class="i">parseOne</span> <span onmouseout="hideTip(event, 'fs39', 141)" onmouseover="showTip(event, 'fs39', 141)" class="i">rest</span>
+
+    <span onmouseout="hideTip(event, 'fs35', 142)" onmouseover="showTip(event, 'fs35', 142)" class="i">parseOne</span> <span onmouseout="hideTip(event, 'fs15', 143)" onmouseover="showTip(event, 'fs15', 143)" class="i">tokens</span>
+    <span onmouseout="hideTip(event, 'fs21', 144)" onmouseover="showTip(event, 'fs21', 144)" class="i">scriptBytes</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs61', 145)" onmouseover="showTip(event, 'fs61', 145)" class="i">ToArray</span>()
+
+[&lt;<span class="i">TestFixture</span>&gt;]
+<span class="k">type</span> <span class="i">``Given a ScriptRuntime``</span> ()<span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs62', 146)" onmouseover="showTip(event, 'fs62', 146)" class="i">validJson</span> <span class="o">=</span> <span class="i">JsonValue</span><span class="o">.</span><span class="i">Load</span>(<span class="k">__SOURCE_DIRECTORY__</span> <span class="o">+</span> <span class="s">&quot;</span><span class="s">/</span><span class="s">data</span><span class="s">/</span><span class="s">script_valid</span><span class="s">.</span><span class="s">json</span><span class="s">&quot;</span>)
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs63', 147)" onmouseover="showTip(event, 'fs63', 147)" class="i">invalidJson</span> <span class="o">=</span> <span class="i">JsonValue</span><span class="o">.</span><span class="i">Load</span>(<span class="k">__SOURCE_DIRECTORY__</span> <span class="o">+</span> <span class="s">&quot;</span><span class="s">/</span><span class="s">data</span><span class="s">/</span><span class="s">script_invalid</span><span class="s">.</span><span class="s">json</span><span class="s">&quot;</span>)
+
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs64', 148)" onmouseover="showTip(event, 'fs64', 148)" class="i">evalScript</span> (<span onmouseout="hideTip(event, 'fs65', 149)" onmouseover="showTip(event, 'fs65', 149)" class="i">sigScript</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 150)" onmouseover="showTip(event, 'fs14', 150)" class="i">string</span>) (<span onmouseout="hideTip(event, 'fs66', 151)" onmouseover="showTip(event, 'fs66', 151)" class="i">pubScript</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 152)" onmouseover="showTip(event, 'fs14', 152)" class="i">string</span>) <span class="o">=</span> 
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs67', 153)" onmouseover="showTip(event, 'fs67', 153)" class="i">interpreter</span> <span class="o">=</span> <span class="k">new</span> <span class="i">ScriptRuntime</span>(<span class="k">fun</span> <span class="i">a</span> _ <span class="k">-&gt;</span> <span class="i">a</span>)
+        <span onmouseout="hideTip(event, 'fs67', 154)" onmouseover="showTip(event, 'fs67', 154)" class="i">interpreter</span><span class="o">.</span><span class="i">Verify</span>(<span onmouseout="hideTip(event, 'fs12', 155)" onmouseover="showTip(event, 'fs12', 155)" class="i">parseScript</span> <span onmouseout="hideTip(event, 'fs65', 156)" onmouseover="showTip(event, 'fs65', 156)" class="i">sigScript</span>, <span onmouseout="hideTip(event, 'fs12', 157)" onmouseover="showTip(event, 'fs12', 157)" class="i">parseScript</span> <span onmouseout="hideTip(event, 'fs66', 158)" onmouseover="showTip(event, 'fs66', 158)" class="i">pubScript</span>)
+
+    [&lt;<span class="i">Test</span>&gt;] 
+    <span class="k">member</span> <span onmouseout="hideTip(event, 'fs68', 159)" onmouseover="showTip(event, 'fs68', 159)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs69', 160)" onmouseover="showTip(event, 'fs69', 160)" class="i">``when evaluating scripts from a valid jsonfile, I should not fail.``</span> () <span class="o">=</span>
+        <span onmouseout="hideTip(event, 'fs62', 161)" onmouseover="showTip(event, 'fs62', 161)" class="i">validJson</span><span class="o">.</span><span class="i">AsArray</span>() <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs19', 162)" onmouseover="showTip(event, 'fs19', 162)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs70', 163)" onmouseover="showTip(event, 'fs70', 163)" class="i">iteri</span>(<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs71', 164)" onmouseover="showTip(event, 'fs71', 164)" class="i">i</span> <span onmouseout="hideTip(event, 'fs72', 165)" onmouseover="showTip(event, 'fs72', 165)" class="i">s</span> <span class="k">-&gt;</span>
+            <span class="k">if</span> <span onmouseout="hideTip(event, 'fs71', 166)" onmouseover="showTip(event, 'fs71', 166)" class="i">i</span> <span class="o">=</span> <span class="n">278</span> <span class="k">then</span> <span onmouseout="hideTip(event, 'fs37', 167)" onmouseover="showTip(event, 'fs37', 167)" class="i">ignore</span>()
+            <span class="k">match</span> <span onmouseout="hideTip(event, 'fs72', 168)" onmouseover="showTip(event, 'fs72', 168)" class="i">s</span> <span class="k">with</span> 
+            | <span class="i">JsonValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs19', 169)" onmouseover="showTip(event, 'fs19', 169)" class="i">Array</span> <span class="i">arr</span> <span class="k">-&gt;</span>
+                <span class="k">let</span> <span class="i">inScript</span> <span class="o">=</span> <span class="i">arr</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">AsString</span>()
+                <span class="k">let</span> <span class="i">outScript</span> <span class="o">=</span> <span class="i">arr</span><span class="o">.</span>[<span class="n">1</span>]<span class="o">.</span><span class="i">AsString</span>()
+                <span onmouseout="hideTip(event, 'fs64', 170)" onmouseover="showTip(event, 'fs64', 170)" class="i">evalScript</span> <span class="i">inScript</span> <span class="i">outScript</span> <span class="o">|&gt;</span> <span class="i">should</span> <span class="i">equal</span> <span class="k">true</span>
+            )
+
+    [&lt;<span class="i">Test</span>&gt;] 
+    <span class="k">member</span> <span onmouseout="hideTip(event, 'fs68', 171)" onmouseover="showTip(event, 'fs68', 171)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs73', 172)" onmouseover="showTip(event, 'fs73', 172)" class="i">``when evaluating scripts from a invalid jsonfile, I should fail.``</span> () <span class="o">=</span>
+        <span class="k">for</span> <span onmouseout="hideTip(event, 'fs72', 173)" onmouseover="showTip(event, 'fs72', 173)" class="i">s</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs63', 174)" onmouseover="showTip(event, 'fs63', 174)" class="i">invalidJson</span><span class="o">.</span><span class="i">AsArray</span>() <span class="k">do</span>
+            <span class="k">match</span> <span onmouseout="hideTip(event, 'fs72', 175)" onmouseover="showTip(event, 'fs72', 175)" class="i">s</span> <span class="k">with</span> 
+            | <span class="i">JsonValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs19', 176)" onmouseover="showTip(event, 'fs19', 176)" class="i">Array</span> <span class="i">arr</span> <span class="k">-&gt;</span>
+                <span class="k">let</span> <span class="i">inScript</span> <span class="o">=</span> <span class="i">arr</span><span class="o">.</span>[<span class="n">0</span>]<span class="o">.</span><span class="i">AsString</span>()
+                <span class="k">let</span> <span class="i">outScript</span> <span class="o">=</span> <span class="i">arr</span><span class="o">.</span>[<span class="n">1</span>]<span class="o">.</span><span class="i">AsString</span>()
+                <span onmouseout="hideTip(event, 'fs64', 177)" onmouseover="showTip(event, 'fs64', 177)" class="i">evalScript</span> <span class="i">inScript</span> <span class="i">outScript</span> <span class="o">|&gt;</span> <span class="i">should</span> <span class="i">equal</span> <span class="k">false</span></pre>
+</td>
+</tr>
+</table>
+
+<h2>Signature hash tests</h2>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+[&lt;<span class="i">TestFixture</span>&gt;]
+<span class="k">type</span> <span class="i">``Given a Tx Hashing function``</span> ()<span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs62', 178)" onmouseover="showTip(event, 'fs62', 178)" class="i">validJson</span> <span class="o">=</span> <span class="i">JsonValue</span><span class="o">.</span><span class="i">Load</span>(<span class="k">__SOURCE_DIRECTORY__</span> <span class="o">+</span> <span class="s">&quot;</span><span class="s">/</span><span class="s">data</span><span class="s">/</span><span class="s">sighash</span><span class="s">.</span><span class="s">json</span><span class="s">&quot;</span>)
+
+    [&lt;<span class="i">Test</span>&gt;] 
+    <span class="k">member</span> <span onmouseout="hideTip(event, 'fs74', 179)" onmouseover="showTip(event, 'fs74', 179)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs75', 180)" onmouseover="showTip(event, 'fs75', 180)" class="i">``when evaluating hashes from a valid json file, I should not fail.``</span> () <span class="o">=</span>
+        <span class="k">for</span> <span onmouseout="hideTip(event, 'fs72', 181)" onmouseover="showTip(event, 'fs72', 181)" class="i">s</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs62', 182)" onmouseover="showTip(event, 'fs62', 182)" class="i">validJson</span><span class="o">.</span><span class="i">AsArray</span>() <span class="k">do</span>
+            <span class="k">match</span> <span onmouseout="hideTip(event, 'fs72', 183)" onmouseover="showTip(event, 'fs72', 183)" class="i">s</span> <span class="k">with</span>
+            | <span class="i">JsonValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs19', 184)" onmouseover="showTip(event, 'fs19', 184)" class="i">Array</span> [| <span class="i">txJ</span>; <span class="i">scriptJ</span>; <span class="i">indexJ</span>; <span class="i">hashTypeJ</span>; <span class="i">resultJ</span> |] <span class="k">-&gt;</span>
+            <span class="k">let</span> <span class="i">txHex</span> <span class="o">=</span> <span class="i">Hex</span><span class="o">.</span><span class="i">Decode</span>(<span class="i">txJ</span><span class="o">.</span><span class="i">AsString</span>())
+            <span class="k">let</span> <span class="i">script</span> <span class="o">=</span> <span class="i">Hex</span><span class="o">.</span><span class="i">Decode</span>(<span class="i">scriptJ</span><span class="o">.</span><span class="i">AsString</span>())
+            <span class="k">let</span> <span class="i">index</span> <span class="o">=</span> <span class="i">indexJ</span><span class="o">.</span><span class="i">AsInteger</span>()
+            <span class="k">let</span> <span class="i">hashType</span> <span class="o">=</span> <span class="i">hashTypeJ</span><span class="o">.</span><span class="i">AsInteger</span>()
+            <span class="k">let</span> <span class="i">result</span> <span class="o">=</span> <span class="i">resultJ</span><span class="o">.</span><span class="i">AsString</span>()
+            <span class="k">let</span> <span class="i">tx</span> <span class="o">=</span> <span class="i">ParseByteArray</span> <span class="i">txHex</span> <span class="i">Tx</span><span class="o">.</span><span class="i">Parse</span>
+            <span class="k">let</span> <span class="i">scriptNoCodeSep</span> <span class="o">=</span> <span class="i">script</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs19', 185)" onmouseover="showTip(event, 'fs19', 185)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs76', 186)" onmouseover="showTip(event, 'fs76', 186)" class="i">filter</span>(<span class="k">fun</span> <span class="i">b</span> <span class="k">-&gt;</span> <span class="i">b</span> <span class="o">&lt;&gt;</span> <span class="n">0xabuy</span>)
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs77', 187)" onmouseover="showTip(event, 'fs77', 187)" class="i">hash</span> <span class="o">=</span> <span class="i">computeTxHash</span> <span class="i">tx</span> <span class="i">index</span> <span class="i">scriptNoCodeSep</span> <span class="i">hashType</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs19', 188)" onmouseover="showTip(event, 'fs19', 188)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs78', 189)" onmouseover="showTip(event, 'fs78', 189)" class="i">rev</span>
+            <span class="k">let</span> <span class="i">hashHex</span> <span class="o">=</span> <span class="i">Hex</span><span class="o">.</span><span class="i">ToHexString</span> <span onmouseout="hideTip(event, 'fs77', 190)" onmouseover="showTip(event, 'fs77', 190)" class="i">hash</span>
+            <span class="i">hashHex</span> <span class="o">|&gt;</span> <span class="i">should</span> <span class="i">equal</span> <span class="i">result</span>
+            | _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs37', 191)" onmouseover="showTip(event, 'fs37', 191)" class="i">ignore</span>()</pre>
+</td>
+</tr>
+</table>
+
+<h2>Transaction parsing tests</h2>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
+<span class="l">18: </span>
+<span class="l">19: </span>
+<span class="l">20: </span>
+<span class="l">21: </span>
+<span class="l">22: </span>
+<span class="l">23: </span>
+<span class="l">24: </span>
+<span class="l">25: </span>
+<span class="l">26: </span>
+<span class="l">27: </span>
+<span class="l">28: </span>
+<span class="l">29: </span>
+<span class="l">30: </span>
+<span class="l">31: </span>
+<span class="l">32: </span>
+<span class="l">33: </span>
+<span class="l">34: </span>
+<span class="l">35: </span>
+<span class="l">36: </span>
+<span class="l">37: </span>
+<span class="l">38: </span>
+<span class="l">39: </span>
+<span class="l">40: </span>
+<span class="l">41: </span>
+<span class="l">42: </span>
+<span class="l">43: </span>
+<span class="l">44: </span>
+<span class="l">45: </span>
+<span class="l">46: </span>
+<span class="l">47: </span>
+<span class="l">48: </span>
+<span class="l">49: </span>
+<span class="l">50: </span>
+<span class="l">51: </span>
+<span class="l">52: </span>
+<span class="l">53: </span>
+<span class="l">54: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+[&lt;<span class="i">TestFixture</span>&gt;]
+<span class="k">type</span> <span class="i">``Given a Tx``</span> ()<span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs62', 192)" onmouseover="showTip(event, 'fs62', 192)" class="i">validJson</span> <span class="o">=</span> <span class="i">JsonValue</span><span class="o">.</span><span class="i">Load</span>(<span class="k">__SOURCE_DIRECTORY__</span> <span class="o">+</span> <span class="s">&quot;</span><span class="s">/</span><span class="s">data</span><span class="s">/</span><span class="s">tx_valid</span><span class="s">.</span><span class="s">json</span><span class="s">&quot;</span>)
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs63', 193)" onmouseover="showTip(event, 'fs63', 193)" class="i">invalidJson</span> <span class="o">=</span> <span class="i">JsonValue</span><span class="o">.</span><span class="i">Load</span>(<span class="k">__SOURCE_DIRECTORY__</span> <span class="o">+</span> <span class="s">&quot;</span><span class="s">/</span><span class="s">data</span><span class="s">/</span><span class="s">tx_invalid</span><span class="s">.</span><span class="s">json</span><span class="s">&quot;</span>)
+
+    [&lt;<span class="i">Test</span>&gt;] 
+    <span class="k">member</span> <span onmouseout="hideTip(event, 'fs79', 194)" onmouseover="showTip(event, 'fs79', 194)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs80', 195)" onmouseover="showTip(event, 'fs80', 195)" class="i">``when verifying transactions from a valid json file, I should not fail.``</span> () <span class="o">=</span>
+        <span class="k">for</span> <span onmouseout="hideTip(event, 'fs72', 196)" onmouseover="showTip(event, 'fs72', 196)" class="i">s</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs62', 197)" onmouseover="showTip(event, 'fs62', 197)" class="i">validJson</span><span class="o">.</span><span class="i">AsArray</span>() <span class="k">do</span>
+            <span class="k">match</span> <span onmouseout="hideTip(event, 'fs72', 198)" onmouseover="showTip(event, 'fs72', 198)" class="i">s</span> <span class="k">with</span>
+            | <span class="i">JsonValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs19', 199)" onmouseover="showTip(event, 'fs19', 199)" class="i">Array</span> [| <span class="i">prevInputsJ</span>; <span class="i">txHexJ</span>; <span class="i">flagsJ</span> |] <span class="k">-&gt;</span>
+                <span class="k">let</span> <span class="i">txHex</span> <span class="o">=</span> <span class="i">Hex</span><span class="o">.</span><span class="i">Decode</span>(<span class="i">txHexJ</span><span class="o">.</span><span class="i">AsString</span>())
+                <span class="k">let</span> <span class="i">tx</span> <span class="o">=</span> <span class="i">ParseByteArray</span> <span class="i">txHex</span> <span class="i">Tx</span><span class="o">.</span><span class="i">Parse</span>
+                <span class="k">let</span> <span class="i">prevOutputsMap</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs81', 200)" onmouseover="showTip(event, 'fs81', 200)" class="i">Dictionary</span><span class="o">&lt;</span><span class="i">OutPoint</span>, <span onmouseout="hideTip(event, 'fs46', 201)" onmouseover="showTip(event, 'fs46', 201)" class="i">byte</span>[]<span class="o">&gt;</span>(<span class="k">new</span> <span class="i">Mempool</span><span class="o">.</span><span class="i">OutpointCompare</span>())
+                <span class="i">prevInputsJ</span><span class="o">.</span><span class="i">AsArray</span>() <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs19', 202)" onmouseover="showTip(event, 'fs19', 202)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs82', 203)" onmouseover="showTip(event, 'fs82', 203)" class="i">map</span>(<span class="k">fun</span> <span class="i">p</span> <span class="k">-&gt;</span>
+                    <span class="k">match</span> <span class="i">p</span> <span class="k">with</span>
+                    | <span class="i">JsonValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs19', 204)" onmouseover="showTip(event, 'fs19', 204)" class="i">Array</span> [| <span class="i">JsonValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs83', 205)" onmouseover="showTip(event, 'fs83', 205)" class="i">String</span> <span class="i">prevHashJ</span>; <span class="i">JsonValue</span><span class="o">.</span><span class="i">Number</span> <span class="i">index</span>; <span class="i">JsonValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs83', 206)" onmouseover="showTip(event, 'fs83', 206)" class="i">String</span> <span class="i">script</span> |] <span class="k">-&gt;</span>
+                        (<span class="k">new</span> <span class="i">OutPoint</span>(<span class="i">hashFromHex</span> <span class="i">prevHashJ</span>, <span onmouseout="hideTip(event, 'fs84', 207)" onmouseover="showTip(event, 'fs84', 207)" class="i">int</span> <span class="i">index</span>), <span onmouseout="hideTip(event, 'fs12', 208)" onmouseover="showTip(event, 'fs12', 208)" class="i">parseScript</span> <span class="i">script</span>)
+                    | _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs85', 209)" onmouseover="showTip(event, 'fs85', 209)" class="i">raise</span> (<span class="k">new</span> <span onmouseout="hideTip(event, 'fs86', 210)" onmouseover="showTip(event, 'fs86', 210)" class="i">ArgumentException</span>())
+                ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs87', 211)" onmouseover="showTip(event, 'fs87', 211)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs88', 212)" onmouseover="showTip(event, 'fs88', 212)" class="i">iter</span>(<span class="k">fun</span> (<span class="i">k</span>, <span class="i">v</span>) <span class="k">-&gt;</span> <span class="i">prevOutputsMap</span><span class="o">.</span><span class="i">Add</span>(<span class="i">k</span>, <span class="i">v</span>))
+                <span class="k">let</span> <span class="i">verified</span> <span class="o">=</span> 
+                    <span class="i">tx</span><span class="o">.</span><span class="i">TxIns</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs19', 213)" onmouseover="showTip(event, 'fs19', 213)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs89', 214)" onmouseover="showTip(event, 'fs89', 214)" class="i">mapi</span>(<span class="k">fun</span> <span class="i">i</span> <span class="i">txIn</span> <span class="k">-&gt;</span>
+                        <span class="k">let</span> <span class="i">outpoint</span> <span class="o">=</span> <span class="i">txIn</span><span class="o">.</span><span class="i">PrevOutPoint</span>
+                        <span class="k">let</span> <span class="i">script</span> <span class="o">=</span> <span class="i">prevOutputsMap</span><span class="o">.</span>[<span class="i">outpoint</span>]
+                        <span class="k">let</span> <span class="i">scriptInterpreter</span> <span class="o">=</span> <span class="k">new</span> <span class="i">ScriptRuntime</span>(<span class="i">computeTxHash</span> <span class="i">tx</span> <span class="i">i</span>)
+                        <span class="i">scriptInterpreter</span><span class="o">.</span><span class="i">Verify</span>(<span class="i">txIn</span><span class="o">.</span><span class="i">Script</span>, <span class="i">script</span>)
+                    ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs87', 215)" onmouseover="showTip(event, 'fs87', 215)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs90', 216)" onmouseover="showTip(event, 'fs90', 216)" class="i">forall</span> <span onmouseout="hideTip(event, 'fs91', 217)" onmouseover="showTip(event, 'fs91', 217)" class="i">id</span>
+                (<span class="i">flagsJ</span><span class="o">.</span><span class="i">AsString</span>() <span class="o">=</span> <span class="s">&quot;</span><span class="s">NONE</span><span class="s">&quot;</span> <span class="o">||</span> <span class="i">verified</span>) <span class="o">|&gt;</span> <span class="i">should</span> <span class="i">equal</span> <span class="k">true</span>
+            | _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs37', 218)" onmouseover="showTip(event, 'fs37', 218)" class="i">ignore</span>()
+
+    [&lt;<span class="i">Test</span>&gt;] 
+    <span class="k">member</span> <span onmouseout="hideTip(event, 'fs79', 219)" onmouseover="showTip(event, 'fs79', 219)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs92', 220)" onmouseover="showTip(event, 'fs92', 220)" class="i">``when verifying transactions from an invalid json file, I should not fail.``</span> () <span class="o">=</span>
+        <span class="k">for</span> <span onmouseout="hideTip(event, 'fs72', 221)" onmouseover="showTip(event, 'fs72', 221)" class="i">s</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs63', 222)" onmouseover="showTip(event, 'fs63', 222)" class="i">invalidJson</span><span class="o">.</span><span class="i">AsArray</span>() <span class="k">do</span>
+            <span class="k">match</span> <span onmouseout="hideTip(event, 'fs72', 223)" onmouseover="showTip(event, 'fs72', 223)" class="i">s</span> <span class="k">with</span>
+            | <span class="i">JsonValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs19', 224)" onmouseover="showTip(event, 'fs19', 224)" class="i">Array</span> [| <span class="i">prevInputsJ</span>; <span class="i">txHexJ</span>; <span class="i">flagsJ</span> |] <span class="k">-&gt;</span>
+                <span class="k">let</span> <span class="i">txHex</span> <span class="o">=</span> <span class="i">Hex</span><span class="o">.</span><span class="i">Decode</span>(<span class="i">txHexJ</span><span class="o">.</span><span class="i">AsString</span>())
+                <span class="k">let</span> <span class="i">tx</span> <span class="o">=</span> <span class="i">ParseByteArray</span> <span class="i">txHex</span> <span class="i">Tx</span><span class="o">.</span><span class="i">Parse</span>
+                <span class="k">let</span> <span class="i">prevOutputsMap</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs81', 225)" onmouseover="showTip(event, 'fs81', 225)" class="i">Dictionary</span><span class="o">&lt;</span><span class="i">OutPoint</span>, <span onmouseout="hideTip(event, 'fs46', 226)" onmouseover="showTip(event, 'fs46', 226)" class="i">byte</span>[]<span class="o">&gt;</span>(<span class="k">new</span> <span class="i">Mempool</span><span class="o">.</span><span class="i">OutpointCompare</span>())
+                <span class="i">prevInputsJ</span><span class="o">.</span><span class="i">AsArray</span>() <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs19', 227)" onmouseover="showTip(event, 'fs19', 227)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs82', 228)" onmouseover="showTip(event, 'fs82', 228)" class="i">map</span>(<span class="k">fun</span> <span class="i">p</span> <span class="k">-&gt;</span>
+                    <span class="k">match</span> <span class="i">p</span> <span class="k">with</span>
+                    | <span class="i">JsonValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs19', 229)" onmouseover="showTip(event, 'fs19', 229)" class="i">Array</span> [| <span class="i">JsonValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs83', 230)" onmouseover="showTip(event, 'fs83', 230)" class="i">String</span> <span class="i">prevHashJ</span>; <span class="i">JsonValue</span><span class="o">.</span><span class="i">Number</span> <span class="i">index</span>; <span class="i">JsonValue</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs83', 231)" onmouseover="showTip(event, 'fs83', 231)" class="i">String</span> <span class="i">script</span> |] <span class="k">-&gt;</span>
+                        (<span class="k">new</span> <span class="i">OutPoint</span>(<span class="i">hashFromHex</span> <span class="i">prevHashJ</span>, <span onmouseout="hideTip(event, 'fs84', 232)" onmouseover="showTip(event, 'fs84', 232)" class="i">int</span> <span class="i">index</span>), <span onmouseout="hideTip(event, 'fs12', 233)" onmouseover="showTip(event, 'fs12', 233)" class="i">parseScript</span> <span class="i">script</span>)
+                    | _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs85', 234)" onmouseover="showTip(event, 'fs85', 234)" class="i">raise</span> (<span class="k">new</span> <span onmouseout="hideTip(event, 'fs86', 235)" onmouseover="showTip(event, 'fs86', 235)" class="i">ArgumentException</span>())
+                ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs87', 236)" onmouseover="showTip(event, 'fs87', 236)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs88', 237)" onmouseover="showTip(event, 'fs88', 237)" class="i">iter</span>(<span class="k">fun</span> (<span class="i">k</span>, <span class="i">v</span>) <span class="k">-&gt;</span> <span class="i">prevOutputsMap</span><span class="o">.</span><span class="i">Add</span>(<span class="i">k</span>, <span class="i">v</span>))
+                <span class="k">let</span> <span class="i">verified</span> <span class="o">=</span> 
+                    <span class="i">tx</span><span class="o">.</span><span class="i">TxIns</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs19', 238)" onmouseover="showTip(event, 'fs19', 238)" class="i">Array</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs89', 239)" onmouseover="showTip(event, 'fs89', 239)" class="i">mapi</span>(<span class="k">fun</span> <span class="i">i</span> <span class="i">txIn</span> <span class="k">-&gt;</span>
+                        <span class="k">let</span> <span class="i">outpoint</span> <span class="o">=</span> <span class="i">txIn</span><span class="o">.</span><span class="i">PrevOutPoint</span>
+                        <span class="k">let</span> <span class="i">script</span> <span class="o">=</span> <span class="i">prevOutputsMap</span><span class="o">.</span>[<span class="i">outpoint</span>]
+                        <span class="k">let</span> <span class="i">scriptInterpreter</span> <span class="o">=</span> <span class="k">new</span> <span class="i">ScriptRuntime</span>(<span class="i">computeTxHash</span> <span class="i">tx</span> <span class="i">i</span>)
+                        <span class="i">scriptInterpreter</span><span class="o">.</span><span class="i">Verify</span>(<span class="i">txIn</span><span class="o">.</span><span class="i">Script</span>, <span class="i">script</span>)
+                    ) <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs87', 240)" onmouseover="showTip(event, 'fs87', 240)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs90', 241)" onmouseover="showTip(event, 'fs90', 241)" class="i">forall</span> <span onmouseout="hideTip(event, 'fs91', 242)" onmouseover="showTip(event, 'fs91', 242)" class="i">id</span>
+                <span class="k">let</span> <span class="i">ok</span> <span class="o">=</span> (<span class="i">flagsJ</span><span class="o">.</span><span class="i">AsString</span>() <span class="o">=</span> <span class="s">&quot;</span><span class="s">NONE</span><span class="s">&quot;</span> <span class="o">||</span> <span class="i">verified</span>)
+                <span class="k">if</span> <span class="i">ok</span> <span class="k">then</span>
+                    <span onmouseout="hideTip(event, 'fs93', 243)" onmouseover="showTip(event, 'fs93', 243)" class="i">printfn</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span class="i">txHexJ</span>
+            | _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs37', 244)" onmouseover="showTip(event, 'fs37', 244)" class="i">ignore</span>()</pre>
+</td>
+</tr>
+</table>
+
+<h2>Canonical signature tests</h2>
+
+<table class="pre"><tr><td class="lines"><pre class="fssnip">
+<span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
+<span class="l">11: </span>
+<span class="l">12: </span>
+<span class="l">13: </span>
+</pre>
+</td>
+<td class="snippet"><pre class="fssnip">
+[&lt;<span class="i">TestFixture</span>&gt;]
+<span class="k">type</span> <span class="i">``Given a Signature file``</span> ()<span class="o">=</span>
+    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs62', 245)" onmouseover="showTip(event, 'fs62', 245)" class="i">validJson</span> <span class="o">=</span> <span class="i">JsonValue</span><span class="o">.</span><span class="i">Load</span>(<span class="k">__SOURCE_DIRECTORY__</span> <span class="o">+</span> <span class="s">&quot;</span><span class="s">/</span><span class="s">data</span><span class="s">/</span><span class="s">sig_canonical</span><span class="s">.</span><span class="s">json</span><span class="s">&quot;</span>)
+
+    [&lt;<span class="i">Test</span>&gt;] 
+    <span class="k">member</span> <span onmouseout="hideTip(event, 'fs94', 246)" onmouseover="showTip(event, 'fs94', 246)" class="i">x</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs95', 247)" onmouseover="showTip(event, 'fs95', 247)" class="i">``when verifying signatures from a valid json file, I should not fail.``</span> () <span class="o">=</span>
+        <span class="k">for</span> <span onmouseout="hideTip(event, 'fs72', 248)" onmouseover="showTip(event, 'fs72', 248)" class="i">s</span> <span class="k">in</span> <span onmouseout="hideTip(event, 'fs62', 249)" onmouseover="showTip(event, 'fs62', 249)" class="i">validJson</span><span class="o">.</span><span class="i">AsArray</span>() <span class="k">do</span>
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs96', 250)" onmouseover="showTip(event, 'fs96', 250)" class="i">signature</span> <span class="o">=</span> <span class="i">Hex</span><span class="o">.</span><span class="i">Decode</span> (<span onmouseout="hideTip(event, 'fs72', 251)" onmouseover="showTip(event, 'fs72', 251)" class="i">s</span><span class="o">.</span><span class="i">AsString</span>())
+            <span class="k">let</span> <span onmouseout="hideTip(event, 'fs97', 252)" onmouseover="showTip(event, 'fs97', 252)" class="i">r</span> <span class="o">=</span> <span class="i">checkCanonicalSignature</span> <span onmouseout="hideTip(event, 'fs96', 253)" onmouseover="showTip(event, 'fs96', 253)" class="i">signature</span>
+            <span onmouseout="hideTip(event, 'fs93', 254)" onmouseover="showTip(event, 'fs93', 254)" class="i">printfn</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">A</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs72', 255)" onmouseover="showTip(event, 'fs72', 255)" class="i">s</span> <span onmouseout="hideTip(event, 'fs97', 256)" onmouseover="showTip(event, 'fs97', 256)" class="i">r</span>
+
+        
+        </pre>
+</td>
+</tr>
+</table>
+
+          <div class="tip" id="fs1">namespace Test</div>
+<div class="tip" id="fs2">module Script<br /><br />from Test</div>
+<div class="tip" id="fs3">namespace System</div>
+<div class="tip" id="fs4">namespace System.Collections</div>
+<div class="tip" id="fs5">namespace System.Collections.Generic</div>
+<div class="tip" id="fs6">namespace System.IO</div>
+<div class="tip" id="fs7">namespace System.Text</div>
+<div class="tip" id="fs8">Multiple items<br />namespace System.Data<br /><br />--------------------<br />namespace Microsoft.FSharp.Data</div>
+<div class="tip" id="fs9">val opCodes : Map&lt;string,int&gt;<br /><br />Full name: Test.Script.opCodes</div>
+<div class="tip" id="fs10">Multiple items<br />module Map<br /><br />from Microsoft.FSharp.Collections<br /><br />--------------------<br />type Map&lt;&#39;Key,&#39;Value (requires comparison)&gt; =<br />&#160;&#160;interface IEnumerable<br />&#160;&#160;interface IComparable<br />&#160;&#160;interface IEnumerable&lt;KeyValuePair&lt;&#39;Key,&#39;Value&gt;&gt;<br />&#160;&#160;interface ICollection&lt;KeyValuePair&lt;&#39;Key,&#39;Value&gt;&gt;<br />&#160;&#160;interface IDictionary&lt;&#39;Key,&#39;Value&gt;<br />&#160;&#160;new : elements:seq&lt;&#39;Key * &#39;Value&gt; -&gt; Map&lt;&#39;Key,&#39;Value&gt;<br />&#160;&#160;member Add : key:&#39;Key * value:&#39;Value -&gt; Map&lt;&#39;Key,&#39;Value&gt;<br />&#160;&#160;member ContainsKey : key:&#39;Key -&gt; bool<br />&#160;&#160;override Equals : obj -&gt; bool<br />&#160;&#160;member Remove : key:&#39;Key -&gt; Map&lt;&#39;Key,&#39;Value&gt;<br />&#160;&#160;...<br /><br />Full name: Microsoft.FSharp.Collections.Map&lt;_,_&gt;<br /><br />--------------------<br />new : elements:seq&lt;&#39;Key * &#39;Value&gt; -&gt; Map&lt;&#39;Key,&#39;Value&gt;</div>
+<div class="tip" id="fs11">val ofSeq : elements:seq&lt;&#39;Key * &#39;T&gt; -&gt; Map&lt;&#39;Key,&#39;T&gt; (requires comparison)<br /><br />Full name: Microsoft.FSharp.Collections.Map.ofSeq</div>
+<div class="tip" id="fs12">val parseScript : scriptString:string -&gt; byte []<br /><br />Full name: Test.Script.parseScript</div>
+<div class="tip" id="fs13">val scriptString : string</div>
+<div class="tip" id="fs14">Multiple items<br />val string : value:&#39;T -&gt; string<br /><br />Full name: Microsoft.FSharp.Core.Operators.string<br /><br />--------------------<br />type string = String<br /><br />Full name: Microsoft.FSharp.Core.string</div>
+<div class="tip" id="fs15">val tokens : string list</div>
+<div class="tip" id="fs16">String.Split(params separator: char []) : string []<br />String.Split(separator: string [], options: StringSplitOptions) : string []<br />String.Split(separator: char [], options: StringSplitOptions) : string []<br />String.Split(separator: char [], count: int) : string []<br />String.Split(separator: string [], count: int, options: StringSplitOptions) : string []<br />String.Split(separator: char [], count: int, options: StringSplitOptions) : string []</div>
+<div class="tip" id="fs17">type StringSplitOptions =<br />&#160;&#160;| None = 0<br />&#160;&#160;| RemoveEmptyEntries = 1<br /><br />Full name: System.StringSplitOptions</div>
+<div class="tip" id="fs18">field StringSplitOptions.RemoveEmptyEntries = 1</div>
+<div class="tip" id="fs19">type Array =<br />&#160;&#160;member Clone : unit -&gt; obj<br />&#160;&#160;member CopyTo : array:Array * index:int -&gt; unit + 1 overload<br />&#160;&#160;member GetEnumerator : unit -&gt; IEnumerator<br />&#160;&#160;member GetLength : dimension:int -&gt; int<br />&#160;&#160;member GetLongLength : dimension:int -&gt; int64<br />&#160;&#160;member GetLowerBound : dimension:int -&gt; int<br />&#160;&#160;member GetUpperBound : dimension:int -&gt; int<br />&#160;&#160;member GetValue : params indices:int[] -&gt; obj + 7 overloads<br />&#160;&#160;member Initialize : unit -&gt; unit<br />&#160;&#160;member IsFixedSize : bool<br />&#160;&#160;...<br /><br />Full name: System.Array</div>
+<div class="tip" id="fs20">val toList : array:&#39;T [] -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.Array.toList</div>
+<div class="tip" id="fs21">val scriptBytes : MemoryStream</div>
+<div class="tip" id="fs22">Multiple items<br />type MemoryStream =<br />&#160;&#160;inherit Stream<br />&#160;&#160;new : unit -&gt; MemoryStream + 6 overloads<br />&#160;&#160;member CanRead : bool<br />&#160;&#160;member CanSeek : bool<br />&#160;&#160;member CanWrite : bool<br />&#160;&#160;member Capacity : int with get, set<br />&#160;&#160;member Flush : unit -&gt; unit<br />&#160;&#160;member GetBuffer : unit -&gt; byte[]<br />&#160;&#160;member Length : int64<br />&#160;&#160;member Position : int64 with get, set<br />&#160;&#160;member Read : buffer:byte[] * offset:int * count:int -&gt; int<br />&#160;&#160;...<br /><br />Full name: System.IO.MemoryStream<br /><br />--------------------<br />MemoryStream() : unit<br />MemoryStream(capacity: int) : unit<br />MemoryStream(buffer: byte []) : unit<br />MemoryStream(buffer: byte [], writable: bool) : unit<br />MemoryStream(buffer: byte [], index: int, count: int) : unit<br />MemoryStream(buffer: byte [], index: int, count: int, writable: bool) : unit<br />MemoryStream(buffer: byte [], index: int, count: int, writable: bool, publiclyVisible: bool) : unit</div>
+<div class="tip" id="fs23">val scriptWriter : BinaryWriter</div>
+<div class="tip" id="fs24">Multiple items<br />type BinaryWriter =<br />&#160;&#160;new : output:Stream -&gt; BinaryWriter + 1 overload<br />&#160;&#160;member BaseStream : Stream<br />&#160;&#160;member Close : unit -&gt; unit<br />&#160;&#160;member Dispose : unit -&gt; unit<br />&#160;&#160;member Flush : unit -&gt; unit<br />&#160;&#160;member Seek : offset:int * origin:SeekOrigin -&gt; int64<br />&#160;&#160;member Write : value:bool -&gt; unit + 17 overloads<br />&#160;&#160;static val Null : BinaryWriter<br /><br />Full name: System.IO.BinaryWriter<br /><br />--------------------<br />BinaryWriter(output: Stream) : unit<br />BinaryWriter(output: Stream, encoding: Encoding) : unit</div>
+<div class="tip" id="fs25">val intToBytes : (bigint -&gt; byte [])</div>
+<div class="tip" id="fs26">val i : bigint</div>
+<div class="tip" id="fs27">type bigint = Numerics.BigInteger<br /><br />Full name: Microsoft.FSharp.Core.bigint</div>
+<div class="tip" id="fs28">val pos : bigint</div>
+<div class="tip" id="fs29">val abs : value:&#39;T -&gt; &#39;T (requires member Abs)<br /><br />Full name: Microsoft.FSharp.Core.Operators.abs</div>
+<div class="tip" id="fs30">val bi : byte []</div>
+<div class="tip" id="fs31">Numerics.BigInteger.ToByteArray() : byte []</div>
+<div class="tip" id="fs32">val posTrimIdx : int</div>
+<div class="tip" id="fs33">val iTrimIdx : int</div>
+<div class="tip" id="fs34">val bytes : byte []</div>
+<div class="tip" id="fs35">val parseOne : (string list -&gt; unit)</div>
+<div class="tip" id="fs36">type &#39;T list = List&lt;&#39;T&gt;<br /><br />Full name: Microsoft.FSharp.Collections.list&lt;_&gt;</div>
+<div class="tip" id="fs37">val ignore : value:&#39;T -&gt; unit<br /><br />Full name: Microsoft.FSharp.Core.Operators.ignore</div>
+<div class="tip" id="fs38">val token : string</div>
+<div class="tip" id="fs39">val rest : string list</div>
+<div class="tip" id="fs40">val c : char</div>
+<div class="tip" id="fs41">val code : int option</div>
+<div class="tip" id="fs42">val tryFind : key:&#39;Key -&gt; table:Map&lt;&#39;Key,&#39;T&gt; -&gt; &#39;T option (requires comparison)<br /><br />Full name: Microsoft.FSharp.Collections.Map.tryFind</div>
+<div class="tip" id="fs43">String.StartsWith(value: string) : bool<br />String.StartsWith(value: string, comparisonType: StringComparison) : bool<br />String.StartsWith(value: string, ignoreCase: bool, culture: Globalization.CultureInfo) : bool</div>
+<div class="tip" id="fs44">property Option.IsSome: bool</div>
+<div class="tip" id="fs45">BinaryWriter.Write(value: string) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: float32) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: uint64) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: int64) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: uint32) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: int) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: uint16) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: int16) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: decimal) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em><br />BinaryWriter.Write(value: float) : unit<br />&#160;&#160;&#160;<em>(+0 other overloads)</em></div>
+<div class="tip" id="fs46">Multiple items<br />val byte : value:&#39;T -&gt; byte (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.byte<br /><br />--------------------<br />type byte = Byte<br /><br />Full name: Microsoft.FSharp.Core.byte</div>
+<div class="tip" id="fs47">property Option.Value: int</div>
+<div class="tip" id="fs48">val message : byte []</div>
+<div class="tip" id="fs49">Multiple items<br />type ASCIIEncoding =<br />&#160;&#160;inherit Encoding<br />&#160;&#160;new : unit -&gt; ASCIIEncoding<br />&#160;&#160;member GetByteCount : chars:string -&gt; int + 2 overloads<br />&#160;&#160;member GetBytes : chars:char * charCount:int * bytes:byte * byteCount:int -&gt; int + 2 overloads<br />&#160;&#160;member GetCharCount : bytes:byte * count:int -&gt; int + 1 overload<br />&#160;&#160;member GetChars : bytes:byte * byteCount:int * chars:char * charCount:int -&gt; int + 1 overload<br />&#160;&#160;member GetDecoder : unit -&gt; Decoder<br />&#160;&#160;member GetEncoder : unit -&gt; Encoder<br />&#160;&#160;member GetMaxByteCount : charCount:int -&gt; int<br />&#160;&#160;member GetMaxCharCount : byteCount:int -&gt; int<br />&#160;&#160;member GetString : bytes:byte[] * byteIndex:int * byteCount:int -&gt; string<br />&#160;&#160;...<br /><br />Full name: System.Text.ASCIIEncoding<br /><br />--------------------<br />ASCIIEncoding() : unit</div>
+<div class="tip" id="fs50">property Encoding.ASCII: Encoding</div>
+<div class="tip" id="fs51">Encoding.GetBytes(s: string) : byte []<br />Encoding.GetBytes(chars: char []) : byte []<br />Encoding.GetBytes(chars: char [], index: int, count: int) : byte []<br />Encoding.GetBytes(chars: nativeptr&lt;char&gt;, charCount: int, bytes: nativeptr&lt;byte&gt;, byteCount: int) : int<br />Encoding.GetBytes(s: string, charIndex: int, charCount: int, bytes: byte [], byteIndex: int) : int<br />Encoding.GetBytes(chars: char [], charIndex: int, charCount: int, bytes: byte [], byteIndex: int) : int</div>
+<div class="tip" id="fs52">property String.Length: int</div>
+<div class="tip" id="fs53">val len : int</div>
+<div class="tip" id="fs54">property Array.Length: int</div>
+<div class="tip" id="fs55">Multiple items<br />val uint16 : value:&#39;T -&gt; uint16 (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.uint16<br /><br />--------------------<br />type uint16 = UInt16<br /><br />Full name: Microsoft.FSharp.Core.uint16</div>
+<div class="tip" id="fs56">val hex : obj</div>
+<div class="tip" id="fs57">val s : bool</div>
+<div class="tip" id="fs58">val n : Numerics.BigInteger</div>
+<div class="tip" id="fs59">Numerics.BigInteger.TryParse(value: string, result: byref&lt;Numerics.BigInteger&gt;) : bool<br />Numerics.BigInteger.TryParse(value: string, style: Globalization.NumberStyles, provider: IFormatProvider, result: byref&lt;Numerics.BigInteger&gt;) : bool</div>
+<div class="tip" id="fs60">val code : byte</div>
+<div class="tip" id="fs61">MemoryStream.ToArray() : byte []</div>
+<div class="tip" id="fs62">val validJson : obj</div>
+<div class="tip" id="fs63">val invalidJson : obj</div>
+<div class="tip" id="fs64">val evalScript : (string -&gt; string -&gt; &#39;a)</div>
+<div class="tip" id="fs65">val sigScript : string</div>
+<div class="tip" id="fs66">val pubScript : string</div>
+<div class="tip" id="fs67">val interpreter : obj</div>
+<div class="tip" id="fs68">val x : Given a ScriptRuntime</div>
+<div class="tip" id="fs69">member Given a ScriptRuntime.( when evaluating scripts from a valid jsonfile, I should not fail. ) : unit -&gt; unit<br /><br />Full name: Test.Script.Given a ScriptRuntime.( when evaluating scripts from a valid jsonfile, I should not fail. )</div>
+<div class="tip" id="fs70">val iteri : action:(int -&gt; &#39;T -&gt; unit) -&gt; array:&#39;T [] -&gt; unit<br /><br />Full name: Microsoft.FSharp.Collections.Array.iteri</div>
+<div class="tip" id="fs71">val i : int</div>
+<div class="tip" id="fs72">val s : obj</div>
+<div class="tip" id="fs73">member Given a ScriptRuntime.( when evaluating scripts from a invalid jsonfile, I should fail. ) : unit -&gt; unit<br /><br />Full name: Test.Script.Given a ScriptRuntime.( when evaluating scripts from a invalid jsonfile, I should fail. )</div>
+<div class="tip" id="fs74">val x : Given a Tx Hashing function</div>
+<div class="tip" id="fs75">member Given a Tx Hashing function.( when evaluating hashes from a valid json file, I should not fail. ) : unit -&gt; unit<br /><br />Full name: Test.Script.Given a Tx Hashing function.( when evaluating hashes from a valid json file, I should not fail. )</div>
+<div class="tip" id="fs76">val filter : predicate:(&#39;T -&gt; bool) -&gt; array:&#39;T [] -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Array.filter</div>
+<div class="tip" id="fs77">val hash : obj:&#39;T -&gt; int (requires equality)<br /><br />Full name: Microsoft.FSharp.Core.Operators.hash</div>
+<div class="tip" id="fs78">val rev : array:&#39;T [] -&gt; &#39;T []<br /><br />Full name: Microsoft.FSharp.Collections.Array.rev</div>
+<div class="tip" id="fs79">val x : Given a Tx</div>
+<div class="tip" id="fs80">member Given a Tx.( when verifying transactions from a valid json file, I should not fail. ) : unit -&gt; unit<br /><br />Full name: Test.Script.Given a Tx.( when verifying transactions from a valid json file, I should not fail. )</div>
+<div class="tip" id="fs81">Multiple items<br />type Dictionary&lt;&#39;TKey,&#39;TValue&gt; =<br />&#160;&#160;new : unit -&gt; Dictionary&lt;&#39;TKey, &#39;TValue&gt; + 5 overloads<br />&#160;&#160;member Add : key:&#39;TKey * value:&#39;TValue -&gt; unit<br />&#160;&#160;member Clear : unit -&gt; unit<br />&#160;&#160;member Comparer : IEqualityComparer&lt;&#39;TKey&gt;<br />&#160;&#160;member ContainsKey : key:&#39;TKey -&gt; bool<br />&#160;&#160;member ContainsValue : value:&#39;TValue -&gt; bool<br />&#160;&#160;member Count : int<br />&#160;&#160;member GetEnumerator : unit -&gt; Enumerator&lt;&#39;TKey, &#39;TValue&gt;<br />&#160;&#160;member GetObjectData : info:SerializationInfo * context:StreamingContext -&gt; unit<br />&#160;&#160;member Item : &#39;TKey -&gt; &#39;TValue with get, set<br />&#160;&#160;...<br />&#160;&#160;nested type Enumerator<br />&#160;&#160;nested type KeyCollection<br />&#160;&#160;nested type ValueCollection<br /><br />Full name: System.Collections.Generic.Dictionary&lt;_,_&gt;<br /><br />--------------------<br />Dictionary() : unit<br />Dictionary(capacity: int) : unit<br />Dictionary(comparer: IEqualityComparer&lt;&#39;TKey&gt;) : unit<br />Dictionary(dictionary: IDictionary&lt;&#39;TKey,&#39;TValue&gt;) : unit<br />Dictionary(capacity: int, comparer: IEqualityComparer&lt;&#39;TKey&gt;) : unit<br />Dictionary(dictionary: IDictionary&lt;&#39;TKey,&#39;TValue&gt;, comparer: IEqualityComparer&lt;&#39;TKey&gt;) : unit</div>
+<div class="tip" id="fs82">val map : mapping:(&#39;T -&gt; &#39;U) -&gt; array:&#39;T [] -&gt; &#39;U []<br /><br />Full name: Microsoft.FSharp.Collections.Array.map</div>
+<div class="tip" id="fs83">Multiple items<br />type String =<br />&#160;&#160;new : value:char -&gt; string + 7 overloads<br />&#160;&#160;member Chars : int -&gt; char<br />&#160;&#160;member Clone : unit -&gt; obj<br />&#160;&#160;member CompareTo : value:obj -&gt; int + 1 overload<br />&#160;&#160;member Contains : value:string -&gt; bool<br />&#160;&#160;member CopyTo : sourceIndex:int * destination:char[] * destinationIndex:int * count:int -&gt; unit<br />&#160;&#160;member EndsWith : value:string -&gt; bool + 2 overloads<br />&#160;&#160;member Equals : obj:obj -&gt; bool + 2 overloads<br />&#160;&#160;member GetEnumerator : unit -&gt; CharEnumerator<br />&#160;&#160;member GetHashCode : unit -&gt; int<br />&#160;&#160;...<br /><br />Full name: System.String<br /><br />--------------------<br />String(value: nativeptr&lt;char&gt;) : unit<br />String(value: nativeptr&lt;sbyte&gt;) : unit<br />String(value: char []) : unit<br />String(c: char, count: int) : unit<br />String(value: nativeptr&lt;char&gt;, startIndex: int, length: int) : unit<br />String(value: nativeptr&lt;sbyte&gt;, startIndex: int, length: int) : unit<br />String(value: char [], startIndex: int, length: int) : unit<br />String(value: nativeptr&lt;sbyte&gt;, startIndex: int, length: int, enc: Encoding) : unit</div>
+<div class="tip" id="fs84">Multiple items<br />val int : value:&#39;T -&gt; int (requires member op_Explicit)<br /><br />Full name: Microsoft.FSharp.Core.Operators.int<br /><br />--------------------<br />type int = int32<br /><br />Full name: Microsoft.FSharp.Core.int<br /><br />--------------------<br />type int&lt;&#39;Measure&gt; = int<br /><br />Full name: Microsoft.FSharp.Core.int&lt;_&gt;</div>
+<div class="tip" id="fs85">val raise : exn:Exception -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.Operators.raise</div>
+<div class="tip" id="fs86">Multiple items<br />type ArgumentException =<br />&#160;&#160;inherit SystemException<br />&#160;&#160;new : unit -&gt; ArgumentException + 4 overloads<br />&#160;&#160;member GetObjectData : info:SerializationInfo * context:StreamingContext -&gt; unit<br />&#160;&#160;member Message : string<br />&#160;&#160;member ParamName : string<br /><br />Full name: System.ArgumentException<br /><br />--------------------<br />ArgumentException() : unit<br />ArgumentException(message: string) : unit<br />ArgumentException(message: string, innerException: exn) : unit<br />ArgumentException(message: string, paramName: string) : unit<br />ArgumentException(message: string, paramName: string, innerException: exn) : unit</div>
+<div class="tip" id="fs87">module Seq<br /><br />from Microsoft.FSharp.Collections</div>
+<div class="tip" id="fs88">val iter : action:(&#39;T -&gt; unit) -&gt; source:seq&lt;&#39;T&gt; -&gt; unit<br /><br />Full name: Microsoft.FSharp.Collections.Seq.iter</div>
+<div class="tip" id="fs89">val mapi : mapping:(int -&gt; &#39;T -&gt; &#39;U) -&gt; array:&#39;T [] -&gt; &#39;U []<br /><br />Full name: Microsoft.FSharp.Collections.Array.mapi</div>
+<div class="tip" id="fs90">val forall : predicate:(&#39;T -&gt; bool) -&gt; source:seq&lt;&#39;T&gt; -&gt; bool<br /><br />Full name: Microsoft.FSharp.Collections.Seq.forall</div>
+<div class="tip" id="fs91">val id : x:&#39;T -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.Operators.id</div>
+<div class="tip" id="fs92">member Given a Tx.( when verifying transactions from an invalid json file, I should not fail. ) : unit -&gt; unit<br /><br />Full name: Test.Script.Given a Tx.( when verifying transactions from an invalid json file, I should not fail. )</div>
+<div class="tip" id="fs93">val printfn : format:Printf.TextWriterFormat&lt;&#39;T&gt; -&gt; &#39;T<br /><br />Full name: Microsoft.FSharp.Core.ExtraTopLevelOperators.printfn</div>
+<div class="tip" id="fs94">val x : Given a Signature file</div>
+<div class="tip" id="fs95">member Given a Signature file.( when verifying signatures from a valid json file, I should not fail. ) : unit -&gt; unit<br /><br />Full name: Test.Script.Given a Signature file.( when verifying signatures from a valid json file, I should not fail. )</div>
+<div class="tip" id="fs96">val signature : obj</div>
+<div class="tip" id="fs97">val r : obj</div>
+          
+        </div>
+        <div class="span1"></div>
+      </div>
+    </div>
+  </body>
+</html>

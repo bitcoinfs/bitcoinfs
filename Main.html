@@ -48,6 +48,8 @@
             <li><a href="Checks.html">Validation</a></li>
             <li><a href="Blockchain.html">Blockchain</a></li>
             <li><a href="Main.html">Main</a></li>
+            <li><a href="Test.html">Tests</a></li>
+            <li><a href="Building.html">Building and Running</a></li>
           </ul>
         </div><!--/.nav-collapse -->
       </div>
@@ -82,22 +84,30 @@
 <span class="l">11: </span>
 <span class="l">12: </span>
 <span class="l">13: </span>
+<span class="l">14: </span>
+<span class="l">15: </span>
+<span class="l">16: </span>
+<span class="l">17: </span>
 </pre>
 </td>
 <td class="snippet"><pre class="fssnip">
-<span class="k">let</span> <span onmouseout="hideTip(event, 'fs36', 76)" onmouseover="showTip(event, 'fs36', 76)" class="i">readBootstrapFast</span> (<span onmouseout="hideTip(event, 'fs37', 77)" onmouseover="showTip(event, 'fs37', 77)" class="i">firstBlock</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs22', 78)" onmouseover="showTip(event, 'fs22', 78)" class="i">int</span>) (<span onmouseout="hideTip(event, 'fs38', 79)" onmouseover="showTip(event, 'fs38', 79)" class="i">stream</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs39', 80)" onmouseover="showTip(event, 'fs39', 80)" class="i">Stream</span>) <span class="o">=</span>
-    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs40', 81)" onmouseover="showTip(event, 'fs40', 81)" class="i">reader</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs41', 82)" onmouseover="showTip(event, 'fs41', 82)" class="i">BinaryReader</span>(<span onmouseout="hideTip(event, 'fs38', 83)" onmouseover="showTip(event, 'fs38', 83)" class="i">stream</span>)
-    <span class="k">let</span> <span class="k">mutable</span> <span onmouseout="hideTip(event, 'fs42', 84)" onmouseover="showTip(event, 'fs42', 84)" class="i">i</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs37', 85)" onmouseover="showTip(event, 'fs37', 85)" class="i">firstBlock</span>
-    <span class="k">while</span>(<span onmouseout="hideTip(event, 'fs38', 86)" onmouseover="showTip(event, 'fs38', 86)" class="i">stream</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs43', 87)" onmouseover="showTip(event, 'fs43', 87)" class="i">Position</span> <span class="o">&lt;&gt;</span> <span onmouseout="hideTip(event, 'fs38', 88)" onmouseover="showTip(event, 'fs38', 88)" class="i">stream</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs44', 89)" onmouseover="showTip(event, 'fs44', 89)" class="i">Length</span>) <span class="k">do</span>
-        <span class="k">if</span> <span onmouseout="hideTip(event, 'fs42', 90)" onmouseover="showTip(event, 'fs42', 90)" class="i">i</span> <span class="o">%</span> <span class="n">10000</span> <span class="o">=</span> <span class="n">0</span> <span class="k">then</span>
-            <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">d</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs42', 91)" onmouseover="showTip(event, 'fs42', 91)" class="i">i</span>
-        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs45', 92)" onmouseover="showTip(event, 'fs45', 92)" class="i">magic</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs40', 93)" onmouseover="showTip(event, 'fs40', 93)" class="i">reader</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs46', 94)" onmouseover="showTip(event, 'fs46', 94)" class="i">ReadInt32</span>()
-        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs47', 95)" onmouseover="showTip(event, 'fs47', 95)" class="i">length</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs40', 96)" onmouseover="showTip(event, 'fs40', 96)" class="i">reader</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs46', 97)" onmouseover="showTip(event, 'fs46', 97)" class="i">ReadInt32</span>()
-        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs48', 98)" onmouseover="showTip(event, 'fs48', 98)" class="i">block</span> <span class="o">=</span> <span class="i">ParseByteArray</span> (<span onmouseout="hideTip(event, 'fs40', 99)" onmouseover="showTip(event, 'fs40', 99)" class="i">reader</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 100)" onmouseover="showTip(event, 'fs49', 100)" class="i">ReadBytes</span>(<span onmouseout="hideTip(event, 'fs47', 101)" onmouseover="showTip(event, 'fs47', 101)" class="i">length</span>)) <span class="i">Block</span><span class="o">.</span><span class="i">Parse</span>
-        <span onmouseout="hideTip(event, 'fs48', 102)" onmouseover="showTip(event, 'fs48', 102)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Height</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs42', 103)" onmouseover="showTip(event, 'fs42', 103)" class="i">i</span>
-        <span onmouseout="hideTip(event, 'fs48', 104)" onmouseover="showTip(event, 'fs48', 104)" class="i">block</span><span class="o">.</span><span class="i">Txs</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs23', 105)" onmouseover="showTip(event, 'fs23', 105)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs24', 106)" onmouseover="showTip(event, 'fs24', 106)" class="i">iteri</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs50', 107)" onmouseover="showTip(event, 'fs50', 107)" class="i">idx</span> <span onmouseout="hideTip(event, 'fs51', 108)" onmouseover="showTip(event, 'fs51', 108)" class="i">tx</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs17', 109)" onmouseover="showTip(event, 'fs17', 109)" class="i">processUTXOFast</span> <span class="i">utxoAccessor</span> <span onmouseout="hideTip(event, 'fs48', 110)" onmouseover="showTip(event, 'fs48', 110)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Height</span> <span onmouseout="hideTip(event, 'fs51', 111)" onmouseover="showTip(event, 'fs51', 111)" class="i">tx</span> <span onmouseout="hideTip(event, 'fs50', 112)" onmouseover="showTip(event, 'fs50', 112)" class="i">idx</span>)
-        <span onmouseout="hideTip(event, 'fs42', 113)" onmouseover="showTip(event, 'fs42', 113)" class="i">i</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs42', 114)" onmouseover="showTip(event, 'fs42', 114)" class="i">i</span> <span class="o">+</span> <span class="n">1</span>
-    <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Last</span><span class="s"> </span><span class="s">block</span><span class="s"> </span><span class="s">%</span><span class="s">d</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs42', 115)" onmouseover="showTip(event, 'fs42', 115)" class="i">i</span></pre>
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs35', 70)" onmouseover="showTip(event, 'fs35', 70)" class="i">readBootstrapFast</span> (<span onmouseout="hideTip(event, 'fs36', 71)" onmouseover="showTip(event, 'fs36', 71)" class="i">firstBlock</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs22', 72)" onmouseover="showTip(event, 'fs22', 72)" class="i">int</span>) (<span onmouseout="hideTip(event, 'fs37', 73)" onmouseover="showTip(event, 'fs37', 73)" class="i">stream</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs38', 74)" onmouseover="showTip(event, 'fs38', 74)" class="i">Stream</span>) <span class="o">=</span>
+    <span class="k">use</span> <span onmouseout="hideTip(event, 'fs39', 75)" onmouseover="showTip(event, 'fs39', 75)" class="i">reader</span> <span class="o">=</span> <span class="k">new</span> <span onmouseout="hideTip(event, 'fs40', 76)" onmouseover="showTip(event, 'fs40', 76)" class="i">BinaryReader</span>(<span onmouseout="hideTip(event, 'fs37', 77)" onmouseover="showTip(event, 'fs37', 77)" class="i">stream</span>)
+    <span class="k">let</span> <span class="k">mutable</span> <span onmouseout="hideTip(event, 'fs41', 78)" onmouseover="showTip(event, 'fs41', 78)" class="i">i</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs36', 79)" onmouseover="showTip(event, 'fs36', 79)" class="i">firstBlock</span>
+    <span class="k">let</span> <span class="k">mutable</span> <span onmouseout="hideTip(event, 'fs42', 80)" onmouseover="showTip(event, 'fs42', 80)" class="i">tip</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs15', 81)" onmouseover="showTip(event, 'fs15', 81)" class="i">byte</span>[] <span class="o">=</span> <span class="k">null</span>
+    <span class="k">while</span>(<span onmouseout="hideTip(event, 'fs37', 82)" onmouseover="showTip(event, 'fs37', 82)" class="i">stream</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs43', 83)" onmouseover="showTip(event, 'fs43', 83)" class="i">Position</span> <span class="o">&lt;&gt;</span> <span onmouseout="hideTip(event, 'fs37', 84)" onmouseover="showTip(event, 'fs37', 84)" class="i">stream</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs44', 85)" onmouseover="showTip(event, 'fs44', 85)" class="i">Length</span>) <span class="k">do</span>
+        <span class="k">if</span> <span onmouseout="hideTip(event, 'fs41', 86)" onmouseover="showTip(event, 'fs41', 86)" class="i">i</span> <span class="o">%</span> <span class="n">10000</span> <span class="o">=</span> <span class="n">0</span> <span class="k">then</span>
+            <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">d</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs41', 87)" onmouseover="showTip(event, 'fs41', 87)" class="i">i</span>
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs45', 88)" onmouseover="showTip(event, 'fs45', 88)" class="i">magic</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs39', 89)" onmouseover="showTip(event, 'fs39', 89)" class="i">reader</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs46', 90)" onmouseover="showTip(event, 'fs46', 90)" class="i">ReadInt32</span>()
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs47', 91)" onmouseover="showTip(event, 'fs47', 91)" class="i">length</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs39', 92)" onmouseover="showTip(event, 'fs39', 92)" class="i">reader</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs46', 93)" onmouseover="showTip(event, 'fs46', 93)" class="i">ReadInt32</span>()
+        <span class="k">let</span> <span onmouseout="hideTip(event, 'fs48', 94)" onmouseover="showTip(event, 'fs48', 94)" class="i">block</span> <span class="o">=</span> <span class="i">ParseByteArray</span> (<span onmouseout="hideTip(event, 'fs39', 95)" onmouseover="showTip(event, 'fs39', 95)" class="i">reader</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs49', 96)" onmouseover="showTip(event, 'fs49', 96)" class="i">ReadBytes</span>(<span onmouseout="hideTip(event, 'fs47', 97)" onmouseover="showTip(event, 'fs47', 97)" class="i">length</span>)) <span class="i">Block</span><span class="o">.</span><span class="i">Parse</span>
+        <span onmouseout="hideTip(event, 'fs48', 98)" onmouseover="showTip(event, 'fs48', 98)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Height</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs41', 99)" onmouseover="showTip(event, 'fs41', 99)" class="i">i</span>
+        <span onmouseout="hideTip(event, 'fs48', 100)" onmouseover="showTip(event, 'fs48', 100)" class="i">block</span><span class="o">.</span><span class="i">Txs</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs23', 101)" onmouseover="showTip(event, 'fs23', 101)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs24', 102)" onmouseover="showTip(event, 'fs24', 102)" class="i">iteri</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs50', 103)" onmouseover="showTip(event, 'fs50', 103)" class="i">idx</span> <span onmouseout="hideTip(event, 'fs51', 104)" onmouseover="showTip(event, 'fs51', 104)" class="i">tx</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs17', 105)" onmouseover="showTip(event, 'fs17', 105)" class="i">processUTXOFast</span> <span class="i">utxoAccessor</span> <span onmouseout="hideTip(event, 'fs48', 106)" onmouseover="showTip(event, 'fs48', 106)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Height</span> <span onmouseout="hideTip(event, 'fs51', 107)" onmouseover="showTip(event, 'fs51', 107)" class="i">tx</span> <span onmouseout="hideTip(event, 'fs50', 108)" onmouseover="showTip(event, 'fs50', 108)" class="i">idx</span>)
+        <span class="i">Db</span><span class="o">.</span><span class="i">writeHeaders</span> <span onmouseout="hideTip(event, 'fs48', 109)" onmouseover="showTip(event, 'fs48', 109)" class="i">block</span><span class="o">.</span><span class="i">Header</span>
+        <span onmouseout="hideTip(event, 'fs42', 110)" onmouseover="showTip(event, 'fs42', 110)" class="i">tip</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs48', 111)" onmouseover="showTip(event, 'fs48', 111)" class="i">block</span><span class="o">.</span><span class="i">Header</span><span class="o">.</span><span class="i">Hash</span>
+        <span onmouseout="hideTip(event, 'fs41', 112)" onmouseover="showTip(event, 'fs41', 112)" class="i">i</span> <span class="o">&lt;-</span> <span onmouseout="hideTip(event, 'fs41', 113)" onmouseover="showTip(event, 'fs41', 113)" class="i">i</span> <span class="o">+</span> <span class="n">1</span>
+    <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Last</span><span class="s"> </span><span class="s">block</span><span class="s"> </span><span class="s">%</span><span class="s">d</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs41', 114)" onmouseover="showTip(event, 'fs41', 114)" class="i">i</span>
+    <span class="i">Db</span><span class="o">.</span><span class="i">writeTip</span> <span onmouseout="hideTip(event, 'fs42', 115)" onmouseover="showTip(event, 'fs42', 115)" class="i">tip</span></pre>
 </td>
 </tr>
 </table>
@@ -131,6 +141,7 @@
 <span class="l">24: </span>
 <span class="l">25: </span>
 <span class="l">26: </span>
+<span class="l">27: </span>
 </pre>
 </td>
 <td class="snippet"><pre class="fssnip">
@@ -138,9 +149,10 @@
 <span class="k">let</span> <span onmouseout="hideTip(event, 'fs64', 179)" onmouseover="showTip(event, 'fs64', 179)" class="i">main</span> <span onmouseout="hideTip(event, 'fs65', 180)" onmouseover="showTip(event, 'fs65', 180)" class="i">argv</span> <span class="o">=</span> 
     <span class="i">Config</span><span class="o">.</span><span class="i">BasicConfigurator</span><span class="o">.</span><span class="i">Configure</span>() <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs62', 181)" onmouseover="showTip(event, 'fs62', 181)" class="i">ignore</span>
 
-<span class="c">(*  // Import a couple of bootstrap dat files</span>
-<span class="c">    use stream = new FileStream(&quot;J:/bootstrap-332703.dat&quot;, FileMode.Open, FileAccess.Read)</span>
-<span class="c">    readBootstrapFast 295001 stream</span>
+<span class="c">(*</span>
+<span class="c">  // Import a couple of bootstrap dat files</span>
+<span class="c">    use stream = new FileStream(&quot;J:/bootstrap-295000.dat&quot;, FileMode.Open, FileAccess.Read)</span>
+<span class="c">    readBootstrapFast 0 stream</span>
 <span class="c">    use stream = new FileStream(&quot;J:/bootstrap-332703.dat&quot;, FileMode.Open, FileAccess.Read)</span>
 <span class="c">    readBootstrapFast 295001 stream</span>
 <span class="c">*)</span>
@@ -155,8 +167,8 @@
     <span class="c">(* Manually import my own local node</span>
 <span class="c">    let myNode = new IPEndPoint(IPAddress.Loopback, 8333)</span>
 <span class="c">    trackerIncoming.OnNext(TrackerCommand.Connect myNode)</span>
-<span class="c">    trackerIncoming.OnNext(TrackerCommand.GetPeers)</span>
 <span class="c">    *)</span>
+    <span class="i">trackerIncoming</span><span class="o">.</span><span class="i">OnNext</span>(<span class="i">TrackerCommand</span><span class="o">.</span><span class="i">GetPeers</span>)
     <span onmouseout="hideTip(event, 'fs66', 182)" onmouseover="showTip(event, 'fs66', 182)" class="i">Thread</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs67', 183)" onmouseover="showTip(event, 'fs67', 183)" class="i">Sleep</span>(<span class="o">-</span><span class="n">1</span>)
 
     <span class="n">0</span> <span class="c">// return an integer exit code</span></pre>
@@ -196,16 +208,16 @@
 <div class="tip" id="fs30">val txOut : obj</div>
 <div class="tip" id="fs31">val inScript : obj</div>
 <div class="tip" id="fs32">val script : obj</div>
-<div class="tip" id="fs33">val not : value:bool -&gt; bool<br /><br />Full name: Microsoft.FSharp.Core.Operators.not</div>
-<div class="tip" id="fs34">val iTxOut : int</div>
-<div class="tip" id="fs35">val outpoint : obj</div>
-<div class="tip" id="fs36">val readBootstrapFast : firstBlock:int -&gt; stream:Stream -&gt; &#39;a<br /><br />Full name: Main.readBootstrapFast</div>
-<div class="tip" id="fs37">val firstBlock : int</div>
-<div class="tip" id="fs38">val stream : Stream</div>
-<div class="tip" id="fs39">type Stream =<br />&#160;&#160;inherit MarshalByRefObject<br />&#160;&#160;member BeginRead : buffer:byte[] * offset:int * count:int * callback:AsyncCallback * state:obj -&gt; IAsyncResult<br />&#160;&#160;member BeginWrite : buffer:byte[] * offset:int * count:int * callback:AsyncCallback * state:obj -&gt; IAsyncResult<br />&#160;&#160;member CanRead : bool<br />&#160;&#160;member CanSeek : bool<br />&#160;&#160;member CanTimeout : bool<br />&#160;&#160;member CanWrite : bool<br />&#160;&#160;member Close : unit -&gt; unit<br />&#160;&#160;member CopyTo : destination:Stream -&gt; unit + 1 overload<br />&#160;&#160;member Dispose : unit -&gt; unit<br />&#160;&#160;member EndRead : asyncResult:IAsyncResult -&gt; int<br />&#160;&#160;...<br /><br />Full name: System.IO.Stream</div>
-<div class="tip" id="fs40">val reader : BinaryReader</div>
-<div class="tip" id="fs41">Multiple items<br />type BinaryReader =<br />&#160;&#160;new : input:Stream -&gt; BinaryReader + 1 overload<br />&#160;&#160;member BaseStream : Stream<br />&#160;&#160;member Close : unit -&gt; unit<br />&#160;&#160;member Dispose : unit -&gt; unit<br />&#160;&#160;member PeekChar : unit -&gt; int<br />&#160;&#160;member Read : unit -&gt; int + 2 overloads<br />&#160;&#160;member ReadBoolean : unit -&gt; bool<br />&#160;&#160;member ReadByte : unit -&gt; byte<br />&#160;&#160;member ReadBytes : count:int -&gt; byte[]<br />&#160;&#160;member ReadChar : unit -&gt; char<br />&#160;&#160;...<br /><br />Full name: System.IO.BinaryReader<br /><br />--------------------<br />BinaryReader(input: Stream) : unit<br />BinaryReader(input: Stream, encoding: Text.Encoding) : unit</div>
-<div class="tip" id="fs42">val mutable i : int</div>
+<div class="tip" id="fs33">val iTxOut : int</div>
+<div class="tip" id="fs34">val outpoint : obj</div>
+<div class="tip" id="fs35">val readBootstrapFast : firstBlock:int -&gt; stream:Stream -&gt; &#39;a<br /><br />Full name: Main.readBootstrapFast</div>
+<div class="tip" id="fs36">val firstBlock : int</div>
+<div class="tip" id="fs37">val stream : Stream</div>
+<div class="tip" id="fs38">type Stream =<br />&#160;&#160;inherit MarshalByRefObject<br />&#160;&#160;member BeginRead : buffer:byte[] * offset:int * count:int * callback:AsyncCallback * state:obj -&gt; IAsyncResult<br />&#160;&#160;member BeginWrite : buffer:byte[] * offset:int * count:int * callback:AsyncCallback * state:obj -&gt; IAsyncResult<br />&#160;&#160;member CanRead : bool<br />&#160;&#160;member CanSeek : bool<br />&#160;&#160;member CanTimeout : bool<br />&#160;&#160;member CanWrite : bool<br />&#160;&#160;member Close : unit -&gt; unit<br />&#160;&#160;member CopyTo : destination:Stream -&gt; unit + 1 overload<br />&#160;&#160;member Dispose : unit -&gt; unit<br />&#160;&#160;member EndRead : asyncResult:IAsyncResult -&gt; int<br />&#160;&#160;...<br /><br />Full name: System.IO.Stream</div>
+<div class="tip" id="fs39">val reader : BinaryReader</div>
+<div class="tip" id="fs40">Multiple items<br />type BinaryReader =<br />&#160;&#160;new : input:Stream -&gt; BinaryReader + 1 overload<br />&#160;&#160;member BaseStream : Stream<br />&#160;&#160;member Close : unit -&gt; unit<br />&#160;&#160;member Dispose : unit -&gt; unit<br />&#160;&#160;member PeekChar : unit -&gt; int<br />&#160;&#160;member Read : unit -&gt; int + 2 overloads<br />&#160;&#160;member ReadBoolean : unit -&gt; bool<br />&#160;&#160;member ReadByte : unit -&gt; byte<br />&#160;&#160;member ReadBytes : count:int -&gt; byte[]<br />&#160;&#160;member ReadChar : unit -&gt; char<br />&#160;&#160;...<br /><br />Full name: System.IO.BinaryReader<br /><br />--------------------<br />BinaryReader(input: Stream) : unit<br />BinaryReader(input: Stream, encoding: Text.Encoding) : unit</div>
+<div class="tip" id="fs41">val mutable i : int</div>
+<div class="tip" id="fs42">val mutable tip : byte []</div>
 <div class="tip" id="fs43">property Stream.Position: int64</div>
 <div class="tip" id="fs44">property Stream.Length: int64</div>
 <div class="tip" id="fs45">val magic : int</div>

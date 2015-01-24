@@ -3,12 +3,12 @@
   <head>
     <meta charset="utf-8">
     <!-- 
-      The Application organization
+      The Building
  parameters will be replaced with the 
       document title extracted from the <h1> element or
       file name, if there is no <h1> heading
     -->
-    <title>Application organization
+    <title>Building
 </title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="http://code.jquery.com/jquery-1.11.2.js"></script>
@@ -58,31 +58,36 @@
       <div class="row" style="margin-top:70px">
         <div class="span1"></div>
         <div class="span10" id="main">
-          <h1>Application organization</h1>
+          <h1>Building</h1>
 
-<p>The next few files implement the peer to peer communication protocol built on top of the messaging format 
-presented in the first part.</p>
+<p>The project can be build from Visual Studio 2015 (Preview). It doesn't depend on any recent F# improvements and may be capable of being built with an earlier release of Visual Studio.
+It includes most of the dependencies as NuGet packages which are downloaded by the IDE automatically. Two packagages are not present on NuGet though:</p>
 
-<p>The application follows the <a href="http://en.wikipedia.org/wiki/Functional_reactive_programming">FRP</a> method using <a href="http://en.wikipedia.org/wiki/Reactive_programming">RX</a> queues as channels between <a href="http://en.wikipedia.org/wiki/Actor_model">actors</a>.</p>
+<ul>
+<li>Secp256k1.net - On <a href="https://github.com/joshlang/Secp256k1.NET">github</a></li>
+<li>leveldb-sharp - also on <a href="https://github.com/hhanh00/leveldb-sharp">github</a>. I forked from the official release to add support for binary keys and values.</li>
+</ul>
 
-<p>At the top of the hierarchy, there is the actor in charge of the blockchain. 
-As the most fundamental data upon which the rest of the data model derives, the blockchain stays isolated from other 
-components by a tight actor boundary. The blockchain is only read and modified by its associated actor whose name is Bob.</p>
+<p>Last but not least, it needs <a href="https://github.com/google/leveldb">leveldb</a>. I built my version from source a while ago and unfortunately I don't remember the exact step that I went through. The source code has instructions for Windows so it could be as simple as following them.</p>
 
-<p>Bob is the boss. He maintains the accounting books and he trusts no-one. He sits in his office and spends his day counting his money. 
-He never goes out - he has people to do that for him.</p>
+<h1>Configuration</h1>
 
-<p>But Bob needs to know when his blockchain is modified. He hired Tom to keep him in the loop.</p>
+<p>The important settings are the directory location for the block and the database files. If you want to bootstrap and quickly process a large amount of blocks, for instance if you want to sync up with the latest bootstrap, I recommend putting the UTXO leveldb database on a RAM Disk. I use <a href="http://www.ltr-data.se/opencode.html/#ImDisk">IMDisk</a>. It's free. A 2 GB RAM disk works fine.</p>
 
-<p>Tom is a well connected guy. He knows people who know people who know people. He has a group of active informants. 
-They are a bit flaky and tend to quit without notice but Tom doesn't mind. He can always replace them.</p>
+<h1>Setting the DB</h1>
 
-<p>When one of his crew tells Tom about something new on the blockchain, Tom sends a note to the boss. 
-Tom doesn't understand that blockchain nonsense but he knows his boss would be very unhappy if he was not informed and it's not good to 
-make the boss angry.</p>
+<p>Run the database script <code>db.sql</code> to create the tables. You can use direct SQL or an IDE like <a href="http://sqlitestudio.pl/">SQLiteStudio</a>.</p>
 
-<p>Bob is a collector by nature. His blockchain is his most valued collection. The blockchain is made of blocks and Bob wants them all. 
-And so he watches his mailbox waiting for messages from Tom.</p>
+<h1>Importing Bootstrap dat</h1>
+
+<p>Syncing is much faster if you start with a <a href="https://bitcointalk.org/index.php?topic=145386.0">bootstrap file</a>. Then change the <code>main</code> function to just load this file. Basically uncomment the lines that mentions <code>readBootstrap</code> and comment out the rest.
+This function uses a faster <code>processBlock</code> function that bypasses all validation. It just parses the file and updates the UTXO db.</p>
+
+<p>Once it completes, you can copy the resulting UTXO and bitcoin databases to the normal location and update the config file accordingly.</p>
+
+<h1>Syncing up</h1>
+
+<p>Revert the changes you made to <code>main</code> and run the application again. This time, it will locate peers and synchronize the rest of the blockchain from them. You are good to go.</p>
 
                     
         </div>
