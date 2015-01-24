@@ -44,16 +44,16 @@ I can write parametrized SQL statements. It's direct SQL and therefore not porta
 well here. The database model isn't sophisticated enough to warrant an entity-relation library. I prefer to keep the 
 database layer a straight get and put interface.
 *)
-let connection = new SQLiteConnection(connectionString)
-connection.Open()
-let updateAddrQuery = new SQLiteCommand(@"insert or ignore into peerInfo(host, port, ts, user_agent, state, score) values(@host, @port, @ts, @user_agent, 0, 0);
-    update peerInfo set ts = @ts where host = @host and port = @port", connection)
-updateAddrQuery.Parameters.Add("@host", DbType.String, 256) |> ignore
-updateAddrQuery.Parameters.Add("@port", DbType.Int32) |> ignore
-updateAddrQuery.Parameters.Add("@ts", DbType.DateTime) |> ignore
-updateAddrQuery.Parameters.Add("@user_agent", DbType.String, 256) |> ignore
 
 let updateAddr(addr: AddrEntry) =
+    use connection = new SQLiteConnection(connectionString)
+    connection.Open()
+    let updateAddrQuery = new SQLiteCommand(@"insert or ignore into peerInfo(host, port, ts, user_agent, state, score) values(@host, @port, @ts, @user_agent, 0, 0);
+        update peerInfo set ts = @ts where host = @host and port = @port", connection)
+    updateAddrQuery.Parameters.Add("@host", DbType.String, 256) |> ignore
+    updateAddrQuery.Parameters.Add("@port", DbType.Int32) |> ignore
+    updateAddrQuery.Parameters.Add("@ts", DbType.DateTime) |> ignore
+    updateAddrQuery.Parameters.Add("@user_agent", DbType.String, 256) |> ignore
     updateAddrQuery.Parameters.[0].Value <- addr.Address.EndPoint.Address.ToString()
     updateAddrQuery.Parameters.[1].Value <- addr.Address.EndPoint.Port
     let dts = (new Instant(int64(addr.Timestamp) * NodaConstants.TicksPerSecond)).ToDateTimeUtc()
@@ -257,7 +257,6 @@ type LevelDBUTXOAccessor(db: DB) =
         if v <> null 
         then Some(ParseByteArray v UTXO.Parse)
         else 
-            logger.Debug "Cannot find outpoint" 
             None
 
     // Use the fact that the txhash is a prefix for the key
@@ -320,7 +319,7 @@ A few helper functions for validity checks. They appear early in the code becaus
 transactions and calls the UTXO accessor. I take advantage of this traversal to do some basic checks.
 *)
 
-let checkMoney (v: int64) = (v >= 0L && v < 2200000000000000L) |> errorIfFalse "not in money range" |> Option.map(fun () -> v)
+let checkMoney (v: int64) = (v >= 0L && v < maxMoney) |> errorIfFalse "not in money range" |> Option.map(fun () -> v)
 let checkCoinbaseMaturity (utxo: UTXO) (height: int) = (utxo.Height = 0 || height >= utxo.Height + coinbaseMaturity) |> errorIfFalse "coinbase has not matured" |> Option.map(fun () -> utxo)
 let OP_RETURN = 106uy
 let isRETURN (script: byte[]) = script.Length > 0 && script.[0] = OP_RETURN
@@ -361,6 +360,8 @@ let processUTXO (utxoAccessor: IUTXOAccessor) (utxoWriter: IUTXOWriter) (isCoinb
                 then checkMoney txOut.Value 
                 else Some 0L
             ) |> Seq.toList |> Option.sequence |> Option.map Seq.sum
+        let! _ = checkMoney totalIn
+        let! _ = checkMoney totalOut
         let fee = totalIn - totalOut
         do! fee >= 0L |> errorIfFalse "fee must be positive"
         return fee

@@ -45,9 +45,8 @@ type BlockChainFragment = BlockHeader list // List of block headers from most re
 
 let minTimestampBlocks = 11
 let difficultyReadjustmentInterval = 2016
-let targetElapsed = 600u
+let targetElapsed = 600u * uint32 difficultyReadjustmentInterval
 let maxCheckSigOpsCount = 20000
-let genesisHash = hashFromHex("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
 
 (** 
 ## Misc functions 
@@ -141,11 +140,15 @@ let checkBits (header: BlockHeader) =
     let testResult = 
         if header.Height > 0 && header.Height % difficultyReadjustmentInterval = 0
         then
-            let blockIntervalAgo = chainFromTip header |> Seq.skip difficultyReadjustmentInterval |> Seq.head
-            let timeElapsed = header.Timestamp - blockIntervalAgo.Timestamp
+            let chain = chainFromTip header
+            let prevBlock = chain |> Seq.skip 1 |> Seq.head
+            let blockIntervalAgo = chain |> Seq.skip (difficultyReadjustmentInterval) |> Seq.head
+            let timeElapsed = (prevBlock.Timestamp - blockIntervalAgo.Timestamp)
             let boundedTimeElapsed = between timeElapsed (targetElapsed/4u) (targetElapsed*4u) // don't readjust by too much
-            let readjustedTarget = (target header.Bits*bigint targetElapsed)/(bigint boundedTimeElapsed)
-            bits readjustedTarget = header.Bits
+            let prevTarget = target prevBlock.Bits
+            let readjustedTarget = (prevTarget*bigint boundedTimeElapsed)/(bigint targetElapsed)
+            let newBits = bits readjustedTarget
+            newBits = header.Bits
         else
             let prevBlock = chainFromTip header |> Seq.skip 1 |> Seq.head
             prevBlock.Bits = header.Bits
@@ -169,7 +172,8 @@ let checkBlockHeader (header: BlockHeader) =
 let checkLocktime (height: int) (timestamp: uint32) (tx: Tx) =
     let sequenceFinal = tx.TxIns |> Seq.map (fun txIn -> txIn.Sequence = 0xFFFFFFFF) |> Seq.exists id
     let lockTime = tx.LockTime
-    let r = (sequenceFinal || lockTime = 0u || (lockTime < 500000000u && (uint32)height >= lockTime) || (lockTime > 500000000u && timestamp >= lockTime))
+    let r = (sequenceFinal || lockTime = 0u || (lockTime < 500000000u && (uint32)height >= lockTime) || (lockTime >= 500000000u && timestamp >= lockTime))
+    if not r then printfn "STOP"
     r
 
 (**
@@ -199,7 +203,7 @@ let checkBlockTxs (utxoAccessor: IUTXOAccessor) (block: Block) =
                             utxo |> Option.bind(fun utxo ->
                                 let pubScript = utxo.TxOut.Script
                                 if Script.isP2SH pubScript // For P2SH, also count the signature checks from the redeem script
-                                then Some(scriptRuntime.RedeemScript txIn.Script)
+                                then Some(scriptRuntime.RedeemScript pubScript)
                                 else None
                                 ) |?| txIn.Script
                             ) |> Seq.toArray
@@ -238,3 +242,37 @@ let updateBlockUTXO (utxoAccessor: IUTXOAccessor) (block: Block) =
         let totalReward = fees + reward block.Header.Height
         do! coinbase <= totalReward |> errorIfFalse "coinbase payout exceeds fees + reward"
         }
+
+(**
+## Canonical Signature / PubKey
+*)
+let checkDERInt (signature: byte[]) (offset: int) (len: int) =
+    maybe {
+        do! (signature.[offset-2] = 0x02uy) |> errorIfFalse "Non-canonical signature: value type mismatch"
+        do! (len <> 0) |> errorIfFalse "Non-canonical signature: length is zero"
+        do! ((signature.[offset] &&& 0x80uy) = 0uy) |> errorIfFalse "Non-canonical signature: value negative"
+        do! (len <= 1 || (signature.[offset] <> 0x00uy) || ((signature.[offset+1] &&& 0x80uy) <> 0uy)) |> errorIfFalse "Non-canonical signature: value negative"
+    }
+
+let checkLowS (sBytes: byte[]) =
+    let s = bigint (sBytes |> Array.rev)
+    (s >= 0I && s < Script.halfN) |> errorIfFalse "Non-canonical signature: S value is unnecessarily high"
+
+let checkCanonicalSignature (signature: byte[]) =
+    maybe {
+        do! (signature.Length >= 9) |> errorIfFalse "Non-canonical signature: too short"
+        do! (signature.Length <= 73) |> errorIfFalse "Non-canonical signature: too long"
+        let hashType = signature.Last() &&& ~~~0x80uy
+        do! (hashType >= 1uy && hashType <= 3uy) |> errorIfFalse "unknown hashtype byte"
+        do! (signature.[0] = 0x30uy) |> errorIfFalse "Non-canonical signature: wrong type"
+        do! (signature.[1] = byte(signature.Length-3)) |> errorIfFalse "Non-canonical signature: wrong length marker"
+        let rLen = int signature.[3]
+        do! (rLen+5 < signature.Length) |> errorIfFalse "Non-canonical signature: S length misplaced"
+        let sLen = int signature.[rLen+5]
+        do! (rLen+sLen+7 = signature.Length) |> errorIfFalse "Non-canonical signature: R+S length mismatch"
+
+        do! checkDERInt signature 4 rLen
+        do! checkDERInt signature (6+rLen) sLen
+
+        do! checkLowS signature.[6+rLen..5+rLen+sLen]
+    }

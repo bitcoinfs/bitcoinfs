@@ -15,6 +15,9 @@ open Protocol
 open Murmur
 open Script
 
+let secp256k1Curve = Org.BouncyCastle.Asn1.Sec.SecNamedCurves.GetByName("secp256k1")
+let ecDomain = new ECDomainParameters(secp256k1Curve.Curve, secp256k1Curve.G, secp256k1Curve.N)
+
 type BloomFilter(N: int, P: float, cHashes: int, nTweak: int) =
     let size = int(min (-1.0/log 2.0**2.0*(float N)*log P) 36000.0)
     let bits = new BitArray(size)

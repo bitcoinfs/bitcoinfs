@@ -178,7 +178,9 @@ let processCommand(command: TrackerCommand) =
         peerSlots.TryFind id |> Option.iter(fun ps ->
             let peer = ps.Peer
             let oldState = changeState id Ready
-            // if oldState = Allocated then blockchainIncoming.OnNext(Catchup(peer, null)) // Disable if you want no catchup on connect
+            if oldState = Allocated then 
+                logger.InfoF "Connected to %A" peer
+                blockchainIncoming.OnNext(Catchup(peer, null)) // Disable if you want no catchup on connect
             dequeuePendingMessage()
             )
     | Close id -> 
@@ -229,7 +231,7 @@ let startTracker() =
 The server binds to the port configured in the app.config file and listens to incoming connection.
 On a connection, it sends a message to Tom. At this time, there is no limit to the number of incoming connections
 *)
-let port = settings.ServerPort
+let port = defaultPort
 let ipAddress = IPAddress.Any
 let endpoint = IPEndPoint(ipAddress, port)
 let cts = new CancellationTokenSource()

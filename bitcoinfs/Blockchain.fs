@@ -143,7 +143,9 @@ let rec asyncGetBlocks (headers: BlockHeader list) (attempsRemaining: int) =
         if attempsRemaining > 0 then
             let pendingBlocks = headers |> List.map(fun bh -> (bh.Hash, bh)) |> Map.ofList
             let! (peer, obs) = Async.AwaitTask(Tracker.getBlocks(pendingBlocks |> Map.keys)) // Send a getdata request and park until we get an observable of blocks
-            let! failedBlocks = 
+
+            let! failedBlocks = (
+                use d = Disposable.Create(fun () -> peer.Ready())
                 Async.AwaitTask(
                     Observable.Return(pendingBlocks)
                         .Concat(obs // Unlike F# scan, RX scan doesn't emit the first element (pendingBlocks) and we must manually add it
@@ -151,8 +153,7 @@ let rec asyncGetBlocks (headers: BlockHeader list) (attempsRemaining: int) =
                             .OnErrorResumeNext(Observable.Empty())) // If we get an exception quit without error
                         .LastOrDefaultAsync() // Fetch the last pending block list
                         .ToTask()) // Park until we finished
-
-            peer.Ready()
+            )
             if not failedBlocks.IsEmpty then // Some blocks remaining, it was a failure
                 peer.Bad()
                 logger.DebugF "Failed blocks %A" (failedBlocks |> Map.values)
@@ -215,15 +216,13 @@ let checkBlock (utxoAccessor: IUTXOAccessor) (p: BlockHeader) (blocks: BlockHead
 let catchup (peer: IPeer) = 
     let getHeaders(): Async<Headers> = 
         async {
-            try
-                let blockchain = fnBlockchain() // Get current blockchain
-                let gh = new GetHeaders(blockchain |> Seq.truncate 10 |> Seq.map(fun bh -> bh.Hash) |> Seq.toList, Array.zeroCreate 32) // Prepare GetHeaders request
-                let! headers = Async.AwaitTask(Tracker.getHeaders(gh, peer)) // Send request - park until request is processed
-                let! getHeadersResult = Async.AwaitTask(headers.FirstOrDefaultAsync().ToTask()) // Pick Headers or exception
-                logger.DebugF "GetHeaders Results> %A %A" (peer.Target) (getHeadersResult)
-                return getHeadersResult
-            finally
-                peer.Ready()
+            use d = Disposable.Create(fun () -> peer.Ready())
+            let blockchain = fnBlockchain() // Get current blockchain
+            let gh = new GetHeaders(blockchain |> Seq.truncate 10 |> Seq.map(fun bh -> bh.Hash) |> Seq.toList, Array.zeroCreate 32) // Prepare GetHeaders request
+            let! headers = Async.AwaitTask(Tracker.getHeaders(gh, peer)) // Send request - park until request is processed
+            let! getHeadersResult = Async.AwaitTask(headers.FirstOrDefaultAsync().ToTask()) // Pick Headers or exception
+            logger.DebugF "GetHeaders Results> %A %A" (peer.Target) (getHeadersResult)
+            return getHeadersResult
         }
 
     let rec catchupImpl() = 
@@ -236,7 +235,7 @@ let catchup (peer: IPeer) =
                 newBlockchainOpt |> Option.iter (fun newBlockchainFrag ->
                     newBlockchainFrag |> List.iter Db.writeHeaders
                     let headersAfter = newBlockchainFrag |> List.head |> iterate (fun bh -> Db.getNextHeader bh.Hash) |> Seq.takeWhile (fun bh -> bh.Hash <> zeroHash) |> Seq.skip 1 |> Seq.toList |> List.rev
-                    let connectedNewBlockchain = headersAfter @ newBlockchainFrag
+                    let connectedNewBlockchain = (headersAfter @ newBlockchainFrag) |> List.rev |> Seq.truncate 100 |> Seq.toList |> List.rev
                     let downloadBlocksAsync = connectedNewBlockchain |> List.rev |> List.tail |> downloadBlocks
                     downloadBlocksAsync |> Async.RunSynchronously
                     let tempUTXO = new MempoolUTXOAccessor(utxoAccessor)

@@ -50,6 +50,7 @@ let minGetdataBatchSize = settings.MinGetdataBatchSize
 let maxGetdataBatchSize = settings.MaxGetdataBatchSize
 let coinbaseMaturity = 100
 let maxBlockSize = 1000000
+let maxMoney = 2100000000000000L
 
 (**
 I define some helper functions and some constants here.
@@ -66,6 +67,15 @@ let maybe = new MaybeBuilder()
 let rec iterate f value = seq { // Same as iterate in clojure
     yield value
     yield! iterate f (f value) }
+
+(** Find the first byte that matches a given condition starting from the end of the array *)
+let revFind (arr: byte[]) (f: byte -> bool) =
+    let rec rf (i: int) =
+        if i < 0 || f(arr.[i]) then 
+            i
+        else
+            rf (i-1)
+    rf (arr.Length-1)
 
 (**
 Extends the log4net logger with F# printf style. The later checks the format
@@ -209,7 +219,7 @@ the gains wouldn't be big anyway.
 *)
 type NetworkAddr(ip: IPEndPoint) = 
     // the address put in the version message. The other side may want to connect back using this IP
-    static member MyAddress = new IPEndPoint(IPAddress.Loopback, settings.ServerPort) // TODO: Lookup external address
+    static member MyAddress = NetworkAddr(new IPEndPoint(IPAddress.Parse(settings.MyExtIp), settings.ServerPort)) // TODO: Lookup external address
     member x.ToByteArray() =
         use ms = new MemoryStream()
         use os = new BinaryWriter(ms)
@@ -275,6 +285,12 @@ type AddrEntry = {
     Address: NetworkAddr
     }
 type Addr(addrs: AddrEntry[]) =
+    member x.ToByteArray() = ToBinaryArray (fun os ->
+        os.WriteVarInt(addrs.Length)
+        for addr in addrs do
+            os.Write(addr.Timestamp)
+            os.Write(addr.Address.ToByteArray())
+    )
     static member Parse(reader: BinaryReader) =
         let count = reader.ReadVarInt()
         let addrs = 
@@ -685,7 +701,7 @@ type BitcoinMessageParser(networkData: IObservable<byte[]>) =
             )
             .Select(fst)
             .SelectMany(fun m -> (m |> List.toSeq).ToObservable())
-            .Select(fun m -> logger.DebugF "Incoming %A" m; m)
+//          .Select(fun m -> logger.DebugF "Incoming %A" m; m)
     member x.BitcoinMessages with get() = bitcoinMessages
 
 let hashCompare = new HashCompare() :> IEqualityComparer<byte[]>

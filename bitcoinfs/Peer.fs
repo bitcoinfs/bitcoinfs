@@ -249,7 +249,10 @@ and routes it to the appropriate queue.
         | "version" 
         | "verack" ->
             peerQueues.From.OnNext(message)
-        | "getaddr" -> ignore()
+        | "getaddr" -> 
+            let now = Instant.FromDateTimeUtc(DateTime.UtcNow)
+            let addr = new Addr([|{ Timestamp = int32(now.Ticks / NodaConstants.TicksPerSecond); Address = NetworkAddr.MyAddress }|])
+            peerQueues.To.OnNext(new BitcoinMessage("addr", addr.ToByteArray()))
         | "getdata" ->
             let gd = message.ParsePayload() :?> GetData
             mempoolIncoming.OnNext(GetTx (gd.Invs |> List.filter (fun inv -> inv.Type = txInvType), peerQueues.To))
@@ -327,7 +330,7 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             disposable.Add(stream)
 
             // Prepare and send out my version message
-            let version = Version.Create(SystemClock.Instance.Now, target, NetworkAddr.MyAddress, int64(random.Next()), "Satoshi YOLO 1.0", tip.Height, 1uy)
+            let version = Version.Create(SystemClock.Instance.Now, target, NetworkAddr.MyAddress.EndPoint, int64(random.Next()), "Satoshi YOLO 1.0", tip.Height, 1uy)
             peerQueues.To.OnNext(new BitcoinMessage("version", version.ToByteArray()))
 
             // The handshake observable waits for the verack and the version response from the other side. When both parties have
@@ -464,7 +467,7 @@ result forever.
         member x.Ready() = readyPeer()
         member val Id = id with get
         member x.Target with get() = target // For diagnostics only
-        member x.Bad() = ignore() // TODO: Renable badPeer()
+        member x.Bad() = badPeer()
 
     override x.ToString() = sprintf "Peer(%d, %A)" id target
     member x.Incoming with get() = incoming
@@ -483,12 +486,12 @@ let dropOldPeers() =
 let bootstrapPeers() =
     async {
         let now = NodaTime.Instant.FromDateTimeUtc(DateTime.UtcNow)
-        
+        let port = if settings.TestNet then 18444 else 8333
+
         let! entry = Async.AwaitTask(Dns.GetHostEntryAsync("seed.bitnodes.io"))
         for peer in entry.AddressList do
             let addr = { Timestamp = int (now.Ticks / NodaConstants.TicksPerSecond); Address = new NetworkAddr(new IPEndPoint(peer.MapToIPv4(), defaultPort)) }
             Db.updateAddr addr
-        trackerIncoming.OnNext(GetPeers)
         } |> Async.StartImmediate
 
 let initPeers() =

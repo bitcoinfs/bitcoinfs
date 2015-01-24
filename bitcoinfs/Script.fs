@@ -49,10 +49,8 @@ open Protocol
 
 (** 
 ##  Bitcoin Elliptic Curve secp256k1 
-Import the EC that Bitcoin uses. 
 *)
-let secp256k1Curve = Org.BouncyCastle.Asn1.Sec.SecNamedCurves.GetByName("secp256k1")
-let ecDomain = new ECDomainParameters(secp256k1Curve.Curve, secp256k1Curve.G, secp256k1Curve.N)
+let halfN = 57896044618658097711785492504343953926418782139537452191302581570759080747168I // Half the order of N
 
 (** 
 ## Commonly used op codes.
@@ -76,6 +74,15 @@ let OP_CHECKMULTISIG = 174uy // Multi signature check
 let OP_CHECKMULTISIGVERIFY = 175uy // As above and fail the script if the check doesn't succeed
 let OP_DATA_65 = 65uy // Push the next 65 bytes on the stack
 let OP_DATA_33 = 33uy // Push the next 33 bytes on the stack
+
+(** Limits
+*)
+let stackMaxDepth = 1000
+let maxPushLength = 520
+let maxMultiSig = 20
+let maxOpCodeCount = 201
+let maxSigOpCount = 201
+let maxScriptSize = 10000
 
 (*** hide ***)
 let scriptToHash (script: byte[]) =
@@ -146,15 +153,6 @@ type ByteList() =
         // logger.DebugF "Pushing %s" (Hex.ToHexString v)
         base.Add(v)
 
-(*** hide ***)
-let revFind (arr: byte[]) (f: byte -> bool) =
-    let rec rf (i: int) =
-        if i < 0 || f(arr.[i]) then 
-            i
-        else
-            rf (i-1)
-    rf (arr.Length-1)
-
 (** 
 ## Compute the signature hash 
 
@@ -174,14 +172,14 @@ The signing process is described [here][1].
 
 [1]: https://en.bitcoin.it/wiki/OP_CHECKSIG
 *)
-let computeTxHash (tx: Tx) (index: int) (subScript: byte[]) (sigType: byte) = 
+let computeTxHash (tx: Tx) (index: int) (subScript: byte[]) (sigType: int) = 
     let mutable returnBuggyHash = false
 
-    let anyoneCanPay = (sigType &&& 0x80uy) <> 0uy
+    let anyoneCanPay = (sigType &&& 0x80) <> 0
     let sigHashType = 
-        match sigType &&& 0x1Fuy with
-        | 2uy -> 2uy
-        | 3uy -> 3uy
+        match sigType &&& 0x1F with
+        | 2 -> 2uy
+        | 3 -> 3uy
         | _ -> 1uy
     use oms = new MemoryStream()
     use writer = new BinaryWriter(oms)
@@ -196,7 +194,7 @@ let computeTxHash (tx: Tx) (index: int) (subScript: byte[]) (sigType: byte) =
         tx.TxIns |> Array.iteri (fun i txIn ->
             let script = if i = index then subScript else Array.empty
             let txIn2 = 
-                if sigHashType = 3uy && i <> index then 
+                if sigHashType <> 1uy && i <> index then 
                     new TxIn(txIn.PrevOutPoint, script, 0)
                 else
                     new TxIn(txIn.PrevOutPoint, script, txIn.Sequence)
@@ -225,7 +223,7 @@ let computeTxHash (tx: Tx) (index: int) (subScript: byte[]) (sigType: byte) =
     | _ -> ignore() // cannot happen
 
     writer.Write(tx.LockTime)
-    writer.Write(int sigType)
+    writer.Write(sigType)
 
     if returnBuggyHash then
         let hash = Array.zeroCreate<byte> 32
@@ -241,18 +239,21 @@ let computeTxHash (tx: Tx) (index: int) (subScript: byte[]) (sigType: byte) =
 These functions are used when integers are put into the stack. They must be converted to byte[]. It's using
 variable length byte strings in 1-complement encoding. Therefore there is positive 0 and negative 0. 
 *)
-let intToBytes (i: int) =
+let bigintToBytes (i: bigint) =
     let pos = abs i
-    let bi = BitConverter.GetBytes(pos)
+    let bi = pos.ToByteArray()
     let posTrimIdx = revFind bi (fun b -> b <> 0uy)
     let iTrimIdx = 
-        if i < 0 && (bi.[posTrimIdx] &&& 0x80uy) <> 0uy 
+        if (posTrimIdx >= 0 && (bi.[posTrimIdx] &&& 0x80uy) <> 0uy)
             then posTrimIdx + 1
             else posTrimIdx
     let bytes = bi.[0..iTrimIdx]
-    if i < 0 then
+    if i < 0I then
         bytes.[iTrimIdx] <- bytes.[iTrimIdx] ||| 0x80uy
     bytes
+
+let intToBytes (i: int) = bigintToBytes (bigint i)
+let int64ToBytes (i: int64) = bigintToBytes (bigint i)
         
 let bytesToInt (bytes: byte[]) =
     let b = Array.zeroCreate<byte> bytes.Length
@@ -272,7 +273,7 @@ let bytesToInt (bytes: byte[]) =
 The interpreter takes a transaction hashing function at construction. When the function is applied, the index
 of the input matters and will not give the same hash.
 *)
-type ScriptRuntime(getTxHash: byte[] -> byte -> byte[]) =
+type ScriptRuntime(getTxHash: byte[] -> int -> byte[]) =
     let evalStack = new ByteList()
     let altStack = new ByteList()
     let ifStack = new List<bool>()
@@ -283,18 +284,25 @@ type ScriptRuntime(getTxHash: byte[] -> byte -> byte[]) =
 ### Basic stack helpers *)
     let checkDepth (stack: List<'a>) minDepth = 
         if stack.Count < minDepth then raise (ValidationException "not enough stack depth")
+    let checkMaxDepth () =
+        if evalStack.Count + altStack.Count > stackMaxDepth then raise (ValidationException "stack too deep")
     let popAsBool() = 
         checkDepth evalStack 1
         bytesToInt(evalStack.Pop()) <> 0I
     let verify() =
         if not (popAsBool()) 
         then raise (ValidationException "verification failed")
-
     let fail() = 
         evalStack.Push(intToBytes(0))
         raise (ValidationException "verification failed")
+    let checkOverflow (bytes: byte[]) =
+        if bytes.Length > 4 then fail()
+        bytes
+    let checkIfStackEmpty() = 
+        if ifStack.Count > 0 then fail()
 
-    let roll n =
+    let roll m =
+        let n = m+1
         checkDepth evalStack n
         let i = evalStack.Count-n
         let top = evalStack.Item i
@@ -302,8 +310,10 @@ type ScriptRuntime(getTxHash: byte[] -> byte -> byte[]) =
         evalStack.Push top
 
     let dup n depth =
+        checkDepth evalStack (n+depth)
         for i in 1..n do
             evalStack.Push(evalStack.Item(evalStack.Count-n-depth))
+        checkMaxDepth()
 
 (** 
 ### Operators on stack elements 
@@ -312,34 +322,34 @@ They pull a certain number of elements from the stack, apply a function and then
 push the result back to the stack. The number of arguments and the nature of the operation
 varies with the helper.
 *)
-    let unaryOp (f: int -> int) =
+    let unaryOp (f: int64 -> int64) =
         checkDepth evalStack 1
-        let arg = evalStack.Pop() |> bytesToInt |> int
-        f(arg) |> intToBytes |> evalStack.Push
+        let arg = evalStack.Pop() |> checkOverflow |> bytesToInt |> int64
+        f(arg) |> int64ToBytes |> evalStack.Push
 
-    let binaryOp (f: int -> int -> int) = 
+    let binaryOp (f: int64 -> int64 -> int64) = 
         checkDepth evalStack 2
-        let arg2 = evalStack.Pop() |> bytesToInt |> int
-        let arg1 = evalStack.Pop() |> bytesToInt |> int
-        f arg1 arg2 |> intToBytes |> evalStack.Push
+        let arg2 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int64
+        let arg1 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int64
+        f arg1 arg2 |> int64ToBytes |> evalStack.Push
 
     let logicalOp (f: bool -> bool -> bool) = 
         checkDepth evalStack 2
-        let arg2 = evalStack.Pop() |> bytesToInt |> int |> fun x -> x <> 0
-        let arg1 = evalStack.Pop() |> bytesToInt |> int |> fun x -> x <> 0
+        let arg2 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int |> fun x -> x <> 0
+        let arg1 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int |> fun x -> x <> 0
         f arg1 arg2 |> (fun x -> if x then 1 else 0) |> intToBytes |> evalStack.Push
 
     let binaryBoolOp (f: int -> int -> bool) = 
         checkDepth evalStack 2
-        let arg2 = evalStack.Pop() |> bytesToInt |> int
-        let arg1 = evalStack.Pop() |> bytesToInt |> int
+        let arg2 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int
+        let arg1 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int
         f arg1 arg2 |> (fun x -> if x then 1 else 0) |> intToBytes |> evalStack.Push
 
     let tertiaryOp (f: int -> int -> int -> int) = 
-        checkDepth evalStack 2
-        let arg3 = evalStack.Pop() |> bytesToInt |> int
-        let arg2 = evalStack.Pop() |> bytesToInt |> int
-        let arg1 = evalStack.Pop() |> bytesToInt |> int
+        checkDepth evalStack 3
+        let arg3 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int
+        let arg2 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int
+        let arg1 = evalStack.Pop() |> checkOverflow |> bytesToInt |> int
         f arg1 arg2 arg3 |> intToBytes |> evalStack.Push
 
     let hashOp (f: byte[] -> byte[]) =
@@ -353,6 +363,8 @@ varies with the helper.
 This function parses the script quickly and identifies the data parts. The predicate is evaluated
 on the data part and if it returns true, the data is *removed* from the script. Surprisingly, there are
 a few places where the standard dictates this behavior.
+
+It also removes any instance of OP_CODESEPARATOR
 *)
     let removeData (script: byte[]) (pred: byte[] -> bool) = 
         let dataList = new List<byte[]>()
@@ -375,14 +387,19 @@ a few places where the standard dictates this behavior.
                                 | 77 -> int (reader.ReadInt16())
                                 | 78 -> reader.ReadInt32()
                                 | x -> x
+                            let canonical = 
+                                if len < 75 then len
+                                elif len < 0xFF then 76
+                                elif len < 0xFFFF then 77
+                                else 78
+
                             let data = reader.ReadBytes(len)
-                            if not (pred(data)) then
+                            if canonical <> c || not (pred(data)) then
                                 let lenRead = int(ms.Position - startPos)
                                 ms.Seek(startPos, SeekOrigin.Begin) |> ignore
                                 writer.Write(reader.ReadBytes(lenRead))
-                            else
-                                dataList.Add(data)
-                        else
+                            dataList.Add(data)
+                        elif b <> 171uy then
                             writer.Write(b)
                         removeDataInner()
                     else
@@ -440,7 +457,7 @@ of the signature itself is removed from the pub script before the tx hash is cal
 *)
     let checksigInner pubScript pub (signature: byte[]) = 
         let sigType = if signature.Length > 0 then signature.[signature.Length-1] else 0uy
-        let txHash = getTxHash pubScript sigType
+        let txHash = getTxHash pubScript (int sigType)
         ECDSACheck(txHash, pub, signature)
 
     let checksig script pub signature = 
@@ -471,14 +488,18 @@ if it's data or instruction. If it's data, one or more bytes are then read. If i
 byte. It's an important trick. When the code must be skipped because it is on the wrong side of a If/then/else, 
 the function can quickly jump to the next code.
 *)
-    let eval (script: byte[]) =
+    let eval (pushOnly: bool) (script: byte[]) =
+        codeSep <- 0
+        if script.Length > maxScriptSize then fail()
         let ms = new MemoryStream(script)
         let reader = new BinaryReader(ms)
 
-        let rec innerEval() =
+        let rec innerEval (opCount: int) =
+            let mutable multiSigOps = 0
+            if opCount > maxOpCodeCount then fail()
             if ms.Position < ms.Length then
                 let c = int (reader.ReadByte())
-                // logger.DebugF "Stack size %d op = %x" evalStack.Count c
+                // logger.DebugF "Stack size %d op = %x opc = %d" evalStack.Count c opCount
                 if c = 0 then
                     if not skipping then
                         evalStack.Push(Array.empty)
@@ -498,6 +519,8 @@ There are different size of push data, 1, 2, or 4 bytes
                         | 78 -> reader.ReadInt32()
                         | x -> x
                     let data = reader.ReadBytes(len)
+                    if data.Length < len then raise (ValidationException "Not enough data to read")
+                    if len > maxPushLength then raise (ValidationException "PushData exceeds 520 bytes")
                     if not skipping then
                         evalStack.Push(data)
 (** 
@@ -506,6 +529,7 @@ There are different size of push data, 1, 2, or 4 bytes
                 elif c >= 81 && c <= 96 then
                     if not skipping then
                         evalStack.Push(intToBytes (c-80))
+                elif pushOnly then fail()
 (** 
 ### IF/THEN/ELSE 
 Some special care must be given to if/then/else. They can nest so the 
@@ -528,6 +552,13 @@ is flipped only if the enclosing block isn't skipped too. The parser knows that 
                     checkDepth ifStack 1
                     skipping <- ifStack.Pop()
                 elif c >= 176 && c <= 185 then ignore()
+                elif 
+                    match c with
+                    | 101 | 102 
+                    | 126 | 127 | 128 | 129 | 131 | 132 | 133 | 134
+                    | 141 | 142 | 149 | 150 | 151 | 152 | 153 -> true
+                    | _ -> false
+                    then fail()
                 elif not skipping then
 (** 
 ### Stack operators 
@@ -538,7 +569,7 @@ is cleared between the parts of the script evaluation.
                     match c with
                     | 97 -> ignore()
                     | 105 -> verify()
-                    | 106 -> fail()
+                    | 106 | 80 | 98 | 137 | 138 -> fail()
                     | 107 -> 
                         checkDepth evalStack 1
                         let top = evalStack.Pop()
@@ -561,6 +592,7 @@ is cleared between the parts of the script evaluation.
                         roll 3
                         roll 3
                     | 115 ->
+                        checkDepth evalStack 1
                         let t = evalStack.Peek()
                         evalStack.Push t
                         if popAsBool() then evalStack.Push t
@@ -568,7 +600,9 @@ is cleared between the parts of the script evaluation.
                     | 117 ->
                         checkDepth evalStack 1
                         evalStack.Pop() |> ignore
-                    | 118 -> evalStack.Push(evalStack.Peek())
+                    | 118 -> 
+                        checkDepth evalStack 1
+                        evalStack.Push(evalStack.Peek())
                     | 119 -> 
                         checkDepth evalStack 2
                         evalStack.RemoveAt(evalStack.Count-2)
@@ -577,13 +611,16 @@ is cleared between the parts of the script evaluation.
                         evalStack.Push(evalStack.Item(evalStack.Count-2))
                     | 121 ->
                         let n = int(bytesToInt(evalStack.Pop()))
+                        if n < 0 then fail()
                         checkDepth evalStack (n+1)
                         evalStack.Push(evalStack.Item(evalStack.Count-1-n))
                     | 122 ->
                         let n = int(bytesToInt(evalStack.Pop()))
-                        roll (n+1)
-                    | 123 -> roll 3
+                        if n < 0 then fail()
+                        roll n
+                    | 123 -> roll 2
                     | 124 ->
+                        checkDepth evalStack 2
                         let a = evalStack.Pop()
                         let b = evalStack.Pop()
                         evalStack.Push a
@@ -592,8 +629,6 @@ is cleared between the parts of the script evaluation.
                         checkDepth evalStack 2
                         let top = evalStack.Peek()
                         evalStack.Insert(evalStack.Count-2, top)
-                    | 126 | 127 | 128 | 129 | 131 | 132 | 133 | 134
-                    | 141 | 142 | 149 | 150 | 151 | 152 | 153 -> fail()
                     | 130 -> 
                         checkDepth evalStack 1
                         let top = evalStack.Peek()
@@ -608,17 +643,17 @@ is cleared between the parts of the script evaluation.
 (** 
 ### Arithmetic operators *)
                     | 139 ->
-                        unaryOp(fun x -> x+1)
+                        unaryOp(fun x -> x+1L)
                     | 140 ->
-                        unaryOp(fun x -> x-1)
+                        unaryOp(fun x -> x-1L)
                     | 143 ->
                         unaryOp(fun x -> -x)
                     | 144 ->
-                        unaryOp(fun x -> if x > 0 then x else -x)
+                        unaryOp(fun x -> if x > 0L then x else -x)
                     | 145 ->
-                        unaryOp(fun x -> if x <> 0 then 0 else 1)
+                        unaryOp(fun x -> if x <> 0L then 0L else 1L)
                     | 146 ->
-                        unaryOp(fun x -> if x <> 0 then 1 else 0)
+                        unaryOp(fun x -> if x <> 0L then 1L else 0L)
                     | 147 ->
                         binaryOp(fun x y -> x+y)
                     | 148 ->
@@ -676,20 +711,26 @@ is cleared between the parts of the script evaluation.
                     | 174 | 175 ->
                         checkDepth evalStack 1
                         let nPubs = int(bytesToInt(evalStack.Pop()))
+                        multiSigOps <- nPubs
+                        if nPubs > maxMultiSig then fail()
                         checkDepth evalStack nPubs
                         let pubs = seq { for _ in 1..nPubs do yield evalStack.Pop() } |> Seq.toArray
                         let nSigs = int(bytesToInt(evalStack.Pop()))
+                        if nSigs > nPubs then fail()
                         checkDepth evalStack nSigs
                         let sigs = seq { for _ in 1..nSigs do yield evalStack.Pop() } |> Seq.toList
-                        evalStack.Pop() |> ignore
+                        checkDepth evalStack 1
+                        let dummy = evalStack.Pop()
+                        if dummy.Length > 0 then fail()
                         let check = checkmultisig script pubs sigs
                         evalStack.Push(intToBytes(if check then 1 else 0))
                         if c = 175 then verify()
                     | _ -> fail()
 
-                innerEval()
+                innerEval ((if c < 97 then opCount else (opCount+1))+multiSigOps)
 
-        innerEval()
+        innerEval 0
+        checkIfStackEmpty()
 
 (** 
 ## P2SH special case 
@@ -701,10 +742,10 @@ TODO: Enforce strict BIP16 rules: No other opcode other than push data and redee
 *)
     let evalP2SH (script: byte[]) =
         evalStack.Clear()
-        eval script
+        eval true script
         checkDepth evalStack 1
         let redeemScript = evalStack.Pop()
-        eval redeemScript
+        eval false redeemScript
         popAsBool()
 
     let redeemScript (script: byte[]) =
@@ -713,9 +754,10 @@ TODO: Enforce strict BIP16 rules: No other opcode other than push data and redee
 
     member x.Verify(inScript: byte[], outScript: byte[]) = 
         try
-            eval inScript
+            eval false inScript
             altStack.Clear() // bitcoin core does that
-            eval outScript
+            ifStack.Clear() // 
+            eval false outScript
             let res = popAsBool()
             res && (not (isP2SH outScript) || evalP2SH inScript)
         with

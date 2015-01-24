@@ -42,8 +42,10 @@ let processUTXOFast (utxoAccessor: IUTXOAccessor) (height) (tx: Tx) (i: int) =
             utxoAccessor.GetUTXO txIn.PrevOutPoint |> Option.iter(fun txOut ->
                 let inScript = txIn.Script
                 let script = txOut.TxOut.Script
+                (*
                 if not (scriptRuntime.Verify(inScript, script)) then
                     logger.ErrorF "Script failed on tx %A for input %d" tx iTxIn
+                *)
                 utxoAccessor.DeleteUTXO txIn.PrevOutPoint
                 )
         )
@@ -57,6 +59,7 @@ let processUTXOFast (utxoAccessor: IUTXOAccessor) (height) (tx: Tx) (i: int) =
 let readBootstrapFast (firstBlock: int) (stream: Stream) =
     use reader = new BinaryReader(stream)
     let mutable i = firstBlock
+    let mutable tip: byte[] = null
     while(stream.Position <> stream.Length) do
         if i % 10000 = 0 then
             logger.DebugF "%d" i
@@ -65,8 +68,11 @@ let readBootstrapFast (firstBlock: int) (stream: Stream) =
         let block = ParseByteArray (reader.ReadBytes(length)) Block.Parse
         block.Header.Height <- i
         block.Txs |> Seq.iteri (fun idx tx -> processUTXOFast utxoAccessor block.Header.Height tx idx)
+        Db.writeHeaders block.Header
+        tip <- block.Header.Hash
         i <- i + 1
     logger.DebugF "Last block %d" i
+    Db.writeTip tip
 
 (*** hide ***)
 let verifySingleTx (tx: Tx) (iTxIn: int) (outScript: byte[]) = 
@@ -102,9 +108,10 @@ The main function initializes the application and waits forever
 let main argv = 
     Config.BasicConfigurator.Configure() |> ignore
 
-(*  // Import a couple of bootstrap dat files
-    use stream = new FileStream("J:/bootstrap-332703.dat", FileMode.Open, FileAccess.Read)
-    readBootstrapFast 295001 stream
+(*
+  // Import a couple of bootstrap dat files
+    use stream = new FileStream("J:/bootstrap-295000.dat", FileMode.Open, FileAccess.Read)
+    readBootstrapFast 0 stream
     use stream = new FileStream("J:/bootstrap-332703.dat", FileMode.Open, FileAccess.Read)
     readBootstrapFast 295001 stream
 *)
@@ -119,8 +126,8 @@ let main argv =
     (* Manually import my own local node
     let myNode = new IPEndPoint(IPAddress.Loopback, 8333)
     trackerIncoming.OnNext(TrackerCommand.Connect myNode)
-    trackerIncoming.OnNext(TrackerCommand.GetPeers)
     *)
+    trackerIncoming.OnNext(TrackerCommand.GetPeers)
     Thread.Sleep(-1)
 
     0 // return an integer exit code
