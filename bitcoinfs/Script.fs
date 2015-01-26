@@ -28,7 +28,7 @@ and I will just mention the main charateristics of this language. For more detai
 
 Bitcoin script is a stack based primary arithmetic language. There are operators to push data to the stack and to
 perform operations on the elements of the stack. The stack is made of arbitrary long binary strings. When used for
-math operations, these byte strings are considered litle endian big integers.
+math operations, these byte strings are considered little endian big integers.
 
 The language has IF/THEN/ELSE but no loops. It is therefore non Turing complete and program execution time is bounded.
 Besides the classic operators, it has cryptographic functions such as hashing operators and signature verification.
