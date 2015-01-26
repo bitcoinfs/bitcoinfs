@@ -7,8 +7,8 @@ was generated directly from the code.
 This project is under development and currently in alpha stage. Generally speaking, writing
 a fully compliant bitcoin node is extremely hard - some think impossible. The Bitcoin project
 is experimental and never aimed to deliver a 100% accurate specification. The Satoshi client
-is the de-factor standard. By far the most used client on the network, it dictates what should
-be accepted and what should be rejected. Even the slighest deviation can cause a fork and potential
+is the de-facto standard. By far the most used client on the network, it dictates what should
+be accepted and what should be rejected. Even the slightest deviation can cause a fork and potential
 loss of funds. It should go without saying
 
 > Do not use this code in production when real funds are at stake. 
@@ -18,7 +18,7 @@ are almost certainly bugs that could be exploited to cause it to deviate from th
 implementation.
 
 That being said this code has been through the "official" [block acceptance test][1] and has run
-from extended period of time. It implements all the consensus rules including the bugs that 
+for an extended period of time. It implements all the consensus rules including the bugs that 
 are now included in the blockchain since the genesis of Bitcoin.
 
 > However, Bitcoin F# has fully validated the existing mainnet blockchain and passes all the integration
