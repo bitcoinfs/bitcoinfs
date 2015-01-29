@@ -133,13 +133,14 @@ let main argv =
     Config.BasicConfigurator.Configure() |> ignore
     // RPC.startRPC()
 
+(*
   // Import a couple of bootstrap dat files
     use stream = new FileStream("J:/bootstrap-295000.dat", FileMode.Open, FileAccess.Read)
     readBootstrapFast 0 stream
     use stream = new FileStream("J:/bootstrap-332703.dat", FileMode.Open, FileAccess.Read)
     readBootstrapFast 295001 stream
+*)
 
-(*
     Peer.initPeers()
 
     Tracker.startTracker()
@@ -153,5 +154,5 @@ let main argv =
     *)
     trackerIncoming.OnNext(TrackerCommand.GetPeers)
     Thread.Sleep(-1)
-*)
+
     0 // return an integer exit code

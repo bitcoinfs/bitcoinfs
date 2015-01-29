@@ -235,8 +235,7 @@ let getBlocks(blockHashes: seq<byte[]>): Task<IPeer * IObservable<Block * byte[]
 *)
 let processBroadcast (m: BitcoinMessage) = 
     for peerSlot in peerSlots do
-        if peerSlot.Value.State = Ready then
-            (peerSlot.Value.Peer :> IPeer).Receive(Execute m)
+        (peerSlot.Value.Peer :> IPeer).Receive(Execute m)
 
 (*** hide ***)
 let startTracker() =

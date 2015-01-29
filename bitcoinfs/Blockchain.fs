@@ -292,6 +292,8 @@ let catchup (peer: IPeer) =
                                 tip <- lastValidBlock
                                 Db.writeTip tip.Hash
                                 mempoolIncoming.OnNext(Revalidate (tip.Height, (undoTxs |> List.rev)))
+                                let invBlock = InvVector([InvEntry(blockInvType, tip.Hash)])
+                                broadcastToPeers.OnNext(new BitcoinMessage("inv", invBlock.ToByteArray()))
                                 catchupImpl()
                         )
                 )

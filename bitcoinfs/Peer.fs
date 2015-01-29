@@ -255,7 +255,6 @@ let scriptRuntime = new Script.ScriptRuntime(fun x _ -> x)
 (**
 Check a transaction against the bloom filter
 *)
-let txHash = hashFromHex "e75bad1e7ad444c79a36d5c98b9ce7289ef6ff3ae7ca11e7f39aea0c85260861"
 let checkTxAgainstBloomFilter (bloomFilter: BloomFilter) (updateMode: BloomFilterUpdate) (tx: Tx) =
     let matchScript (script: byte[]) = // Try to match a script with the filter
         let data = scriptRuntime.GetData script // The filter matches only on the data part of the script
@@ -264,10 +263,13 @@ let checkTxAgainstBloomFilter (bloomFilter: BloomFilter) (updateMode: BloomFilte
         let outpoint = new OutPoint(txHash, iTxOut)
         bloomFilter.Add (outpoint.ToByteArray())
 
+    let matchTxHash = bloomFilter.Check tx.Hash
     let matchInput = // Check if there is a match among the txInputs
         seq {
             for txIn in tx.TxIns do
-                yield matchScript txIn.Script
+                let matchTxInOutpoint = bloomFilter.Check (txIn.PrevOutPoint.ToByteArray())
+                let matchTxInScript = matchScript txIn.Script
+                yield matchTxInOutpoint || matchTxInScript
             } |> Seq.exists id
     let matchOutput = // Check if there is a match among the txOutputs
         tx.TxOuts |> Seq.mapi (fun iTxOut txOut ->
@@ -282,7 +284,7 @@ let checkTxAgainstBloomFilter (bloomFilter: BloomFilter) (updateMode: BloomFilte
                 | UpdateNone -> ignore() // don't update
             matchTxOut
             ) |> Seq.exists id
-    matchInput || matchOutput
+    matchTxHash || matchInput || matchOutput
 
 (**
 Build a merkleblock from a given block
