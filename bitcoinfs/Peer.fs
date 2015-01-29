@@ -32,7 +32,11 @@ module Peer
 
 (*** hide ***)
 open System
+open System.IO
+open System.Collections
 open System.Collections.Generic
+open System.Linq
+open MoreLinq
 open System.Net
 open System.Net.Sockets
 open System.Reactive.Subjects
@@ -48,6 +52,7 @@ open FSharpx.Choice
 open FSharpx.Validation
 open NodaTime
 open Protocol
+open Murmur
 
 let defaultPort = settings.ServerPort
 
@@ -92,27 +97,43 @@ The interactions between Bob, Tom and Peter can be described by the following se
 type GetResult<'a> = Choice<'a, exn>
 let addrTopic = new Subject<Addr>()
 
+type BloomFilterUpdate =
+    | UpdateNone
+    | UpdateAll
+    | UpdateP2PubKeyOnly
+
 (**
 A holder for the incoming and outgoing channels from and to the remote node
 *)
+type IPeerSend =
+    abstract Receive: BitcoinMessage -> unit
+    abstract Send: BitcoinMessage -> unit
+
 type PeerQueues(stream: NetworkStream) = 
-    let fromPeer = new Subject<BitcoinMessage>()
-    let toPeer = new Subject<BitcoinMessage>()
+    let fromPeer = new Event<BitcoinMessage>()
+    let toPeer = new Event<BitcoinMessage>()
+    let mutable disposed = false
 
     interface IDisposable with
         override x.Dispose() = 
-            fromPeer.Dispose()
-            toPeer.Dispose()
             stream.Close()
+            disposed <- true
 
-    member x.From with get() = fromPeer
-    member x.To with get() = toPeer
+    [<CLIEvent>]
+    member x.From = fromPeer.Publish
+    [<CLIEvent>]
+    member x.To = toPeer.Publish
+
+    interface IPeerSend with
+        member x.Receive(message: BitcoinMessage) = if not disposed then fromPeer.Trigger message
+        member x.Send(message: BitcoinMessage) = if not disposed then toPeer.Trigger message
 
 type IPeer =
     abstract Id: int // the unique peer id
     abstract Ready: unit -> unit // call this to mark this peer ready. Used by Bob
     abstract Bad: unit -> unit // this peer behaved badly
     abstract Target: IPEndPoint // the address of the remote node
+    abstract Receive: PeerCommand -> unit
 
 (**
 ## Commands
@@ -120,13 +141,14 @@ The communication queues have to be set up before they are used and their types 
 Because F# does not have forward declarations all the commands are listed here even if they are used only later. 
 *)
 // Commands that the Peer can receive
-type PeerCommand = 
+and PeerCommand = 
     | Open of target: IPEndPoint * tip: BlockHeader
     | OpenStream of stream: NetworkStream * remote: IPEndPoint * tip: BlockHeader
     | Handshaked
     | Execute of message: BitcoinMessage
     | GetHeaders of gh: GetHeaders * task: TaskCompletionSource<IObservable<Headers>> * IPeer
-    | GetBlocks of gd: GetData * task: TaskCompletionSource<IPeer * IObservable<Block * byte[]>>
+    | GetBlocks of gb: GetBlocks * task: TaskCompletionSource<IPeer * IObservable<InvVector>> * IPeer
+    | DownloadBlocks of gd: GetData * task: TaskCompletionSource<IPeer * IObservable<Block * byte[]>>
     | GetData of gd: GetData
     | SetReady
     | Close
@@ -146,18 +168,19 @@ type TrackerCommand =
 
 // Commands for Bob
 type BlockchainCommand =
-    | GetBlock of InvEntry list * Subject<BitcoinMessage>
-    | GetHeaders of GetHeaders * Subject<BitcoinMessage>
+    | DownloadBlocks of InvEntry list * IPeerSend
+    | GetHeaders of GetHeaders * IPeerSend
+    | GetBlocks of GetBlocks * IPeerSend
     | Catchup of IPeer * byte[]
-    | Ping of Ping * Subject<BitcoinMessage>
+    | Ping of Ping * IPeerSend
 
 // Commands for the memory pool - the transactions that haven't been confirmed yet
 type MempoolCommand =
     | Revalidate of int * seq<Tx[]>
     | Tx of Tx
-    | Inv of InvVector * Subject<PeerCommand>
-    | GetTx of InvEntry list * Subject<BitcoinMessage>
-    | Mempool of Subject<BitcoinMessage>
+    | Inv of InvVector * IPeer
+    | GetTx of InvEntry list * IPeerSend
+    | Mempool of IPeerSend
 
 (**
 Finally the queues themselves
@@ -166,6 +189,153 @@ let blockchainIncoming = new Subject<BlockchainCommand>()
 let trackerIncoming = new Subject<TrackerCommand>()
 let mempoolIncoming = new Subject<MempoolCommand>()
 
+(**
+## Support for BIP-37 (Bloom Filter)
+A Bloom Filter greater helps SPV clients who want to download or synchronize with a full node but don't
+want to spend bandwidth getting data unrelated to their wallets.
+
+A client can define a filter so that the full node filters messages that are irrelevant and only
+transmits transactions that match the given filter. Please refer to [BIP-37][1] for more details on this
+enhancement.
+
+Originally, I didn't plan on supporting this feature because it doesn't quite fit with the requirements of the full node.
+It is more of an optimization. However, it is an important one and it is now part of the protocol standard. Pre-version 70001 full
+nodes don't have to do it but later versions do.
+
+Fortunately, I had some code related to bloom filters in the wallet part that I can reuse here.
+
+[1]: https://en.bitcoin.it/wiki/BIP_0037
+*)
+
+(**
+## Bloom Filter
+A [Bloom Filter][1] is a probabilistic filter that has a configurable probability of false positive and no
+false negative. Public keys that match the addresses that I own are inserted into the Bloom Filter and checked
+when I process transactions. It allows me to quickly reject transactions that do not belong to my wallets.
+
+[1]: https://en.wikipedia.org/wiki/Bloom_filter
+*)
+type BloomFilter(filter: byte[], cHashes: int, nTweak: int) =
+    let bits = new BitArray(filter)
+    let hashers = seq {
+        for i in 0..cHashes-1 do
+            yield MurmurHash.Create32(uint32(i*0xFBA4C795+nTweak)) } |> Seq.toArray
+
+    let add (v: byte[]) =
+        for hasher in hashers do
+            let hash = hasher.ComputeHash v
+            let bucket = BitConverter.ToUInt32(hash, 0) % (uint32 filter.Length*8u)
+            bits.Set(int bucket, true)
+
+    let check (v: byte[]) =
+        (hashers |> Seq.map (fun hasher ->
+            let hash = hasher.ComputeHash v
+            let h = BitConverter.ToUInt32(hash, 0)
+            let bucket = h % (uint32 filter.Length*8u)
+            bits.Get(int bucket)
+            )).All(fun b ->  b)
+
+    new(N: int, P: float, cHashes: int, nTweak: int) = 
+        let size = int(min (-1.0/log 2.0**2.0*(float N)*log P) 36000.0)
+        new BloomFilter(Array.zeroCreate size, cHashes, nTweak)
+    member x.Add v = add v
+    member x.Check v = check v
+
+// A node in the partial merkle tree
+type PartialMerkleTreeNode = 
+    {
+    Hash: byte[]
+    Include: bool // whether any descendant matches the filter
+    Left: PartialMerkleTreeNode option // children are present if Include is true
+    Right: PartialMerkleTreeNode option
+    }
+    override x.ToString() = sprintf "Hash(%s), Include=%b" (hashToHex x.Hash) x.Include
+
+let scriptRuntime = new Script.ScriptRuntime(fun x _ -> x)
+(**
+Check a transaction against the bloom filter
+*)
+let txHash = hashFromHex "e75bad1e7ad444c79a36d5c98b9ce7289ef6ff3ae7ca11e7f39aea0c85260861"
+let checkTxAgainstBloomFilter (bloomFilter: BloomFilter) (updateMode: BloomFilterUpdate) (tx: Tx) =
+    let matchScript (script: byte[]) = // Try to match a script with the filter
+        let data = scriptRuntime.GetData script // The filter matches only on the data part of the script
+        data |> Array.exists (fun d -> bloomFilter.Check d) // Match is any data item is a match
+    let addOutpoint (txHash: byte[]) (iTxOut: int) = // Update the filter by adding the txOut outpoint
+        let outpoint = new OutPoint(txHash, iTxOut)
+        bloomFilter.Add (outpoint.ToByteArray())
+
+    let matchInput = // Check if there is a match among the txInputs
+        seq {
+            for txIn in tx.TxIns do
+                yield matchScript txIn.Script
+            } |> Seq.exists id
+    let matchOutput = // Check if there is a match among the txOutputs
+        tx.TxOuts |> Seq.mapi (fun iTxOut txOut ->
+            let script = txOut.Script
+            let matchTxOut = matchScript script
+            if matchTxOut then // If match, update the filter according to the updateMode
+                match updateMode with
+                | UpdateAll -> addOutpoint tx.Hash iTxOut // always add the outpoint
+                | UpdateP2PubKeyOnly -> // add the outpoint if it's a pay2Pub or pay2Multisig. It's ok to add more than necessarily because false
+                    // positives are acceptable
+                    if Script.isPay2PubKey script || Script.isPay2MultiSig script then addOutpoint tx.Hash iTxOut 
+                | UpdateNone -> ignore() // don't update
+            matchTxOut
+            ) |> Seq.exists id
+    matchInput || matchOutput
+
+(**
+Build a merkleblock from a given block
+*)
+let buildMerkleBlock (bloomFilter: BloomFilter) (updateMode: BloomFilterUpdate) (block: Block) =
+    let (txs, merkletreeLeaves) = // Build the leaves of the tree
+        block.Txs |> Seq.map(fun tx -> // Each leaf is a transaction
+            let txMatch = checkTxAgainstBloomFilter bloomFilter updateMode tx
+            (Option.conditional txMatch tx, { Hash = tx.Hash; Include = txMatch; Left = None; Right = None })
+        ) |> Seq.toList |> List.unzip
+
+    let rec makeTree (merkletreeNodes: PartialMerkleTreeNode list) = // Build the tree by merging level by level
+        match merkletreeNodes with
+        | [root] -> root // If single node, I am at the root
+        | _ -> 
+            let len = merkletreeNodes.Length
+            let nodes = // Make the level contain an even number of nodes
+                if len % 2 = 0 
+                then merkletreeNodes
+                else merkletreeNodes @ [merkletreeNodes.Last()] // duplicate the last node if uneven
+            let parentNodes = // Merge nodes two by two
+                (nodes |> Seq.ofList).Batch(2) |> Seq.map (fun x ->
+                    let [left; right] = x |> Seq.toList
+                    let includeChildren = left.Include || right.Include
+                    { 
+                        Hash = dsha ([left.Hash; right.Hash] |> Array.concat) // DSHA on the concat of each hash
+                        Include = includeChildren
+                        Left = if includeChildren then Some(left) else None // Trim the branch if both children have no match
+                        Right = if includeChildren && left <> right then Some(right) else None
+                    }
+                ) |> Seq.toList
+            makeTree parentNodes
+            
+    // Build the tree
+    let merkleTree = makeTree merkletreeLeaves
+
+    // Convert to MerkleBlock format
+    let hashes = new List<byte[]>()
+    let flags = new List<bool>()
+
+    let rec depthFirstTraversal (node: PartialMerkleTreeNode) = // Traverse the tree down
+        flags.Add(node.Include)
+        if node.Left = None && node.Right = None then 
+            hashes.Add(node.Hash) // Write the contents of the leaves to the output buffers
+        node.Left |> Option.iter depthFirstTraversal
+        node.Right |> Option.iter depthFirstTraversal
+
+    depthFirstTraversal merkleTree
+    let txHashes = hashes |> List.ofSeq
+    let flags = new BitArray(flags.ToArray()) // Pack the flags into a bitarray
+    let flagsBytes: byte[] = Array.zeroCreate ((flags.Length-1)/8+1)
+    flags.CopyTo(flagsBytes, 0)
+    (txs |> List.choose id, new MerkleBlock(block.Header, txHashes, flagsBytes))
 
 (**
 ## The Peer implementation
@@ -190,7 +360,9 @@ type Peer(id: int) as self =
     let disposable = new CompositeDisposable()
     
     let mutable target: IPEndPoint = null
-    let scheduler = new EventLoopScheduler() // A dedicated thread per peer but peers could share threads too
+    let mutable bloomFilterUpdateMode = BloomFilterUpdate.UpdateNone
+    let mutable bloomFilter: BloomFilter option = None
+    let mutable relay = 1uy
 
 (** Peers take input from 3 distinct sources
 
@@ -198,9 +370,11 @@ type Peer(id: int) as self =
 - header messages from the remote node
 - block messages from the remote node
 *)
-    let incoming = new Subject<PeerCommand>()
+    let incoming = new Event<PeerCommand>()
     let headersIncoming = new Subject<Headers>()
     let blockIncoming = new Subject<Block * byte[]>()
+
+    let incomingEvent = incoming.Publish
 
 (** The workloop takes a network stream and continually grabs data from it and delivers them
 to the Observable.
@@ -216,7 +390,7 @@ to the Observable.
                         let c = stream.EndRead(res)
                         if c = 0 then // When the stream is closed, the read returns 0 byte
                             raise (new SocketException())
-                        buffer.[0..c-1]), 
+                        else buffer.[0..c-1]), 
                     null)
             t.ToObservable() // a task that grabs one read asynchronously
         Observable.Repeat<byte[]>(Observable.Defer(task)) // Keep doing the same task until the stream closes
@@ -225,13 +399,13 @@ to the Observable.
 any thread.
 *)
     let readyPeer() =
-        incoming.OnNext(PeerCommand.SetReady)
+        incoming.Trigger(PeerCommand.SetReady)
 
     let closePeer() =
-        incoming.OnNext(PeerCommand.Close)
+        incoming.Trigger(PeerCommand.Close)
 
     let badPeer() =
-        incoming.OnNext(UpdateScore -100) // lose 100 points - the banscore is not implemented yet
+        incoming.Trigger(UpdateScore -100) // lose 100 points - the banscore is not implemented yet
 
 (** Another helper function that sends a message out and return an empty observable. By having it as
 an observable, the sending is part of the time out.
@@ -239,7 +413,7 @@ an observable, the sending is part of the time out.
     let sendMessageObs (peerQueues: PeerQueues) (message: BitcoinMessage) = 
         Observable.Defer(
             fun () -> 
-                peerQueues.To.OnNext(message)
+                (peerQueues :> IPeerSend).Send(message)
                 Observable.Empty()
             )
 (**
@@ -248,7 +422,7 @@ It could have closed. The network stream has a WriteTimeOut set and will throw a
 couldn't be sent during the allocated time. At this point, if an exception is raised I close the peer because
 there isn't much chance of making progress later.
 *)
-    let sendMessage (stream: NetworkStream) (message: BitcoinMessage)= 
+    let sendMessage (stream: NetworkStream) (message: BitcoinMessage) = 
         let messageBytes = message.ToByteArray()
         try
             stream.Write(messageBytes, 0, messageBytes.Length)
@@ -256,6 +430,32 @@ there isn't much chance of making progress later.
         | e -> 
             logger.DebugF "Cannot send message to peer"
             closePeer()
+
+(**
+Applies the bloom filter to the outgoing message
+*)
+    let filterMessage (message: BitcoinMessage): BitcoinMessage list =
+        if relay = 1uy then
+            match message.Command with
+            | "tx" -> 
+                let emit = 
+                    bloomFilter |> Option.map (fun bf ->
+                        let tx = message.ParsePayload() :?> Tx 
+                        let txMatch = checkTxAgainstBloomFilter bf bloomFilterUpdateMode tx
+                        if txMatch then logger.InfoF "Filtered TX %s" (hashToHex tx.Hash)
+                        txMatch
+                    ) |?| true
+                if emit then [message] else []
+            | "block" -> 
+                bloomFilter |> Option.map (fun bf ->
+                        let block = message.ParsePayload() :?> Block
+                        let (txs, merkleBlock) = buildMerkleBlock bf bloomFilterUpdateMode block
+                        let txMessages = txs |> List.map(fun tx -> new BitcoinMessage("tx", tx.ToByteArray()))
+                        txs |> Seq.iter (fun tx -> logger.InfoF "Filtered TX %s" (hashToHex tx.Hash))
+                        txMessages @ [new BitcoinMessage("merkleblock", merkleBlock.ToByteArray())]
+                    ) |?| [message]
+            | _ -> [message]
+        else []
 
 (**
 `processMessage` handles messages incoming from the remote node. Generally speaking, it parses the payload of the message
@@ -266,18 +466,21 @@ and routes it to the appropriate queue.
         match command with
         | "version" 
         | "verack" ->
-            peerQueues.From.OnNext(message)
+            (peerQueues :> IPeerSend).Receive(message)
         | "getaddr" -> 
             let now = Instant.FromDateTimeUtc(DateTime.UtcNow)
             let addr = new Addr([|{ Timestamp = int32(now.Ticks / NodaConstants.TicksPerSecond); Address = NetworkAddr.MyAddress }|])
-            peerQueues.To.OnNext(new BitcoinMessage("addr", addr.ToByteArray()))
+            (peerQueues :> IPeerSend).Send(new BitcoinMessage("addr", addr.ToByteArray()))
         | "getdata" ->
             let gd = message.ParsePayload() :?> GetData
-            mempoolIncoming.OnNext(GetTx (gd.Invs |> List.filter (fun inv -> inv.Type = txInvType), peerQueues.To))
-            blockchainIncoming.OnNext(GetBlock (gd.Invs |> List.filter (fun inv -> inv.Type = blockInvType), peerQueues.To))
+            mempoolIncoming.OnNext(GetTx (gd.Invs |> List.filter (fun inv -> inv.Type = txInvType), peerQueues))
+            blockchainIncoming.OnNext(DownloadBlocks (gd.Invs |> List.filter (fun inv -> inv.Type = blockInvType || inv.Type = filteredBlockInvType), peerQueues))
         | "getheaders" ->
             let gh = message.ParsePayload() :?> GetHeaders
-            blockchainIncoming.OnNext(GetHeaders (gh, peerQueues.To))
+            blockchainIncoming.OnNext(GetHeaders (gh, peerQueues))
+        | "getblocks" ->
+            let gb = message.ParsePayload() :?> GetBlocks
+            blockchainIncoming.OnNext(GetBlocks (gb, peerQueues))
         | "addr" -> 
             let addr = message.ParsePayload() :?> Addr
             addrTopic.OnNext(addr)
@@ -291,7 +494,7 @@ and routes it to the appropriate queue.
             let inv = message.ParsePayload() :?> InvVector
             if inv.Invs.IsEmpty then ignore() // empty inv
             elif inv.Invs.Length > 1 || inv.Invs.[0].Type <> blockInvType then // many invs or not a block inv
-                mempoolIncoming.OnNext(Inv(inv, incoming)) // send to mempool
+                mempoolIncoming.OnNext(Inv(inv, self)) // send to mempool
             elif inv.Invs.Length = 1 && inv.Invs.[0].Type = blockInvType then // a block inv, send to blockchain
                 logger.DebugF "Catchup requested for %d %s" id (hashToHex inv.Invs.[0].Hash)
                 blockchainIncoming.OnNext(Catchup(self, inv.Invs.[0].Hash))
@@ -300,10 +503,22 @@ and routes it to the appropriate queue.
             mempoolIncoming.OnNext(Tx tx)
         | "ping" ->
             let ping = message.ParsePayload() :?> Ping // send to blockchain because tests use pings to sync with catchup
-            blockchainIncoming.OnNext(BlockchainCommand.Ping(ping, peerQueues.To))
+            blockchainIncoming.OnNext(BlockchainCommand.Ping(ping, peerQueues))
         | "mempool" ->
             let mempool = message.ParsePayload() :?> Mempool
-            mempoolIncoming.OnNext(MempoolCommand.Mempool peerQueues.To)
+            mempoolIncoming.OnNext(MempoolCommand.Mempool peerQueues)
+        | "filteradd" ->
+            let filterAdd = message.ParsePayload() :?> FilterAdd
+            bloomFilter |> Option.iter (fun bloomFilter -> bloomFilter.Add filterAdd.Data)
+            relay <- 1uy
+        | "filterload" ->
+            let filterLoad = message.ParsePayload() :?> FilterLoad
+            let bf = new BloomFilter(filterLoad.Filter, filterLoad.NHash, filterLoad.NTweak)
+            bloomFilter <- Some(bf)
+            relay <- 1uy
+        | "filterclear" -> 
+            bloomFilter <- None
+            relay <- 1uy
         | _ -> ignore()
 
 (**
@@ -327,8 +542,8 @@ Every handler needs to support `Closing` because it may happen at any time. The 
                     }
 
             // Connect to the node and bail out if it fails or the timeout expires
-            Observable.Timeout(Async.AsObservable connect, connectTimeout).ObserveOn(scheduler).Subscribe(
-                onNext = (fun c -> incoming.OnNext c), // If connected, grab the stream
+            Observable.Timeout(Async.AsObservable connect, connectTimeout).Subscribe(
+                onNext = (fun c -> incoming.Trigger c), // If connected, grab the stream
                 onError = (fun ex -> 
                     logger.DebugF "Connect failed> %A %s" t (ex.ToString())
                     closePeer())
@@ -343,23 +558,25 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             let peerQueues = new PeerQueues(stream)
             let parser = new BitcoinMessageParser(workLoop(stream))
             // Subscribe the outgoing queue, it's ready to send out messages
-            disposable.Add(peerQueues.To.Subscribe(onNext = (fun m -> sendMessage stream m), onError = (fun e -> closePeer())))
+            // Subscriptions are not added to the disposable object unless they should be removed when the event loop finishes
+            peerQueues.To.SelectMany(fun m -> filterMessage m |> List.toSeq).Subscribe(onNext = (fun m -> sendMessage stream m), onError = (fun e -> closePeer())) |> ignore
             disposable.Add(peerQueues)
-            disposable.Add(stream)
 
             // Prepare and send out my version message
             let version = Version.Create(SystemClock.Instance.Now, target, NetworkAddr.MyAddress.EndPoint, int64(random.Next()), "Satoshi YOLO 1.0", tip.Height, 1uy)
-            peerQueues.To.OnNext(new BitcoinMessage("version", version.ToByteArray()))
+            (peerQueues :> IPeerSend).Send(new BitcoinMessage("version", version.ToByteArray()))
 
             // The handshake observable waits for the verack and the version response from the other side. When both parties have
             // exchanged their version/verack, it will deliver a single event "Handshaked"
             let handshakeObs = 
-                peerQueues.From.ObserveOn(scheduler)
+                peerQueues.From
                     .Scan((false, false), fun (versionReceived: bool, verackReceived: bool) (m: BitcoinMessage) ->
                     logger.DebugF "HS> %A" m
                     match m.Command with
                     | "version" -> 
-                        peerQueues.To.OnNext(new BitcoinMessage("verack", Array.empty))
+                        let version = m.ParsePayload() :?> Version
+                        relay <- version.Relay
+                        (peerQueues :> IPeerSend).Send(new BitcoinMessage("verack", Array.empty))
                         (true, verackReceived)
                     | "verack" -> (versionReceived, true)
                     | _ -> (versionReceived, verackReceived))
@@ -371,7 +588,7 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             Observable.Timeout(handshakeObs, handshakeTimeout).Subscribe(
                 onNext = (fun c -> 
                     logger.DebugF "%A Handshaked" t
-                    incoming.OnNext c),
+                    incoming.Trigger c),
                 onError = (fun ex -> 
                     logger.DebugF "Handshake failed> %A %s" target (ex.ToString())
                     closePeer())
@@ -379,7 +596,12 @@ Every handler needs to support `Closing` because it may happen at any time. The 
 
             // Finally subscribe and start consuming the responses from the remote side
             // Any exception closes the peer
-            disposable.Add(parser.BitcoinMessages.Subscribe(onNext = (fun m -> processMessage peerQueues m), onError = (fun e -> closePeer())))
+            disposable.Add(
+                parser.BitcoinMessages.Subscribe(
+                    onNext = (fun m -> processMessage peerQueues m), 
+                    onError = (fun e -> 
+                        logger.ErrorF "Exception %A" e
+                        closePeer())))
             // But if it goes well, 
             { data with Queues = Some(peerQueues) }
         | Handshaked ->
@@ -408,7 +630,7 @@ an observable. The peer creates the observable and notifies Bob of its availabil
         let peerQueues = data.Queues.Value
         match command with
         | Execute message -> 
-            peerQueues.To.OnNext(message)
+            (peerQueues :> IPeerSend).Send(message)
             data
         | PeerCommand.GetHeaders (gh, ts, _) ->
             let sendObs = sendMessageObs peerQueues (new BitcoinMessage("getheaders", gh.ToByteArray()))
@@ -417,7 +639,7 @@ an observable. The peer creates the observable and notifies Bob of its availabil
                     .Timeout(sendObs.Concat(headersIncoming), commandTimeout)
             ts.SetResult(obs)
             { data with State = PeerState.Busy }
-        | GetBlocks (gd, ts) ->
+        | PeerCommand.DownloadBlocks (gd, ts) ->
             let blocksPending = new HashSet<byte[]>(gd.Invs |> Seq.map(fun inv -> inv.Hash), new HashCompare())
             let sendObs = sendMessageObs peerQueues (new BitcoinMessage("getdata", gd.ToByteArray()))
             let count = blocksPending.Count
@@ -438,7 +660,7 @@ an observable. The peer creates the observable and notifies Bob of its availabil
             data
         | UpdateScore score -> 
             let newData = { data with Score = data.Score + score }
-            if newData.Score <= 0 then incoming.OnNext(PeerCommand.Close)
+            if newData.Score <= 0 then incoming.Trigger(PeerCommand.Close)
             newData
         | PeerCommand.Close -> 
             logger.DebugF "Closing %A" target
@@ -457,7 +679,7 @@ result forever.
         | PeerCommand.GetHeaders (gh, ts, _) ->
             ts.SetResult(Observable.Empty())
             data
-        | GetBlocks (gd, ts) ->
+        | PeerCommand.DownloadBlocks (gd, ts) ->
             ts.SetResult(self :> IPeer, Observable.Empty())
             data
         | _ -> data
@@ -469,26 +691,23 @@ result forever.
 
     do
         disposable.Add(
-            incoming
-                .ObserveOn(scheduler)
+            incomingEvent
+                .ObserveOn(ThreadPoolScheduler.Instance)
                 .Scan(initialState, new Func<PeerData, PeerCommand, PeerData>(runHandler))
-                .Subscribe(onNext = (fun _ -> ()), onCompleted = (fun () -> 
-                    scheduler.Dispose() // On completion, dispose of the final resources
-                    disposable.Dispose()
-                    )))
+                .Subscribe())
 
     interface IDisposable with
         member x.Dispose() = 
-            incoming.OnCompleted()
+            disposable.Dispose()
 
     interface IPeer with
         member x.Ready() = readyPeer()
         member val Id = id with get
         member x.Target with get() = target // For diagnostics only
         member x.Bad() = badPeer()
+        member x.Receive m = incoming.Trigger m
 
     override x.ToString() = sprintf "Peer(%d, %A)" id target
-    member x.Incoming with get() = incoming
 
 (**
 ### Bootstrap from DNS
@@ -517,3 +736,4 @@ let initPeers() =
     let peers = Db.getPeers()
     if peers.Length < 1000 then
         bootstrapPeers()
+

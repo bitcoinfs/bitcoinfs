@@ -99,6 +99,10 @@ let fnBlockchain = fun () -> chainFromTip tip
 And in code:
 *)
 let calculateChainHeights(newHeaders: BlockHeaderList): BlockChainFragment option = 
+    newHeaders |> Seq.windowed 2 |> Seq.iter (fun pair ->
+        let [prev; cur] = pair |> Seq.toList
+        prev.NextHash <- cur.Hash
+    ) // Link header to next - headers are already linked by prev hash
     let blockchain = fnBlockchain()
     let hashOfPrevNewHeader = Seq.tryPick Some newHeaders |> Option.map (fun bh -> bh.PrevHash) |?| tip.Hash
     let prevNewHeader = Db.readHeader hashOfPrevNewHeader
@@ -124,16 +128,12 @@ let calculateLowestCommonAncestor (newChain: BlockChainFragment) =
     let trimBlockchain = blockchain |> Seq.skip (tip.Height - minHeight)
     let trimNewHeaders = newChain |> Seq.skip (newTip.Height - minHeight)
 
-    (Seq.zip trimBlockchain trimNewHeaders |> Seq.find (fun (a, b) -> hashCompare.Equals(a.Hash, b.Hash)) |> fst)
+    (Seq.zip trimBlockchain trimNewHeaders |> Seq.tryFind (fun (a, b) -> hashCompare.Equals(a.Hash, b.Hash)) |> Option.map fst)
 
 (**
 Compares the POW of one chain against the current chain starting from the given node
 *)
-let isBetter (lowestCommonAncestor: BlockHeader) (newChain: BlockChainFragment) =
-    let blockchain = fnBlockchain()
-    let mainChain = blockchain |> Seq.takeWhile (fun bh -> bh.Height <> lowestCommonAncestor.Height) |> Seq.toList
-    let newFork = newChain |> Seq.takeWhile (fun bh -> bh.Height <> lowestCommonAncestor.Height) |> Seq.toList
-    getWork mainChain < getWork newFork
+let isBetter (oldChain: BlockChainFragment) (newChain: BlockChainFragment) = getWork oldChain < getWork newChain
 
 (**
 Fetch a set of nodes asynchrounously from the current set of peers. The function retries until it reaches the maximum
@@ -228,6 +228,14 @@ let checkBlock (utxoAccessor: IUTXOAccessor) (p: BlockHeader) (blocks: BlockHead
         return ()
     } |> Option.map(fun () -> Choice1Of2 currentBlock) |?| Choice2Of2 (p, currentBlock)
 
+let chainTo (blockchain: seq<BlockHeader>) (stop: BlockHeader) = blockchain |> Seq.takeWhile (fun bh -> bh.Height <> stop.Height) |> Seq.toList
+
+let updateIsMain (fragment: BlockChainFragment) (isMain: bool) = 
+    fragment |> List.iter (fun bh ->
+        bh.IsMain <- isMain
+        Db.writeHeaders bh
+    )
+
 (**
 ## The catchup workflow
 *)
@@ -247,10 +255,11 @@ let catchup (peer: IPeer) =
         try
             let headersMessage = getHeaders() |> Async.RunSynchronously
             let headers = headersMessage.Headers
+            let currentHeight = tip.Height
 
             if not headers.IsEmpty then
                 let newBlockchainOpt = calculateChainHeights headers
-                newBlockchainOpt |> Option.iter (fun newBlockchainFrag ->
+                newBlockchainOpt |> Option.filter (fun f -> f.Head.Height > currentHeight-10000) |> Option.iter (fun newBlockchainFrag -> // limit the size of a fork to 10000 blocks
                     newBlockchainFrag |> List.iter Db.writeHeaders
                     let headersAfter = newBlockchainFrag |> List.head |> iterate (fun bh -> Db.getNextHeader bh.Hash) |> Seq.takeWhile (fun bh -> bh.Hash <> zeroHash) |> Seq.skip 1 |> Seq.toList |> List.rev
                     let connectedNewBlockchain = (headersAfter @ newBlockchainFrag) |> List.rev |> Seq.truncate 100 |> Seq.toList |> List.rev
@@ -258,31 +267,47 @@ let catchup (peer: IPeer) =
                     downloadBlocksAsync |> Async.RunSynchronously
                     let tempUTXO = new MempoolUTXOAccessor(utxoAccessor)
                     let lca = calculateLowestCommonAncestor connectedNewBlockchain
-                    let newBlockchain = connectedNewBlockchain |> List.takeWhile(fun bh -> bh.Hash <> lca.Hash)
-                    if isBetter lca newBlockchain then
-                        let undoTxs = rollbackTo tempUTXO lca
-                        let newBlockList = lca :: (newBlockchain |> List.rev)
+                    lca |> Option.iter(fun lca ->
+                        let mainChain = chainTo (fnBlockchain()) lca
+                        let newBlockchain = connectedNewBlockchain |> List.takeWhile(fun bh -> bh.Hash <> lca.Hash)
+                        if isBetter mainChain newBlockchain then
+                            let undoTxs = rollbackTo tempUTXO lca
+                            let newBlockList = lca :: (newBlockchain |> List.rev)
 
-                        let lastValidBlockChoice = newBlockList |> Seq.windowed 2 |> Choice.foldM (checkBlock tempUTXO) lca
-                        let lastValidBlock =
-                            match lastValidBlockChoice with
-                            | Choice1Of2 bh -> bh
-                            | Choice2Of2 (bh, invalidBlock) -> 
-                                deleteBlock invalidBlock
-                                bh
-                        let validNewBlockchain = newBlockchain |> List.skipWhile(fun bh -> bh.Hash <> lastValidBlock.Hash)
-                        if isBetter lca validNewBlockchain then
-                            logger.InfoF "New chain is better %A" headers
-                            tempUTXO.Commit()
-                            tip <- lastValidBlock
-                            Db.writeTip tip.Hash
-                            mempoolIncoming.OnNext(Revalidate (tip.Height, (undoTxs |> List.rev)))
-                            catchupImpl()
+                            let lastValidBlockChoice = newBlockList |> Seq.windowed 2 |> Choice.foldM (checkBlock tempUTXO) lca
+                            let lastValidBlock =
+                                match lastValidBlockChoice with
+                                | Choice1Of2 bh -> bh
+                                | Choice2Of2 (bh, invalidBlock) -> 
+                                    deleteBlock invalidBlock
+                                    bh
+                            let validNewBlockchain = newBlockchain |> List.skipWhile(fun bh -> bh.Hash <> lastValidBlock.Hash)
+                            if isBetter mainChain validNewBlockchain then
+                                logger.InfoF "New chain is better %A" headers
+                                tempUTXO.Commit()
+                                lca.NextHash <- newBlockchain.Last().Hash // Attach to LCA
+                                Db.writeHeaders lca
+                                updateIsMain mainChain false
+                                updateIsMain validNewBlockchain true
+                                tip <- lastValidBlock
+                                Db.writeTip tip.Hash
+                                mempoolIncoming.OnNext(Revalidate (tip.Height, (undoTxs |> List.rev)))
+                                catchupImpl()
+                        )
                 )
             with 
             | ex -> logger.ErrorF "%A" ex
 
     catchupImpl()
+
+let getBlockchainUpTo (hashes: byte[] list) (hashStop: byte[]) (count: int) = 
+    let startHeader =
+        hashes 
+        |> Seq.map (fun hash -> Db.readHeader hash)
+        |> Seq.tryFind (fun bh -> bh.IsMain
+        ) |?| genesisHeader
+
+    iterate (fun bh -> Db.readHeader bh.NextHash) startHeader |> Seq.truncate (count+1) |> Seq.takeWhile (fun bh -> bh.Hash <> hashStop) |> Seq.tail |> Seq.toList 
 
 (**
 ## Command handler
@@ -306,32 +331,46 @@ let processCommand command =
         if hash = null || (Db.readHeader hash).Hash = zeroHash || not (hasBlock (Db.readHeader hash)) then
             catchup peer
         logger.DebugF "Catchup completed for peer %A" peer
-    | GetBlock (invs, peer) ->
-        for inv in invs do
-            try
+    | DownloadBlocks (invs, peer) ->
+        let downloadResults = 
+            invs |> List.map (fun inv ->
                 let bh = Db.readHeader inv.Hash
-                let block = loadBlock bh
-                peer.OnNext(new BitcoinMessage("block", block.ToByteArray()))
-            with
-            | _ -> ignore() // TODO: send notfound?
+                let block = Choice.protect loadBlock bh
+                block |> Choice.mapError (fun _ -> inv)
+            )
+        downloadResults |> List.filter (fun x -> Choice.isResult x) |> List.iter (fun block -> peer.Send(new BitcoinMessage("block", block.Value().ToByteArray())))
+        let failedInv = downloadResults |> List.filter (fun x -> Choice.isError x) |> List.map (fun inv -> Choice.getError inv)
+        let notfound = new NotFound(failedInv)
+        if not failedInv.IsEmpty then peer.Send(new BitcoinMessage("notfound", notfound.ToByteArray()))
     | GetHeaders (gh, peer) ->
         try
-            let blockchain = fnBlockchain()
-            let reqBlockchain = 
-                blockchain |> Seq.takeWhile (fun bh -> 
-                let stop = gh.Hashes |> Seq.tryFind (fun ghHash -> hashCompare.Equals(bh.Hash, ghHash))
-                stop.IsNone
-                ) 
-                |> Seq.truncate 2000 |> Seq.toList
-                |> List.rev |> List.takeWhile (fun bh -> not(hashCompare.Equals(bh.Hash, gh.HashStop)))
+            let reqBlockchain = getBlockchainUpTo gh.Hashes gh.HashStop 2000
             logger.DebugF "Headers sent> %A" reqBlockchain
             let headers = new Headers(reqBlockchain)
-            peer.OnNext(new BitcoinMessage("headers", headers.ToByteArray()))
+            peer.Send(new BitcoinMessage("headers", headers.ToByteArray()))
+        with
+            | e -> logger.ErrorF "Exception %A" e
+    | GetBlocks (gb, peer) ->
+        try
+            let reqBlockchain = getBlockchainUpTo gb.Hashes gb.HashStop 500
+            let inv = new InvVector(reqBlockchain |> List.map (fun bh -> InvEntry(blockInvType, bh.Hash)))
+            peer.Send(new BitcoinMessage("inv", inv.ToByteArray()))
         with
             | e -> logger.ErrorF "Exception %A" e
     | Ping (ping, peer) ->
         let pong = new Pong(ping.Nonce)
-        peer.OnNext(new BitcoinMessage("pong", pong.ToByteArray()))
+        peer.Send(new BitcoinMessage("pong", pong.ToByteArray()))
 
+(* Populate the next hash field that was introduced in a later version of the database schema *)
+let fixHeaders() =
+    let blockchain = fnBlockchain()
+    blockchain |> Seq.truncate 100 |> Seq.iter (fun bh ->
+        bh.IsMain <- true
+        Db.writeHeaders bh
+    )
+    logger.InfoF "Upgrade finished"
+    
 let blockchainStart() =
+    // fixHeaders()
     disposable.Add(blockchainIncoming.ObserveOn(NewThreadScheduler.Default).Subscribe(processCommand))
+

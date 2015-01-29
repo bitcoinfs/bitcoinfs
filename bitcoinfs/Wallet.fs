@@ -1,4 +1,4 @@
-﻿(*** hide ***)
+(*** hide ***)
 (* Copyright 2015 Hanh Huynh Huu
 
 This file is part of F# Bitcoin.
@@ -16,8 +16,12 @@ along with F# Bitcoin; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 *)
 
+(**
+# Wallet
+*)
 module Wallet
 
+(*** hide ***)
 open System
 open System.Collections
 open System.Text
@@ -36,31 +40,14 @@ open Script
 let secp256k1Curve = Org.BouncyCastle.Asn1.Sec.SecNamedCurves.GetByName("secp256k1")
 let ecDomain = new ECDomainParameters(secp256k1Curve.Curve, secp256k1Curve.G, secp256k1Curve.N)
 
-type BloomFilter(N: int, P: float, cHashes: int, nTweak: int) =
-    let size = int(min (-1.0/log 2.0**2.0*(float N)*log P) 36000.0)
-    let bits = new BitArray(size)
-    let hashers = seq {
-        for i in 0..cHashes-1 do
-            yield MurmurHash.Create32(uint32(i*0xFBA4C795+nTweak)) } |> Seq.toArray
-
-    let add (v: byte[]) =
-        for hasher in hashers do
-            let hash = hasher.ComputeHash v
-            let bucket = BitConverter.ToUInt32(hash, 0) % (uint32 size)
-            bits.Set(int bucket, true)
-
-    let check (v: byte[]) =
-        (hashers |> Seq.map (fun hasher ->
-            let hash = hasher.ComputeHash v
-            let bucket = BitConverter.ToUInt32(hash, 0) % (uint32 size)
-            bits.Get(int bucket)
-            )).All(fun b ->  b)
-
-    member x.Add v = add v
-    member x.Check v = check v
     
 let createBigInt (bytes: byte[]) = new Org.BouncyCastle.Math.BigInteger(1, bytes)
 
+(**
+## Utilities to work with addresses
+The rest of the code is only dealing with binary data whether in the form of hashes or keys. Base58 encoding
+is human readable but not as efficient for storing and comparison.
+*)
 let base58alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 let fromBase58 (base58: string) =
     let bi = 
@@ -113,6 +100,11 @@ let toBase58Check (version: byte) = toBase58 << (to58Check version)
 
 let toAddress = hash160 >> (toBase58Check 0uy)
 
+(**
+## [BIP-32][2] Hierarchical Deterministic Wallets
+
+[2]: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki
+*)
 let hmacOf(chain: byte[])(fnChain: unit -> byte[]) =
     let sha512 = new Sha512Digest()
     let hmac = new HMac(sha512)
@@ -173,6 +165,12 @@ let BIP32master (master: byte[]) =
      let (l, r) = hmacOf(Encoding.ASCII.GetBytes "Bitcoin seed") (fun () -> master)
      new BIP32PrivKeyExt(new Org.BouncyCastle.Math.BigInteger(1, l), r)
 
+(**
+## [Electrum][3] Wallet
+
+Electrum style deterministic wallets. It requires the master public key
+[3]: https://electrum.org/
+*)
 type Electrum(mpub: byte[], group: int) =
     let deriveExp index =
         use ms = new MemoryStream()
@@ -185,6 +183,12 @@ type Electrum(mpub: byte[], group: int) =
     
     member x.Derive(index: int) = ecDomain.G.Multiply(deriveExp index).Add(masterPoint)
         
+(**
+## [Armory][4] Wallet
+
+Armory style deterministic wallets. It requires the public master key and the chain code
+[4]: https://bitcoinarmory.com/
+*)
 type Armory(chain: byte[]) =
     let derive (pkey: byte[]) =
         let point = ecDomain.Curve.DecodePoint pkey
@@ -198,6 +202,7 @@ type Armory(chain: byte[]) =
 
     member x.Derive pk = derive pk
 
+(*** hide ***)
 let electrumHashes (mpk: byte[]) (cReceive: int) (cChange: int) = 
     let electrumReceive = new Electrum(mpk, 0)
     let electrumChange = new Electrum(mpk, 1)

@@ -126,6 +126,11 @@ strange and I just scratched the surface. For more information refer to its spec
 // This test is the first of a few checks
 let isP2SH (script: byte[]) = script.Length = 23 && script.[0] = OP_HASH160 && script.[1] = OP_DATA_20 && script.[22] = OP_EQUAL
 
+// These are used in BIP-37 when the update mode is BLOOM_UPDATE_P2PUBKEY_ONLY. Since it's a probabilistic filter, 
+// I can report false positives and therefore I don't have to be accurate
+let isPay2PubKey (script: byte[]) = script.Length > 0 && script.[script.Length-1] = OP_CHECKSIG
+let isPay2MultiSig (script: byte[]) = script.Length > 0 && script.[script.Length-1] = OP_CHECKMULTISIG
+
 (** 
 ## Signature verification 
 
@@ -446,6 +451,10 @@ before passing the script to the hashing function
         let (success, script, _) = removeData subScript (fun data -> signatures.Contains data)
         if not success then fail() 
         script
+
+    let getData (script: byte[]) = 
+        let (_, _, data) = removeData script (fun _ -> true)
+        data
 
 (** 
 ### Calculate the number of OP_CHECKSIG 
@@ -784,4 +793,6 @@ TODO: Enforce strict BIP16 rules: No other opcode other than push data and redee
     member x.CheckSigCount (script: byte[]) = scriptCheckSigCount script
     member x.RedeemScript (script: byte[]) = redeemScript script
     static member IsP2SH (script: byte[]) = isP2SH script
+
+    member x.GetData (script: byte[]) = getData script
 

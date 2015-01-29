@@ -127,9 +127,8 @@ it's important to check the transactions before they are accepted into the pool.
 the memory pool gets revalidated and every invalid transaction gets booted out. In this case, it is because of a double-spend between
 the transactions in the block and the same one from the pool.
 *)
-let txHash = hashFromHex "6affa593d2c14cf9dbc79e33b1eb79746154dbbfcb25b00908dc4855011660d6"
+let txHash = hashFromHex "d4c7e1458bc7d7c54e90cc95117afd95a7498931cc2aa11e18ab0c52fc4cc512"
 let checkScript (utxoAccessor: IUTXOAccessor) (tx: Tx): Option<unit> = 
-    if tx.Hash = txHash then printfn "STOP"
     let x = 
         tx.TxIns 
             |> Seq.mapi (fun i txIn ->
@@ -175,8 +174,7 @@ let addTx tx =
         validate tx |> Option.iter(fun () ->
             listTx.Add(tx.Hash)
             mempool.Item(tx.Hash) <- tx
-            let invVector = InvVector([InvEntry(txInvType, tx.Hash)])
-            broadcastToPeers.OnNext(new BitcoinMessage("inv", invVector.ToByteArray()))
+            broadcastToPeers.OnNext(new BitcoinMessage("tx", tx.ToByteArray()))
             logger.DebugF "Unconfirmed TX -> %s" (hashToHex tx.Hash)
             )
     with
@@ -194,35 +192,32 @@ The main message loop picks up
 - revalidate
 *)
 let processCommand (command: MempoolCommand) = 
-    try
-        match command with
-        | Revalidate (currentHeight, undoTxs) ->
-            mempoolHeight <- currentHeight
-            for txBlock in undoTxs do
-            for tx in txBlock do
-                listTx.Add(tx.Hash)
-                mempool.Item(tx.Hash) <- tx
-            revalidate()
-        | Tx tx -> addTx tx
-        | Inv (invVector, peerIncoming) -> 
-            let newInvs = invVector.Invs |> List.filter(fun inv -> not (mempool.ContainsKey inv.Hash))
-            newInvs |> List.iter (fun inv -> mempool.Add(inv.Hash, null))
-            let gd = new GetData(newInvs)
-            if not gd.Invs.IsEmpty then
-                peerIncoming.OnNext(GetData gd)
-        | GetTx (invs, peer) ->
-            for inv in invs do
-                let (f, tx) = mempool.TryGetValue(inv.Hash)
-                if f then
-                    peer.OnNext(new BitcoinMessage("tx", tx.ToByteArray()))
-        | Mempool peer -> 
-            let inv = mempool.Keys |> Seq.map (fun txHash -> InvEntry(txInvType, txHash)) |> Seq.toList
-            logger.DebugF "MemoryPool %A" inv
-            if not inv.IsEmpty then
-                let invVec = InvVector(inv)
-                peer.OnNext(new BitcoinMessage("inv", invVec.ToByteArray()))
-    with
-    | :? ObjectDisposedException -> ignore()
+    match command with
+    | Revalidate (currentHeight, undoTxs) ->
+        mempoolHeight <- currentHeight
+        for txBlock in undoTxs do
+        for tx in txBlock do
+            listTx.Add(tx.Hash)
+            mempool.Item(tx.Hash) <- tx
+        revalidate()
+    | Tx tx -> addTx tx
+    | Inv (invVector, peer) -> 
+        let newInvs = invVector.Invs |> List.filter(fun inv -> not (mempool.ContainsKey inv.Hash))
+        newInvs |> List.iter (fun inv -> mempool.Add(inv.Hash, null))
+        let gd = new GetData(newInvs)
+        if not gd.Invs.IsEmpty then
+            peer.Receive(GetData gd)
+    | GetTx (invs, peer) ->
+        for inv in invs do
+            let (f, tx) = mempool.TryGetValue(inv.Hash)
+            if f && tx <> null then
+                peer.Send(new BitcoinMessage("tx", tx.ToByteArray()))
+    | Mempool peer -> 
+        let inv = mempool.Keys |> Seq.map (fun txHash -> InvEntry(txInvType, txHash)) |> Seq.toList
+        logger.DebugF "MemoryPool %A" inv
+        if not inv.IsEmpty then
+            let invVec = InvVector(inv)
+            peer.Send(new BitcoinMessage("inv", invVec.ToByteArray()))
 
 let startMempool() =
     mempoolIncoming.ObserveOn(NewThreadScheduler.Default).Subscribe(processCommand) |> ignore

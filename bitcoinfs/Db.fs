@@ -55,6 +55,7 @@ UTXO database and the `bitcoin.db` file that has the associated metadata. The bl
 vital.
 *)
 let connectionString = sprintf "Data Source=%s/bitcoin.db" baseDir
+let dbLock = new obj() // Serialize all db access because of SQLite
 
 (**
 DB Connections can't be shared between threads but they are coming from a pool and are cheap to establish. Using ADO.NET, 
@@ -63,22 +64,23 @@ well here. The database model isn't sophisticated enough to warrant an entity-re
 database layer a straight get and put interface.
 *)
 
-let updateAddr(addr: AddrEntry) =
-    use connection = new SQLiteConnection(connectionString)
-    connection.Open()
-    let updateAddrQuery = new SQLiteCommand(@"insert or ignore into peerInfo(host, port, ts, user_agent, state, score) values(@host, @port, @ts, @user_agent, 0, 0);
-        update peerInfo set ts = @ts where host = @host and port = @port", connection)
-    updateAddrQuery.Parameters.Add("@host", DbType.String, 256) |> ignore
-    updateAddrQuery.Parameters.Add("@port", DbType.Int32) |> ignore
-    updateAddrQuery.Parameters.Add("@ts", DbType.DateTime) |> ignore
-    updateAddrQuery.Parameters.Add("@user_agent", DbType.String, 256) |> ignore
-    updateAddrQuery.Parameters.[0].Value <- addr.Address.EndPoint.Address.ToString()
-    updateAddrQuery.Parameters.[1].Value <- addr.Address.EndPoint.Port
-    let dts = (new Instant(int64(addr.Timestamp) * NodaConstants.TicksPerSecond)).ToDateTimeUtc()
-    updateAddrQuery.Parameters.[2].Value <- dts
-    updateAddrQuery.Parameters.[3].Value <- ""
-    updateAddrQuery.ExecuteNonQuery() |> ignore
-
+let updateAddr(addr: AddrEntry) = 
+    lock dbLock (fun () ->
+        use connection = new SQLiteConnection(connectionString)
+        connection.Open()
+        let updateAddrQuery = new SQLiteCommand(@"insert or ignore into peerInfo(host, port, ts, user_agent, state, score) values(@host, @port, @ts, @user_agent, 0, 0);
+            update peerInfo set ts = @ts where host = @host and port = @port", connection)
+        updateAddrQuery.Parameters.Add("@host", DbType.String, 256) |> ignore
+        updateAddrQuery.Parameters.Add("@port", DbType.Int32) |> ignore
+        updateAddrQuery.Parameters.Add("@ts", DbType.DateTime) |> ignore
+        updateAddrQuery.Parameters.Add("@user_agent", DbType.String, 256) |> ignore
+        updateAddrQuery.Parameters.[0].Value <- addr.Address.EndPoint.Address.ToString()
+        updateAddrQuery.Parameters.[1].Value <- addr.Address.EndPoint.Port
+        let dts = (new Instant(int64(addr.Timestamp) * NodaConstants.TicksPerSecond)).ToDateTimeUtc()
+        updateAddrQuery.Parameters.[2].Value <- dts
+        updateAddrQuery.Parameters.[3].Value <- ""
+        updateAddrQuery.ExecuteNonQuery() |> ignore
+    )
 (**
 ## Peers
 
@@ -92,24 +94,11 @@ The application will disconnect from badly behaved peers but without a score val
 a peer from reconnecting immediately. This is on the TODO list.
 *)
 let getPeers() =
-    use connection = new SQLiteConnection(connectionString)
-    connection.Open()
-    let command = new SQLiteCommand("select host, port from peerInfo where state = 0 order by ts desc limit 1000", connection)
-    use reader = command.ExecuteReader()
-    [while reader.Read() do 
-        let host = reader.GetString(0)
-        let port = reader.GetInt32(1)
-        let ip = IPAddress.Parse(host)
-        let endpoint = new IPEndPoint(ip, port)
-        yield endpoint
-    ]
-
-let getPeer() =
-    use connection = new SQLiteConnection(connectionString)
-    connection.Open()
-    let command = new SQLiteCommand("select host, port from peerInfo where state = 0 order by ts desc limit 1", connection)
-    use reader = command.ExecuteReader()
-    let peers = 
+    lock dbLock (fun () ->
+        use connection = new SQLiteConnection(connectionString)
+        connection.Open()
+        let command = new SQLiteCommand("select host, port from peerInfo where state = 0 order by ts desc limit 1000", connection)
+        use reader = command.ExecuteReader()
         [while reader.Read() do 
             let host = reader.GetString(0)
             let port = reader.GetInt32(1)
@@ -117,8 +106,24 @@ let getPeer() =
             let endpoint = new IPEndPoint(ip, port)
             yield endpoint
         ]
-    peers |> Seq.tryPick Some
+    )
 
+let getPeer() =
+    lock dbLock (fun () ->
+        use connection = new SQLiteConnection(connectionString)
+        connection.Open()
+        let command = new SQLiteCommand("select host, port from peerInfo where state = 0 order by ts desc limit 1", connection)
+        use reader = command.ExecuteReader()
+        let peers = 
+            [while reader.Read() do 
+                let host = reader.GetString(0)
+                let port = reader.GetInt32(1)
+                let ip = IPAddress.Parse(host)
+                let endpoint = new IPEndPoint(ip, port)
+                yield endpoint
+            ]
+        peers |> Seq.tryPick Some
+    )
 (*
 Drop peers that are older than a certain timestamp. Normally, 3h ago.
 *)
@@ -140,17 +145,18 @@ let resetState() =
     command.ExecuteNonQuery() |> ignore
 
 let updateState(peer: IPEndPoint, state: int) =
-    use connection = new SQLiteConnection(connectionString)
-    connection.Open()
-    let query = new SQLiteCommand("update peerInfo set state = ? where host = ? and port = ?", connection)
-    query.Parameters.Add("state", DbType.Int32) |> ignore
-    query.Parameters.Add("host", DbType.String, 256) |> ignore
-    query.Parameters.Add("port", DbType.Int32) |> ignore
-    query.Parameters.[0].Value <- state
-    query.Parameters.[1].Value <- peer.Address.ToString()
-    query.Parameters.[2].Value <- peer.Port
-    query.ExecuteNonQuery() |> ignore
-
+    lock dbLock (fun () ->
+        use connection = new SQLiteConnection(connectionString)
+        connection.Open()
+        let query = new SQLiteCommand("update peerInfo set state = ? where host = ? and port = ?", connection)
+        query.Parameters.Add("state", DbType.Int32) |> ignore
+        query.Parameters.Add("host", DbType.String, 256) |> ignore
+        query.Parameters.Add("port", DbType.Int32) |> ignore
+        query.Parameters.[0].Value <- state
+        query.Parameters.[1].Value <- peer.Address.ToString()
+        query.Parameters.[2].Value <- peer.Port
+        query.ExecuteNonQuery() |> ignore
+    )
 (**
 ## Headers
 
@@ -162,81 +168,110 @@ header comes and the block connects, I'll get the header again.
 *)    
 let headerConnection = new SQLiteConnection(connectionString)
 headerConnection.Open()
-let command = new SQLiteCommand(@"insert or replace into header(hash, height, version, prev_hash, merkle_root, ts, bits, nonce, tx_count, state) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", headerConnection)
+let command = new SQLiteCommand(@"insert or replace into header(hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main, state) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", headerConnection)
 command.Parameters.Add("hash", DbType.Binary, 32) |> ignore
 command.Parameters.Add("height", DbType.Int32) |> ignore
 command.Parameters.Add("version", DbType.Int32) |> ignore
 command.Parameters.Add("prev_hash", DbType.Binary, 32) |> ignore
+command.Parameters.Add("next_hash", DbType.Binary, 32) |> ignore
 command.Parameters.Add("merkle_root", DbType.Binary, 32) |> ignore
 command.Parameters.Add("ts", DbType.Int32) |> ignore
 command.Parameters.Add("bits", DbType.Int32) |> ignore
 command.Parameters.Add("nonce", DbType.Int32) |> ignore
 command.Parameters.Add("tx_count", DbType.Int32) |> ignore
 command.Parameters.Add("state", DbType.Int32) |> ignore
+command.Parameters.Add("is_main", DbType.Boolean) |> ignore
 
 let readTip(): byte[] =
-    let command = new SQLiteCommand("select best from chainstate where id = 0", headerConnection)
-    use reader = command.ExecuteReader()
-    [while reader.Read() do 
-        let tip = Array.zeroCreate 32
-        reader.GetBytes(0, 0L, tip, 0, 32) |> ignore
-        yield tip
-    ] |> List.head
+    lock dbLock (fun () ->
+        let command = new SQLiteCommand("select best from chainstate where id = 0", headerConnection)
+        use reader = command.ExecuteReader()
+        [while reader.Read() do 
+            let tip = Array.zeroCreate 32
+            reader.GetBytes(0, 0L, tip, 0, 32) |> ignore
+            yield tip
+        ] |> List.head
+    )
 
 let writeTip(tip: byte[]) = 
-    let command = new SQLiteCommand("update chainstate set best = ? where id = 0", headerConnection)
-    command.Parameters.Add("best", DbType.Binary, 32) |> ignore
-    command.Parameters.[0].Value <- tip
-    command.ExecuteNonQuery() |> ignore
+    lock dbLock (fun () ->
+        let command = new SQLiteCommand("update chainstate set best = ? where id = 0", headerConnection)
+        command.Parameters.Add("best", DbType.Binary, 32) |> ignore
+        command.Parameters.[0].Value <- tip
+        command.ExecuteNonQuery() |> ignore
+    )
 
 let getHeader (reader: SQLiteDataReader) =
-    [while reader.Read() do 
-        let hash = Array.zeroCreate 32
-        reader.GetBytes(0, 0L, hash, 0, 32) |> ignore
-        let height = reader.GetInt32(1)
-        let version = reader.GetInt32(2)
-        let prev_hash = Array.zeroCreate 32
-        reader.GetBytes(3, 0L, prev_hash, 0, 32) |> ignore
-        let merkle_root = Array.zeroCreate 32
-        reader.GetBytes(4, 0L, merkle_root, 0, 32) |> ignore
-        let ts = reader.GetInt32(5)
-        let bits = reader.GetInt32(6)
-        let nonce = reader.GetInt32(7)
-        let tx_count = reader.GetInt32(8)
-        let bh = new BlockHeader(hash, version, prev_hash, merkle_root, uint32 ts, bits, nonce, tx_count)
-        bh.Height <- height
-        yield bh
-    ]
+    lock dbLock (fun () ->
+        [while reader.Read() do 
+            let hash = Array.zeroCreate 32
+            reader.GetBytes(0, 0L, hash, 0, 32) |> ignore
+            let height = reader.GetInt32(1)
+            let version = reader.GetInt32(2)
+            let prev_hash = Array.zeroCreate 32
+            reader.GetBytes(3, 0L, prev_hash, 0, 32) |> ignore
+            let next_hash = Array.zeroCreate 32
+            reader.GetBytes(4, 0L, next_hash, 0, 32) |> ignore
+            let merkle_root = Array.zeroCreate 32
+            reader.GetBytes(5, 0L, merkle_root, 0, 32) |> ignore
+            let ts = reader.GetInt32(6)
+            let bits = reader.GetInt32(7)
+            let nonce = reader.GetInt32(8)
+            let tx_count = reader.GetInt32(9)
+            let is_main = reader.GetBoolean(10)
+            let bh = new BlockHeader(hash, version, prev_hash, merkle_root, uint32 ts, bits, nonce, tx_count)
+            bh.Height <- height
+            bh.NextHash <- next_hash
+            bh.IsMain <- is_main
+            yield bh
+        ]
+    )
+
+let genesisHeader = 
+    lock dbLock (fun () ->
+        let command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where height = 0", headerConnection)
+        use reader = command.ExecuteReader()
+        let res = getHeader reader
+        res.Head
+        )
 
 let readHeader(hash: byte[]): BlockHeader = 
-    let command = new SQLiteCommand("select hash, height, version, prev_hash, merkle_root, ts, bits, nonce, tx_count from header where hash = ?", headerConnection)
-    command.Parameters.Add("hash", DbType.Binary, 32) |> ignore
-    command.Parameters.[0].Value <- hash
-    use reader = command.ExecuteReader()
-    let res = getHeader reader
-    if res.Length <> 0 then res.[0] else BlockHeader.Zero
+    lock dbLock (fun () ->
+        let command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where hash = ?", headerConnection)
+        command.Parameters.Add("hash", DbType.Binary, 32) |> ignore
+        command.Parameters.[0].Value <- hash
+        use reader = command.ExecuteReader()
+        let res = getHeader reader
+        if res.Length <> 0 then res.[0] else BlockHeader.Zero
+    )
 
 let getNextHeader(hash: byte[]): BlockHeader = 
-    let command = new SQLiteCommand("select hash, height, version, prev_hash, merkle_root, ts, bits, nonce, tx_count from header where prev_hash = ?", headerConnection)
-    command.Parameters.Add("prev_hash", DbType.Binary, 32) |> ignore
-    command.Parameters.[0].Value <- hash
-    use reader = command.ExecuteReader()
-    let res = getHeader reader
-    if res.Length <> 0 then res.[0] else BlockHeader.Zero
+    lock dbLock (fun () ->
+        let command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where prev_hash = ?", headerConnection)
+        command.Parameters.Add("prev_hash", DbType.Binary, 32) |> ignore
+        command.Parameters.[0].Value <- hash
+        use reader = command.ExecuteReader()
+        let res = getHeader reader
+        if res.Length <> 0 then res.[0] else BlockHeader.Zero
+    )
 
 let writeHeaders(header: BlockHeader) = 
-    command.Parameters.[0].Value <- header.Hash
-    command.Parameters.[1].Value <- header.Height
-    command.Parameters.[2].Value <- header.Version
-    command.Parameters.[3].Value <- header.PrevHash
-    command.Parameters.[4].Value <- header.MerkleRoot
-    command.Parameters.[5].Value <- header.Timestamp
-    command.Parameters.[6].Value <- header.Bits
-    command.Parameters.[7].Value <- header.Nonce
-    command.Parameters.[8].Value <- header.TxCount
-    command.Parameters.[9].Value <- 0
+    lock dbLock (fun () ->
+        command.Parameters.[0].Value <- header.Hash
+        command.Parameters.[1].Value <- header.Height
+        command.Parameters.[2].Value <- header.Version
+        command.Parameters.[3].Value <- header.PrevHash
+        command.Parameters.[4].Value <- header.NextHash
+        command.Parameters.[5].Value <- header.MerkleRoot
+        command.Parameters.[6].Value <- header.Timestamp
+        command.Parameters.[7].Value <- header.Bits
+        command.Parameters.[8].Value <- header.Nonce
+        command.Parameters.[9].Value <- header.TxCount
+        command.Parameters.[10].Value <- header.IsMain
+        command.Parameters.[11].Value <- 0
 
-    command.ExecuteNonQuery() |> ignore
+        command.ExecuteNonQuery() |> ignore
+    )
 
 (**
 ## UTXO accessor

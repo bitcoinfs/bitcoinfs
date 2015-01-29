@@ -60,7 +60,7 @@ and end up being checked at compile time. It's a small but nice feature.
 *)
 type settings = AppSettings<"app.config">
 let baseDir = settings.BaseDir
-let version = 60001
+let version = 70001
 let connectTimeout = TimeSpan.FromSeconds(float settings.ConnectTimeout)
 let handshakeTimeout = TimeSpan.FromSeconds(float settings.HandshakeTimeout)
 let commandTimeout = TimeSpan.FromSeconds(float settings.CommandTimeout)
@@ -76,6 +76,7 @@ I define some helper functions and some constants here.
 let (|?|) = defaultArg // infix version
 let txInvType = 1
 let blockInvType = 2
+let filteredBlockInvType = 3
 let zeroHash: byte[] = Array.zeroCreate 32
 let random = new Random() // used to produce nonces in ping/pong
 exception ValidationException of string
@@ -295,6 +296,7 @@ type Version(version: int32, services: int64, timestamp: int64, recv: byte[], fr
     member val Recv = recv with get
     member val From = from with get
     member val UserAgent = userAgent with get
+    member val Relay = relay with get
     member val Height = height with get
 
 (*** hide ***)
@@ -357,15 +359,17 @@ type BlockHeaderCompare() =
 
 and BlockHeader(hash: byte[], version: int, prevBlockHash: byte[], merkleRoot: byte[], timestamp: uint32, bits: int, nonce: int, txCount: int) =
     let mutable height = 0
+    let mutable nextBlockHash: byte[] = Array.empty
+    let mutable isMain = false
     new(hash: byte[]) = BlockHeader(hash, 0, Array.zeroCreate 32, Array.zeroCreate 32, 0u, 0, 0, 0)
-    member x.ToByteArray(full: bool) = ToBinaryArray (fun os ->
+    member x.ToByteArray (nocount: bool) (full: bool) = ToBinaryArray (fun os ->
         os.Write(version)
         os.Write(prevBlockHash)
         os.Write(merkleRoot)
         os.Write(timestamp)
         os.Write(bits)
         os.Write(nonce)
-        os.WriteVarInt(if full then txCount else 0)
+        if not nocount then os.WriteVarInt(if full then txCount else 0)
     )
     static member Parse(reader: BinaryReader) =
         let headerHashPart = reader.ReadBytes(80)
@@ -391,12 +395,14 @@ and BlockHeader(hash: byte[], version: int, prevBlockHash: byte[], merkleRoot: b
     member val Nonce = nonce with get
     member val TxCount = txCount with get
     member x.Height with get() = height and set value = height <- value
+    member x.NextHash with get() = nextBlockHash and set value = nextBlockHash <- value
+    member x.IsMain with get() = isMain and set value = isMain <- value
 
 type Headers(headers: BlockHeader list) =
     member x.ToByteArray() = ToBinaryArray (fun os ->
         os.WriteVarInt(headers.Length)
         for header in headers do
-            os.Write(header.ToByteArray(false))
+            os.Write(header.ToByteArray false false)
     )
     static member Parse(reader: BinaryReader) =
         let count = reader.ReadVarInt()
@@ -438,6 +444,22 @@ type InvVector(invs: InvEntry list) =
                 yield InvEntry.Parse(reader)
             } |> Seq.toList
         new InvVector(invs)
+
+type NotFound(invs: InvEntry list) =
+    member x.ToByteArray() = ToBinaryArray(fun os ->
+        os.WriteVarInt(invs.Length)
+        for inv in invs do
+            os.Write(inv.ToByteArray())
+        )
+    member val Invs = invs with get
+    static member Parse(reader: BinaryReader) =
+        let count = reader.ReadVarInt()
+        let invs = 
+            seq {
+            for _ in 1..count do
+                yield InvEntry.Parse(reader)
+            } |> Seq.toList
+        new NotFound(invs)
 
 type GetData(invs: InvEntry list) =
     member x.ToByteArray() = ToBinaryArray(fun os ->
@@ -558,7 +580,7 @@ type Tx(hash: byte[], version: int, txIns: TxIn[], txOuts: TxOut[], lockTime: ui
 
 type Block(header: BlockHeader, txs: Tx[]) =
     member x.ToByteArray() = ToBinaryArray(fun os ->
-        os.Write(header.ToByteArray(true))
+        os.Write(header.ToByteArray false true)
         for tx in txs do
             os.Write(tx.ToByteArray())
     )
@@ -574,6 +596,21 @@ type Block(header: BlockHeader, txs: Tx[]) =
     member val Header = header with get
     member val Txs = txs with get
     
+type MerkleBlock(header: BlockHeader, txHashes: byte[] list, flags: byte[]) =
+    member x.ToByteArray() = ToBinaryArray(fun os ->
+        os.Write(header.ToByteArray true false)
+        os.Write(header.TxCount)
+        os.WriteVarInt(txHashes.Length)
+        for txHash in txHashes do
+            os.Write(txHash)
+        os.WriteVarInt(flags.Length)
+        os.Write(flags)
+    )
+
+    member val Header = header with get
+    member val TxHashes = txHashes with get
+    member val Flags = flags with get
+
 type Mempool() = 
     member x.ToByteArray() = ToBinaryArray ignore
     static member Parse(reader: BinaryReader) =
@@ -596,6 +633,67 @@ type Pong(nonce: uint64) =
         new Pong(nonce)
     member val Nonce = nonce with get
 
+type GetBlocks(hashes: byte[] list, hashStop: byte[]) =
+    member x.ToByteArray() = ToBinaryArray (fun os ->
+        os.Write(version)
+        os.WriteVarInt(Seq.length hashes)
+        for h in hashes do 
+            os.Write(h)
+        os.Write(hashStop)
+        )
+
+    static member Parse(reader: BinaryReader) = 
+        let version = reader.ReadInt32()
+        let hashCount = int(reader.ReadVarInt())
+        let hashes = 
+            seq { 
+                for _ in 1..hashCount do
+                let hash = reader.ReadBytes(32)
+                yield hash
+            } |> Seq.toList
+        let hashStop = reader.ReadBytes(32)
+        new GetBlocks(hashes, hashStop)
+
+    override x.ToString() = sprintf "GetBlocks(%s)" (hashToHex(Seq.head hashes))
+    member val Hashes = hashes with get
+    member val HashStop = hashStop with get
+
+type FilterLoad(filter: byte[], nHash: int, nTweak: int, nFlags: byte) = 
+    member x.ToByteArray() = ToBinaryArray(fun os ->
+        os.WriteVarInt(filter.Length)
+        os.Write(filter)
+        os.Write(nHash)
+        os.Write(nTweak)
+        os.Write(nFlags)
+    )
+    static member Parse(reader: BinaryReader) =
+        let filterLen = reader.ReadVarInt()
+        let filter = reader.ReadBytes(filterLen)
+        let nHash = reader.ReadInt32()
+        let nTweak = reader.ReadInt32()
+        let nFlags = reader.ReadByte()
+        new FilterLoad(filter, nHash, nTweak, nFlags)
+    member val Filter = filter with get
+    member val NHash = nHash with get
+    member val NTweak = nTweak with get
+    member val NFlags = nFlags with get
+
+type FilterAdd(data: byte[]) = 
+    member x.ToByteArray() = ToBinaryArray(fun os ->
+        os.WriteVarInt(data.Length)
+        os.Write(data)
+    )
+    static member Parse(reader: BinaryReader) =
+        let dataLen = reader.ReadVarInt()
+        let data = reader.ReadBytes(dataLen)
+        new FilterAdd(data)
+    member val Data = data with get
+
+type FilterClear() = 
+    member x.ToByteArray() = Array.empty
+    static member Parse(reader: BinaryReader) =
+        new FilterClear()
+
 (**
 A `BitcoinMessage` is still a low-level object. The command has been identified and the payload
 extracted but the later hasn't been parsed.
@@ -606,6 +704,7 @@ type BitcoinMessage(command: string, payload: byte[]) =
         use ms = new MemoryStream(payload)
         match command with
         | "getheaders" -> ParseByteArray payload GetHeaders.Parse :> obj
+        | "getblocks" -> ParseByteArray payload GetBlocks.Parse :> obj
         | "getdata" -> ParseByteArray payload GetData.Parse :> obj
         | "version" -> ParseByteArray payload Version.Parse :> obj
         | "headers" -> ParseByteArray payload Headers.Parse :> obj
@@ -615,6 +714,9 @@ type BitcoinMessage(command: string, payload: byte[]) =
         | "tx" -> ParseByteArray payload Tx.Parse :> obj
         | "ping" -> ParseByteArray payload Ping.Parse :> obj
         | "mempool" -> ParseByteArray payload Mempool.Parse :> obj
+        | "filterload" -> ParseByteArray payload FilterLoad.Parse :> obj
+        | "filteradd" -> ParseByteArray payload FilterAdd.Parse :> obj
+        | "filterclear" -> ParseByteArray payload FilterClear.Parse :> obj
         | _ -> null
 
     member x.ToByteArray() = 
@@ -719,7 +821,7 @@ type BitcoinMessageParser(networkData: IObservable<byte[]>) =
             )
             .Select(fst)
             .SelectMany(fun m -> (m |> List.toSeq).ToObservable())
-//          .Select(fun m -> logger.DebugF "Incoming %A" m; m)
+            // .Select(fun m -> logger.DebugF "Incoming %A" m; m)
     member x.BitcoinMessages with get() = bitcoinMessages
 
 let hashCompare = new HashCompare() :> IEqualityComparer<byte[]>

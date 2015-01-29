@@ -85,6 +85,12 @@ let readBootstrapFast (firstBlock: int) (stream: Stream) =
         let length = reader.ReadInt32()
         let block = ParseByteArray (reader.ReadBytes(length)) Block.Parse
         block.Header.Height <- i
+        block.Header.IsMain <- true
+        let prevBH = Db.readHeader block.Header.PrevHash
+        if prevBH.Hash <> zeroHash 
+        then 
+            prevBH.NextHash <- block.Header.Hash
+            Db.writeHeaders prevBH
         block.Txs |> Seq.iteri (fun idx tx -> processUTXOFast utxoAccessor block.Header.Height tx idx)
         Db.writeHeaders block.Header
         tip <- block.Header.Hash
@@ -125,15 +131,15 @@ The main function initializes the application and waits forever
 [<EntryPoint>]
 let main argv = 
     Config.BasicConfigurator.Configure() |> ignore
+    // RPC.startRPC()
 
-(*
   // Import a couple of bootstrap dat files
     use stream = new FileStream("J:/bootstrap-295000.dat", FileMode.Open, FileAccess.Read)
     readBootstrapFast 0 stream
     use stream = new FileStream("J:/bootstrap-332703.dat", FileMode.Open, FileAccess.Read)
     readBootstrapFast 295001 stream
-*)
 
+(*
     Peer.initPeers()
 
     Tracker.startTracker()
@@ -147,5 +153,5 @@ let main argv =
     *)
     trackerIncoming.OnNext(TrackerCommand.GetPeers)
     Thread.Sleep(-1)
-
+*)
     0 // return an integer exit code

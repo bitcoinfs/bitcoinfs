@@ -80,7 +80,7 @@ let chainFromTip (tip: BlockHeader): seq<BlockHeader> =
             else
                 let prevHeader = Db.readHeader(header.PrevHash)
                 Some(header, prevHeader))
-        (tip) 
+        (tip)
 
 (** Convert between bits compact representation and target difficulty *)
 let target (bits: int) =
@@ -190,9 +190,7 @@ let checkBlockHeader (header: BlockHeader) =
 let checkLocktime (height: int) (timestamp: uint32) (tx: Tx) =
     let sequenceFinal = tx.TxIns |> Seq.map (fun txIn -> txIn.Sequence = 0xFFFFFFFF) |> Seq.exists id
     let lockTime = tx.LockTime
-    let r = (sequenceFinal || lockTime = 0u || (lockTime < 500000000u && (uint32)height >= lockTime) || (lockTime >= 500000000u && timestamp >= lockTime))
-    if not r then printfn "STOP"
-    r
+    (sequenceFinal || lockTime = 0u || (lockTime < 500000000u && (uint32)height >= lockTime) || (lockTime >= 500000000u && timestamp >= lockTime))
 
 (**
 Check the transactions from a block. These are expensive but they still aren't the worst because they don't access

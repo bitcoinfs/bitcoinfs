@@ -118,9 +118,10 @@ the work to him. `GetHeader` is the exception because it should stick to a given
 the call, wants to catchup from a given node. 
 *)
 let assign message ps = 
-    logger.DebugF "Assigning %A to %A" message (ps.Peer :> IPeer).Target
+    let peer = ps.Peer :> IPeer
+    logger.DebugF "Assigning %A to %A" message peer.Target
     changeState ps.Id Busy |> ignore
-    ps.Peer.Incoming.OnNext(message)
+    peer.Receive(message)
 
 let forward (command: TrackerCommand) (message: PeerCommand) =
     match message with
@@ -162,7 +163,7 @@ let freePeer (id: int) =
             Db.updateState(p, 1)
             trackerIncoming.OnNext(Connect p))
         peerSlots <- peerSlots.Remove id
-        peer.Incoming.OnNext Closed // tell the old peer to take a hike
+        (peer :> IPeer).Receive Closed // tell the old peer to take a hike
     )
 
 (**
@@ -187,11 +188,11 @@ let processCommand(command: TrackerCommand) =
             Db.updateState(peer, 1)
             trackerIncoming.OnNext(Connect peer)
     | Connect target ->
-        let peer = newPeer()
-        peer.Incoming.OnNext(Open(target, tip))
+        let peer = newPeer() :> IPeer
+        peer.Receive(Open(target, tip))
     | IncomingConnection (stream, target) ->
-        let peer = newPeer()
-        peer.Incoming.OnNext(OpenStream(stream, target, tip))
+        let peer = newPeer() :> IPeer
+        peer.Receive(OpenStream(stream, target, tip))
     | SetReady id ->
         peerSlots.TryFind id |> Option.iter(fun ps ->
             let peer = ps.Peer
@@ -227,7 +228,7 @@ let getBlocks(blockHashes: seq<byte[]>): Task<IPeer * IObservable<Block * byte[]
         |> Seq.toList
     let gd = new GetData(invHashes)
     let ts = new TaskCompletionSource<IPeer * IObservable<Block * byte[]>>()
-    trackerIncoming.OnNext(Command (GetBlocks (gd, ts)))
+    trackerIncoming.OnNext(Command (PeerCommand.DownloadBlocks (gd, ts)))
     ts.Task
 
 (** Send a message to every peer that is not busy
@@ -235,7 +236,7 @@ let getBlocks(blockHashes: seq<byte[]>): Task<IPeer * IObservable<Block * byte[]
 let processBroadcast (m: BitcoinMessage) = 
     for peerSlot in peerSlots do
         if peerSlot.Value.State = Ready then
-            peerSlot.Value.Peer.Incoming.OnNext(Execute m)
+            (peerSlot.Value.Peer :> IPeer).Receive(Execute m)
 
 (*** hide ***)
 let startTracker() =
