@@ -3,13 +3,11 @@
   <head>
     <meta charset="utf-8">
     <!-- 
-      The Bitcoin full node in F#
- parameters will be replaced with the 
+      The BIP37 parameters will be replaced with the 
       document title extracted from the <h1> element or
       file name, if there is no <h1> heading
     -->
-    <title>Bitcoin full node in F#
-</title>
+    <title>BIP37</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="http://code.jquery.com/jquery-1.11.2.js"></script>
     <script src="http://code.jquery.com/ui/1.11.2/jquery-ui.js"></script>
@@ -63,60 +61,20 @@
       <div class="row" style="margin-top:70px">
         <div class="span1"></div>
         <div class="span10" id="main">
-          <h1>Bitcoin full node in F#</h1>
+          <h2>BIP 37</h2>
 
-<p>An alternative full node bitcoin implementation in F#. The <a href="https://github.com/bitcoinfs/bitcoinfs">source code</a> is on GitHub and this documentation
-was generated directly from the code.</p>
+<p>BIP-37 enhances the protocol with Bloom filters on blocks and transactions per peer. It greatly improves the performance of SPV clients. They can download the data that matches the data they want - typically public key hashes - and thus reduce the amount of data transferred. With this checkin, Bitcoin F# supports BIP 37. It was tested with a SPV wallet.</p>
 
-<h2>Introduction</h2>
-
-<p>This project is under development and currently in alpha stage. Generally speaking, writing
-a fully compliant bitcoin node is extremely hard - some think impossible. The Bitcoin project
-is experimental and grew organically. As a result, the Satoshi client
-is the de-factor standard. By far the most used client on the network, it dictates what should
-be accepted and what should be rejected. Even the slighest deviation can cause a fork and potential
-loss of funds. It should go without saying</p>
-
-<blockquote>
-  <p>Do not use this code in production when real funds are at stake.</p>
-</blockquote>
-
-<p>A lot of effort has been put into aligning its behavior with the core client but nevertheless there
-are almost certainly bugs that could be exploited to cause it to deviate from the reference
-implementation.</p>
-
-<p>That being said this code has been through the "official" <a href="https://github.com/TheBlueMatt/test-scripts">block acceptance test</a> and has run
-from extended period of time. It implements all the consensus rules including the bugs that 
-are now included in the blockchain since the genesis of Bitcoin. Last but not least, all the unit tests
-in the JSON directory were passed.</p>
-
-<blockquote>
-  <p>Bitcoin F# has fully validated the existing mainnet blockchain and passes all the integration
-tests including large reorg tests. It is also the only implementation in a functional language and comes
-under 2.5 kLOC, making it the smallest client too.</p>
-</blockquote>
-
-<p>In writing this code, my goal was</p>
+<h2>Various changes</h2>
 
 <ul>
-<li>to make a client that is compatible with the rest of the network to the extend of
-the supported features</li>
-<li>Simple and readable code. It is not code golf but it is not paid by the line code either.</li>
-<li>Header first, blocks later. The client downloads the block headers first and checks the validity
-of the chain then it downloads the blocks from multiple peers in parallel. It dramatically improves
-synchronization speed.</li>
-<li>Easy pruning. Blocks are stored on disk in a normal directory fashion and can be removed by deleting
-files. Other implementations use a database or custom data files.</li>
-<li>I didn't want any wallet spending functionality even if I have included support for BIP32, Armory and Electrum style
-watch-only wallets.</li>
-<li>No JSON API either. I prefer to extend the core.</li>
+<li>Block headers have are linked by next hash in addition to previous hash. It improves the performance of getheaders queries.</li>
+<li>Block headers have a flag indicating whether they belong to the main chain or not.</li>
+<li>If a node sends headers that are more than 10 000 blocks ago, the headers are ignored. Some node somehow reply with the genesis block to a recent getheaders message.</li>
+<li>Rename GetBlock to DownloadBlock to differenciate from the getBlock message.</li>
+<li>Send notfound message for inventory that is not found.</li>
+<li>Replace RX Subjects with .NET Events when the subjects are external to the component. Events are less coupled that Subjects and they allow calling Dispose on the component.</li>
 </ul>
-
-<p>All in all, it is a small but working client that can be used as a relay for transactions since it
-validates inputs and as the base of an online wallet. However, at this point the only wallet
-features are watch-only for HD wallets.</p>
-
-<p>This document follows the structure of the source files.</p>
 
                     
         </div>
