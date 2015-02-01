@@ -53,6 +53,7 @@
                     <li><a href="Test.html">Tests</a></li>
                     <li><a href="Building.html">Building and Running</a></li>
                     <li><a href="BIP37.html">SPV</a></li>
+                    <li><a href="Changelog.html">Changelog</a></li>
                 </ul>
             </li>
           </ul>
@@ -535,7 +536,7 @@ That takes place independently from Bob.</p>
                         )
                 )
             <span class="k">with</span> 
-            | <span onmouseout="hideTip(event, 'fs164', 461)" onmouseover="showTip(event, 'fs164', 461)" class="i">ex</span> <span class="k">-&gt;</span> <span class="i">logger</span><span class="o">.</span><span class="i">ErrorF</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs164', 462)" onmouseover="showTip(event, 'fs164', 462)" class="i">ex</span>
+            | <span onmouseout="hideTip(event, 'fs164', 461)" onmouseover="showTip(event, 'fs164', 461)" class="i">ex</span> <span class="k">-&gt;</span> <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span onmouseout="hideTip(event, 'fs164', 462)" onmouseover="showTip(event, 'fs164', 462)" class="i">ex</span>
 
     <span onmouseout="hideTip(event, 'fs138', 463)" onmouseover="showTip(event, 'fs138', 463)" class="i">catchupImpl</span>()
 
@@ -607,16 +608,6 @@ finished with catchup.</li>
 <span class="l">38: </span>
 <span class="l">39: </span>
 <span class="l">40: </span>
-<span class="l">41: </span>
-<span class="l">42: </span>
-<span class="l">43: </span>
-<span class="l">44: </span>
-<span class="l">45: </span>
-<span class="l">46: </span>
-<span class="l">47: </span>
-<span class="l">48: </span>
-<span class="l">49: </span>
-<span class="l">50: </span>
 </pre>
 </td>
 <td class="snippet"><pre class="fssnip">
@@ -646,30 +637,20 @@ finished with catchup.</li>
             <span class="k">let</span> <span class="i">headers</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Headers</span>(<span class="i">reqBlockchain</span>)
             <span class="i">peer</span><span class="o">.</span><span class="i">Send</span>(<span class="k">new</span> <span class="i">BitcoinMessage</span>(<span class="s">&quot;</span><span class="s">headers</span><span class="s">&quot;</span>, <span class="i">headers</span><span class="o">.</span><span class="i">ToByteArray</span>()))
         <span class="k">with</span>
-            | <span class="i">e</span> <span class="k">-&gt;</span> <span class="i">logger</span><span class="o">.</span><span class="i">ErrorF</span> <span class="s">&quot;</span><span class="s">Exception</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span class="i">e</span>
+            | <span class="i">e</span> <span class="k">-&gt;</span> <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Exception</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span class="i">e</span>
     | <span class="i">GetBlocks</span> (<span class="i">gb</span>, <span class="i">peer</span>) <span class="k">-&gt;</span>
         <span class="k">try</span>
             <span class="k">let</span> <span class="i">reqBlockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs165', 521)" onmouseover="showTip(event, 'fs165', 521)" class="i">getBlockchainUpTo</span> <span class="i">gb</span><span class="o">.</span><span class="i">Hashes</span> <span class="i">gb</span><span class="o">.</span><span class="i">HashStop</span> <span class="n">500</span>
             <span class="k">let</span> <span class="i">inv</span> <span class="o">=</span> <span class="k">new</span> <span class="i">InvVector</span>(<span class="i">reqBlockchain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs42', 522)" onmouseover="showTip(event, 'fs42', 522)" class="i">List</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs78', 523)" onmouseover="showTip(event, 'fs78', 523)" class="i">map</span> (<span class="k">fun</span> <span class="i">bh</span> <span class="k">-&gt;</span> <span class="i">InvEntry</span>(<span class="i">blockInvType</span>, <span class="i">bh</span><span class="o">.</span><span class="i">Hash</span>)))
             <span class="i">peer</span><span class="o">.</span><span class="i">Send</span>(<span class="k">new</span> <span class="i">BitcoinMessage</span>(<span class="s">&quot;</span><span class="s">inv</span><span class="s">&quot;</span>, <span class="i">inv</span><span class="o">.</span><span class="i">ToByteArray</span>()))
         <span class="k">with</span>
-            | <span class="i">e</span> <span class="k">-&gt;</span> <span class="i">logger</span><span class="o">.</span><span class="i">ErrorF</span> <span class="s">&quot;</span><span class="s">Exception</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span class="i">e</span>
+            | <span class="i">e</span> <span class="k">-&gt;</span> <span class="i">logger</span><span class="o">.</span><span class="i">DebugF</span> <span class="s">&quot;</span><span class="s">Exception</span><span class="s"> </span><span class="s">%</span><span class="s">A</span><span class="s">&quot;</span> <span class="i">e</span>
     | <span class="i">Ping</span> (<span class="i">ping</span>, <span class="i">peer</span>) <span class="k">-&gt;</span>
         <span class="k">let</span> <span class="i">pong</span> <span class="o">=</span> <span class="k">new</span> <span class="i">Pong</span>(<span class="i">ping</span><span class="o">.</span><span class="i">Nonce</span>)
         <span class="i">peer</span><span class="o">.</span><span class="i">Send</span>(<span class="k">new</span> <span class="i">BitcoinMessage</span>(<span class="s">&quot;</span><span class="s">pong</span><span class="s">&quot;</span>, <span class="i">pong</span><span class="o">.</span><span class="i">ToByteArray</span>()))
 
-<span class="c">(* Populate the next hash field that was introduced in a later version of the database schema *)</span>
-<span class="k">let</span> <span onmouseout="hideTip(event, 'fs174', 524)" onmouseover="showTip(event, 'fs174', 524)" class="i">fixHeaders</span>() <span class="o">=</span>
-    <span class="k">let</span> <span onmouseout="hideTip(event, 'fs110', 525)" onmouseover="showTip(event, 'fs110', 525)" class="i">blockchain</span> <span class="o">=</span> <span onmouseout="hideTip(event, 'fs20', 526)" onmouseover="showTip(event, 'fs20', 526)" class="i">fnBlockchain</span>()
-    <span onmouseout="hideTip(event, 'fs110', 527)" onmouseover="showTip(event, 'fs110', 527)" class="i">blockchain</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs24', 528)" onmouseover="showTip(event, 'fs24', 528)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs133', 529)" onmouseover="showTip(event, 'fs133', 529)" class="i">truncate</span> <span class="n">100</span> <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs24', 530)" onmouseover="showTip(event, 'fs24', 530)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs26', 531)" onmouseover="showTip(event, 'fs26', 531)" class="i">iter</span> (<span class="k">fun</span> <span onmouseout="hideTip(event, 'fs36', 532)" onmouseover="showTip(event, 'fs36', 532)" class="i">bh</span> <span class="k">-&gt;</span>
-        <span onmouseout="hideTip(event, 'fs36', 533)" onmouseover="showTip(event, 'fs36', 533)" class="i">bh</span><span class="o">.</span><span class="i">IsMain</span> <span class="o">&lt;-</span> <span class="k">true</span>
-        <span class="i">Db</span><span class="o">.</span><span class="i">writeHeaders</span> <span onmouseout="hideTip(event, 'fs36', 534)" onmouseover="showTip(event, 'fs36', 534)" class="i">bh</span>
-    )
-    <span class="i">logger</span><span class="o">.</span><span class="i">InfoF</span> <span class="s">&quot;</span><span class="s">Upgrade</span><span class="s"> </span><span class="s">finished</span><span class="s">&quot;</span>
-    
-<span class="k">let</span> <span onmouseout="hideTip(event, 'fs175', 535)" onmouseover="showTip(event, 'fs175', 535)" class="i">blockchainStart</span>() <span class="o">=</span>
-    <span class="c">// fixHeaders()</span>
-    <span onmouseout="hideTip(event, 'fs18', 536)" onmouseover="showTip(event, 'fs18', 536)" class="i">disposable</span><span class="o">.</span><span class="i">Add</span>(<span class="i">blockchainIncoming</span><span class="o">.</span><span class="i">ObserveOn</span>(<span class="i">NewThreadScheduler</span><span class="o">.</span><span class="i">Default</span>)<span class="o">.</span><span class="i">Subscribe</span>(<span onmouseout="hideTip(event, 'fs171', 537)" onmouseover="showTip(event, 'fs171', 537)" class="i">processCommand</span>))</pre>
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs174', 524)" onmouseover="showTip(event, 'fs174', 524)" class="i">blockchainStart</span>() <span class="o">=</span>
+    <span onmouseout="hideTip(event, 'fs18', 525)" onmouseover="showTip(event, 'fs18', 525)" class="i">disposable</span><span class="o">.</span><span class="i">Add</span>(<span class="i">blockchainIncoming</span><span class="o">.</span><span class="i">ObserveOn</span>(<span class="i">NewThreadScheduler</span><span class="o">.</span><span class="i">Default</span>)<span class="o">.</span><span class="i">Subscribe</span>(<span onmouseout="hideTip(event, 'fs171', 526)" onmouseover="showTip(event, 'fs171', 526)" class="i">processCommand</span>))</pre>
 </td>
 </tr>
 </table>
@@ -847,8 +828,7 @@ finished with catchup.</li>
 <div class="tip" id="fs171">val processCommand : command:&#39;a -&gt; &#39;b<br /><br />Full name: Blockchain.processCommand</div>
 <div class="tip" id="fs172">val command : &#39;a</div>
 <div class="tip" id="fs173">val hash : obj:&#39;T -&gt; int (requires equality)<br /><br />Full name: Microsoft.FSharp.Core.Operators.hash</div>
-<div class="tip" id="fs174">val fixHeaders : unit -&gt; &#39;a<br /><br />Full name: Blockchain.fixHeaders</div>
-<div class="tip" id="fs175">val blockchainStart : unit -&gt; &#39;a<br /><br />Full name: Blockchain.blockchainStart</div>
+<div class="tip" id="fs174">val blockchainStart : unit -&gt; &#39;a<br /><br />Full name: Blockchain.blockchainStart</div>
           
         </div>
         <div class="span1"></div>
