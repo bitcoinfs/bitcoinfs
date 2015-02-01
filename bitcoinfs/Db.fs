@@ -21,9 +21,12 @@ module Db
 
 open System
 open System.IO
+open System.Collections
 open System.Collections.Generic
+open System.Linq
 open System.Net
 open System.Net.Sockets
+open Murmur
 open Protocol
 open Org.BouncyCastle.Utilities.Encoders
 open FSharpx
@@ -97,7 +100,7 @@ let getPeers() =
     lock dbLock (fun () ->
         use connection = new SQLiteConnection(connectionString)
         connection.Open()
-        let command = new SQLiteCommand("select host, port from peerInfo where state = 0 order by ts desc limit 1000", connection)
+        use command = new SQLiteCommand("select host, port from peerInfo where state = 0 order by ts desc limit 1000", connection)
         use reader = command.ExecuteReader()
         [while reader.Read() do 
             let host = reader.GetString(0)
@@ -112,7 +115,7 @@ let getPeer() =
     lock dbLock (fun () ->
         use connection = new SQLiteConnection(connectionString)
         connection.Open()
-        let command = new SQLiteCommand("select host, port from peerInfo where state = 0 order by ts desc limit 1", connection)
+        use command = new SQLiteCommand("select host, port from peerInfo where state = 0 order by ts desc limit 1", connection)
         use reader = command.ExecuteReader()
         let peers = 
             [while reader.Read() do 
@@ -130,7 +133,7 @@ Drop peers that are older than a certain timestamp. Normally, 3h ago.
 let dropOldPeers dts = 
     use connection = new SQLiteConnection(connectionString)
     connection.Open()
-    let command = new SQLiteCommand("delete from peerInfo where ts <= @ts", connection)
+    use command = new SQLiteCommand("delete from peerInfo where ts <= @ts", connection)
     command.Parameters.Add("@ts", DbType.DateTime) |> ignore
     command.Parameters.[0].Value <- dts
     command.ExecuteNonQuery() |> ignore
@@ -141,7 +144,7 @@ At startup, mark all the peers as disconnected
 let resetState() =
     use connection = new SQLiteConnection(connectionString)
     connection.Open()
-    let command = new SQLiteCommand("update peerInfo set state = 0 where state > 0", connection)
+    use command = new SQLiteCommand("update peerInfo set state = 0 where state > 0", connection)
     command.ExecuteNonQuery() |> ignore
 
 let updateState(peer: IPEndPoint, state: int) =
@@ -184,7 +187,7 @@ command.Parameters.Add("is_main", DbType.Boolean) |> ignore
 
 let readTip(): byte[] =
     lock dbLock (fun () ->
-        let command = new SQLiteCommand("select best from chainstate where id = 0", headerConnection)
+        use command = new SQLiteCommand("select best from chainstate where id = 0", headerConnection)
         use reader = command.ExecuteReader()
         [while reader.Read() do 
             let tip = Array.zeroCreate 32
@@ -195,7 +198,7 @@ let readTip(): byte[] =
 
 let writeTip(tip: byte[]) = 
     lock dbLock (fun () ->
-        let command = new SQLiteCommand("update chainstate set best = ? where id = 0", headerConnection)
+        use command = new SQLiteCommand("update chainstate set best = ? where id = 0", headerConnection)
         command.Parameters.Add("best", DbType.Binary, 32) |> ignore
         command.Parameters.[0].Value <- tip
         command.ExecuteNonQuery() |> ignore
@@ -229,7 +232,7 @@ let getHeader (reader: SQLiteDataReader) =
 
 let genesisHeader = 
     lock dbLock (fun () ->
-        let command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where height = 0", headerConnection)
+        use command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where height = 0", headerConnection)
         use reader = command.ExecuteReader()
         let res = getHeader reader
         res.Head
@@ -237,7 +240,7 @@ let genesisHeader =
 
 let readHeader(hash: byte[]): BlockHeader = 
     lock dbLock (fun () ->
-        let command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where hash = ?", headerConnection)
+        use command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where hash = ?", headerConnection)
         command.Parameters.Add("hash", DbType.Binary, 32) |> ignore
         command.Parameters.[0].Value <- hash
         use reader = command.ExecuteReader()
@@ -245,9 +248,19 @@ let readHeader(hash: byte[]): BlockHeader =
         if res.Length <> 0 then res.[0] else BlockHeader.Zero
     )
 
+let getHeaderByHeight (height: int): BlockHeader =
+    lock dbLock (fun () ->
+        use command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where height = ? and is_main = 1", headerConnection)
+        command.Parameters.Add("height", DbType.Int32) |> ignore
+        command.Parameters.[0].Value <- height
+        use reader = command.ExecuteReader()
+        let res = getHeader reader
+        if res.Length <> 0 then res.[0] else BlockHeader.Zero
+    )
+
 let getNextHeader(hash: byte[]): BlockHeader = 
     lock dbLock (fun () ->
-        let command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where prev_hash = ?", headerConnection)
+        use command = new SQLiteCommand("select hash, height, version, prev_hash, next_hash, merkle_root, ts, bits, nonce, tx_count, is_main from header where prev_hash = ?", headerConnection)
         command.Parameters.Add("prev_hash", DbType.Binary, 32) |> ignore
         command.Parameters.[0].Value <- hash
         use reader = command.ExecuteReader()
@@ -274,6 +287,82 @@ let writeHeaders(header: BlockHeader) =
     )
 
 (**
+## Bloom Filter
+A [Bloom Filter][1] is a probabilistic filter that has a configurable probability of false positive and no
+false negative. Public keys that match the addresses that I own are inserted into the Bloom Filter and checked
+when I process transactions. It allows me to quickly reject transactions that do not belong to my wallets.
+
+[1]: https://en.wikipedia.org/wiki/Bloom_filter
+*)
+type BloomFilter(filter: byte[], cHashes: int, nTweak: int) =
+    let bits = new BitArray(filter)
+    let hashers = seq {
+        for i in 0..cHashes-1 do
+            yield MurmurHash.Create32(uint32(i*0xFBA4C795+nTweak)) } |> Seq.toArray
+
+    let add (v: byte[]) =
+        for hasher in hashers do
+            let hash = hasher.ComputeHash v
+            let bucket = BitConverter.ToUInt32(hash, 0) % (uint32 filter.Length*8u)
+            bits.Set(int bucket, true)
+
+    let check (v: byte[]) =
+        (hashers |> Seq.map (fun hasher ->
+            let hash = hasher.ComputeHash v
+            let h = BitConverter.ToUInt32(hash, 0)
+            let bucket = h % (uint32 filter.Length*8u)
+            bits.Get(int bucket)
+            )).All(fun b ->  b)
+
+    new(N: int, P: float, cHashes: int, nTweak: int) = 
+        let size = int(min (-1.0/log 2.0**2.0*(float N)*log P) 36000.0)
+        new BloomFilter(Array.zeroCreate size, cHashes, nTweak)
+    member x.Add v = add v
+    member x.Check v = check v
+
+type AddressEntry = {
+    Id: int
+    Account: int
+    Hash: byte[]
+    Address: string
+    }
+(**
+## Wallet
+A wallet is simply a table that has a collection of hashes which match either a p2pkh script or p2sh script.
+Technically there is a chance that there is a collision between these two types of scripts but the odds are extremely small
+This class loads every key from the table in memory and builds a Bloom filter. Every add/del UTXO is looked up in the walet
+and should be done as quickly as possible. Since the chances of having a match is rather small, the Bloom filter reduces the need
+to do a detailed search through the keys.
+*)
+type Wallet() =
+    let bloomFilter = new BloomFilter(settings.BloomFilterSize, 0.00001, 10, 4)
+
+    let loadData() =
+        lock dbLock (fun () ->
+            use command = new SQLiteCommand("select id, account, hash, address from keys", headerConnection)
+            use reader = command.ExecuteReader()
+            [while reader.Read() do 
+                let id = reader.GetInt32(0)
+                let account  = reader.GetInt32(1)
+                let hash = Array.zeroCreate 20
+                reader.GetBytes(2, 0L, hash, 0, 20) |> ignore
+                let address = reader.GetString(3)
+                yield (hash, { Id = id; Account = account; Hash = hash; Address = address })
+            ] |> Map.ofSeq
+        )
+    let addresses = loadData()
+    let get (hash: byte[]) =
+        maybe {
+            do! Option.conditional (bloomFilter.Check hash) ()
+            return! addresses |> Map.tryFind hash
+        }
+    do
+        addresses |> Map.iter (fun k _ -> bloomFilter.Add k)
+    member x.TryGet (hash: byte[]) = get hash
+
+let wallet = new Wallet()
+
+(**
 ## UTXO accessor
 
 The UTXO accessor interface is the abstract interface over the UTXO data store. The primary store is the levelDB database where
@@ -289,20 +378,95 @@ type IUTXOAccessor =
     abstract GetUTXO: OutPoint -> Option<UTXO> // Try to get a given Outpoint
     abstract GetCount: byte[] -> int // Counts how many UTXO exists for a given transaction hash
 
+type TxTableAccessor() =
+    let connection = new SQLiteConnection(connectionString)
+    let insertTx = new SQLiteCommand("insert or ignore into tx(hash, vout, key_hash, amount) values (?, ?, ?, ?)", connection)
+    let deleteTx = new SQLiteCommand("delete from tx where hash=? and vout=?", connection)
+
+    let addToTxTable (outpoint: OutPoint) (utxo: UTXO) =
+        let script = utxo.TxOut.Script
+        lock dbLock (fun () ->
+            maybe {
+                let! hash = Script.scriptToHash(script)
+                let! addressEntry = wallet.TryGet(hash)
+                insertTx.Parameters.[0].Value <- outpoint.Hash
+                insertTx.Parameters.[1].Value <- outpoint.Index
+                insertTx.Parameters.[2].Value <- hash
+                insertTx.Parameters.[3].Value <- utxo.TxOut.Value
+                insertTx.ExecuteNonQuery() |> ignore
+                logger.InfoF "%s %d" addressEntry.Address utxo.TxOut.Value
+            } |> ignore
+            )
+
+    let deleteFromTxTable (outpoint: OutPoint) =
+        lock dbLock (fun () ->
+            deleteTx.Parameters.[0].Value <- outpoint.Hash
+            deleteTx.Parameters.[1].Value <- outpoint.Index
+            deleteTx.ExecuteNonQuery() |> ignore
+            )
+
+    do
+        connection.Open()
+        insertTx.Parameters.Add("hash", DbType.Binary) |> ignore
+        insertTx.Parameters.Add("vout", DbType.Int32) |> ignore
+        insertTx.Parameters.Add("key_hash", DbType.Binary) |> ignore
+        insertTx.Parameters.Add("amount", DbType.Int64) |> ignore
+        deleteTx.Parameters.Add("hash", DbType.Binary) |> ignore
+        deleteTx.Parameters.Add("vout", DbType.Int32) |> ignore
+
+    interface IDisposable with
+        override x.Dispose() = 
+            insertTx.Dispose()
+            deleteTx.Dispose()
+            connection.Dispose()
+
+    member x.Add (outpoint: OutPoint) (utxo: UTXO) = addToTxTable outpoint utxo
+    member x.Delete (outpoint: OutPoint) = deleteFromTxTable outpoint
+
+let txTableAccessor = new TxTableAccessor()
+
+(**
+This wallet does not store the history of transactions but just the result (unspent outputs). So when a transaction
+spents an outpoint, it is deleted from the `tx` table. Another option would be to keep on adding records. I may change
+the implementation later. It slightly makes undoing a transaction more complicated. One must differenciate between
+undoing a transaction vs spending an output. 
+*)
+let addIfInWallet (txTableAccessor: TxTableAccessor) (wallet: Wallet) (outpoint: OutPoint) (utxo: UTXO) =
+    let script = utxo.TxOut.Script
+    maybe {
+        let! hash = Script.scriptToHash(script)
+        let! addressEntry = wallet.TryGet(hash)
+        txTableAccessor.Add outpoint utxo
+    } |> ignore
+
+let removeIfInWallet (txTableAccessor: TxTableAccessor) (wallet: Wallet) (outpoint: OutPoint) (utxo: UTXO) =
+    let script = utxo.TxOut.Script
+    maybe {
+        let! hash = Script.scriptToHash(script)
+        let! addressEntry = wallet.TryGet(hash)
+        txTableAccessor.Delete outpoint
+    } |> ignore
+
 (**
 The LevelDB accessor converts keys & values into binary strings and uses the LevelDB-Sharp bridge
 to read or write to the database.
 *)
-type LevelDBUTXOAccessor(db: DB) =
+type LevelDBUTXOAccessor(db: DB, wallet: Wallet, txTableAccessor: TxTableAccessor) =
     let ro = new ReadOptions()
     let wo = new WriteOptions()
 
     let deleteUTXO (outpoint: OutPoint) = 
         let k = outpoint.ToByteArray()
+        maybe {
+            let! v = Option.ofNull (db.Get(ro, k))
+            let utxo = ParseByteArray v UTXO.Parse
+            removeIfInWallet txTableAccessor wallet outpoint utxo
+        } |> ignore
         db.Delete(wo, k)
     let addUTXO (outpoint: OutPoint) (utxo: UTXO) = 
         let k = outpoint.ToByteArray()
         let v = utxo.ToByteArray()
+        addIfInWallet txTableAccessor wallet outpoint utxo
         db.Put(wo, k, v)
     let getUTXO (outpoint: OutPoint) =
         let k = outpoint.ToByteArray()
@@ -322,7 +486,7 @@ type LevelDBUTXOAccessor(db: DB) =
         let rec getCountInner (count: int): int = 
             if cursor.IsValid then
                 let k = cursor.Key
-                let hash = k |> Array.take txHash.Length // first part of the key is the txhash
+                let hash = k.[0..txHash.Length-1] // first part of the key is the txhash
                 if hash = txHash 
                 then 
                     cursor.Next()
@@ -336,8 +500,8 @@ type LevelDBUTXOAccessor(db: DB) =
     new() = 
         let options = new Options()
         options.CreateIfMissing <- true
-        new LevelDBUTXOAccessor(DB.Open(options, sprintf "%s/utxo" baseDir))
-
+        new LevelDBUTXOAccessor(DB.Open(options, sprintf "%s/utxo" baseDir), wallet, txTableAccessor)
+        
     interface IUTXOAccessor with
         member x.DeleteUTXO(outpoint) = deleteUTXO outpoint
         member x.AddUTXO(outpoint, txOut) = addUTXO outpoint txOut
@@ -347,7 +511,23 @@ type LevelDBUTXOAccessor(db: DB) =
 
     member val Db = db with get
 
-let utxoAccessor = new LevelDBUTXOAccessor() :> IUTXOAccessor
+let levelDbAccessor = new LevelDBUTXOAccessor()
+let utxoAccessor = levelDbAccessor :> IUTXOAccessor
+
+let scanUTXO () =
+    let creditToWallet = addIfInWallet txTableAccessor wallet 
+    lock dbLock (fun () ->
+        let ro = new ReadOptions()
+        use cursor = new Iterator(levelDbAccessor.Db, ro)
+        cursor.SeekToFirst()
+        while cursor.IsValid do
+            let k = cursor.Key
+            let v = cursor.Value
+            let outpoint = ParseByteArray k OutPoint.Parse
+            let utxo = ParseByteArray v UTXO.Parse
+            creditToWallet outpoint utxo
+            cursor.Next()
+        )
 
 (**
 Format of the UNDO file. The transactions stored in blocks must be reverted if they end up being
@@ -478,6 +658,10 @@ let loadBlock (bh: BlockHeader) =
     let block = Block.Parse reader
     block.Header.Height <- bh.Height
     block
+let getBlockSize (bh: BlockHeader) =
+    let path = getBlockDir bh
+    use fs = new FileStream(sprintf "%s/%s" path (hashToHex bh.Hash), FileMode.Open)
+    int32 fs.Length
 
 let undoBlock (utxoAccessor: IUTXOAccessor) (bh: BlockHeader) = 
     logger.DebugF "Undoing block #%d" bh.Height
@@ -495,6 +679,7 @@ let undoBlock (utxoAccessor: IUTXOAccessor) (bh: BlockHeader) =
             | 0uy -> fun() -> utxoAccessor.DeleteUTXO outpoint // 0 was an add and to undo an add, do a delete
             | 1uy -> fun() -> utxoAccessor.AddUTXO (outpoint, utxo)
             | _ -> ignore
+
         fops.Add(fop)
     fops |> Seq.toList |> List.rev |> List.iter(fun fop -> fop()) // Don't forget to reverse the list
     let block = loadBlock bh

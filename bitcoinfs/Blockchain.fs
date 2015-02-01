@@ -298,7 +298,7 @@ let catchup (peer: IPeer) =
                         )
                 )
             with 
-            | ex -> logger.ErrorF "%A" ex
+            | ex -> logger.DebugF "%A" ex
 
     catchupImpl()
 
@@ -351,28 +351,18 @@ let processCommand command =
             let headers = new Headers(reqBlockchain)
             peer.Send(new BitcoinMessage("headers", headers.ToByteArray()))
         with
-            | e -> logger.ErrorF "Exception %A" e
+            | e -> logger.DebugF "Exception %A" e
     | GetBlocks (gb, peer) ->
         try
             let reqBlockchain = getBlockchainUpTo gb.Hashes gb.HashStop 500
             let inv = new InvVector(reqBlockchain |> List.map (fun bh -> InvEntry(blockInvType, bh.Hash)))
             peer.Send(new BitcoinMessage("inv", inv.ToByteArray()))
         with
-            | e -> logger.ErrorF "Exception %A" e
+            | e -> logger.DebugF "Exception %A" e
     | Ping (ping, peer) ->
         let pong = new Pong(ping.Nonce)
         peer.Send(new BitcoinMessage("pong", pong.ToByteArray()))
 
-(* Populate the next hash field that was introduced in a later version of the database schema *)
-let fixHeaders() =
-    let blockchain = fnBlockchain()
-    blockchain |> Seq.truncate 100 |> Seq.iter (fun bh ->
-        bh.IsMain <- true
-        Db.writeHeaders bh
-    )
-    logger.InfoF "Upgrade finished"
-    
 let blockchainStart() =
-    // fixHeaders()
     disposable.Add(blockchainIncoming.ObserveOn(NewThreadScheduler.Default).Subscribe(processCommand))
 

@@ -80,7 +80,7 @@ let readBootstrapFast (firstBlock: int) (stream: Stream) =
     let mutable tip: byte[] = null
     while(stream.Position <> stream.Length) do
         if i % 10000 = 0 then
-            logger.DebugF "%d" i
+            logger.InfoF "%d" i
         let magic = reader.ReadInt32()
         let length = reader.ReadInt32()
         let block = ParseByteArray (reader.ReadBytes(length)) Block.Parse
@@ -95,8 +95,17 @@ let readBootstrapFast (firstBlock: int) (stream: Stream) =
         Db.writeHeaders block.Header
         tip <- block.Header.Hash
         i <- i + 1
-    logger.DebugF "Last block %d" i
+    logger.InfoF "Last block %d" i
     Db.writeTip tip
+
+let writeBootstrap (firstBlock: int) (lastBlock: int) (stream: Stream) =
+    use writer = new BinaryWriter(stream)
+    for i in firstBlock..lastBlock do
+        let bh = Db.getHeaderByHeight i
+        let block = Db.loadBlock bh
+        writer.Write(magic)
+        writer.Write(Db.getBlockSize bh)
+        writer.Write(block.ToByteArray())
 
 (*** hide ***)
 let verifySingleTx (tx: Tx) (iTxIn: int) (outScript: byte[]) = 
@@ -133,26 +142,38 @@ let main argv =
     Config.BasicConfigurator.Configure() |> ignore
     // RPC.startRPC()
 
+    // Db.scanUTXO()
 (*
-  // Import a couple of bootstrap dat files
+    // Write a bootstrap file from saved blocks
+
+    use stream = new FileStream("D:/bootstrap-nnn.dat", FileMode.CreateNew, FileAccess.Write)
+    writeBootstrap 332703 341000 stream
+*)
+
+(*
+    // Import a couple of bootstrap dat files
     use stream = new FileStream("J:/bootstrap-295000.dat", FileMode.Open, FileAccess.Read)
     readBootstrapFast 0 stream
-    use stream = new FileStream("J:/bootstrap-332703.dat", FileMode.Open, FileAccess.Read)
+    use stream = new FileStream("J:/bootstrap-332702.dat", FileMode.Open, FileAccess.Read)
     readBootstrapFast 295001 stream
+    use stream = new FileStream("J:/bootstrap-341000.dat", FileMode.Open, FileAccess.Read)
+    readBootstrapFast 332703 stream
 *)
 
     Peer.initPeers()
-
+    
     Tracker.startTracker()
     Tracker.startServer()
     Mempool.startMempool()
     Blockchain.blockchainStart()
-
+(*
+*)
     (* Manually import my own local node
     let myNode = new IPEndPoint(IPAddress.Loopback, 8333)
     trackerIncoming.OnNext(TrackerCommand.Connect myNode)
     *)
+(*
+*)
     trackerIncoming.OnNext(TrackerCommand.GetPeers)
     Thread.Sleep(-1)
-
     0 // return an integer exit code

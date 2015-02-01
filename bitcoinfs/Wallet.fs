@@ -33,6 +33,7 @@ open Org.BouncyCastle.Crypto.Macs
 open Org.BouncyCastle.Crypto.Parameters
 open Org.BouncyCastle.Math.EC
 open Org.BouncyCastle.Utilities.Encoders
+open Db
 open Protocol
 open Murmur
 open Script
@@ -230,3 +231,4 @@ let bip32Hashes (mpk: byte[]) (chain: byte[]) (isReceived: bool) (c: int) =
         for i in 0..c-1 do
             yield publicKeyExt.ToPublicChild(i).ToPublic().GetEncoded() |> hash160
         }
+

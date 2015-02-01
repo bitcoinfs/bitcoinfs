@@ -290,9 +290,10 @@ type Version(version: int32, services: int64, timestamp: int64, recv: byte[], fr
         let nonce = reader.ReadInt64()
         let userAgent = reader.ReadVarString()
         let height = reader.ReadInt32()
-        let relay = reader.ReadByte()
+        let relay = if version >= 70001 && reader.BaseStream.Position < reader.BaseStream.Length then reader.ReadByte() else 1uy
         new Version(version, services, timestamp, recv, from, nonce, userAgent, height, relay)
 
+    override x.ToString() = sprintf "%s" userAgent
     member val Recv = recv with get
     member val From = from with get
     member val UserAgent = userAgent with get

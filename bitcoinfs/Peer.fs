@@ -52,7 +52,7 @@ open FSharpx.Choice
 open FSharpx.Validation
 open NodaTime
 open Protocol
-open Murmur
+open Db
 
 let defaultPort = settings.ServerPort
 
@@ -109,14 +109,15 @@ type IPeerSend =
     abstract Receive: BitcoinMessage -> unit
     abstract Send: BitcoinMessage -> unit
 
-type PeerQueues(stream: NetworkStream) = 
+type PeerQueues (stream: NetworkStream, target: IPEndPoint) = 
     let fromPeer = new Event<BitcoinMessage>()
     let toPeer = new Event<BitcoinMessage>()
     let mutable disposed = false
 
     interface IDisposable with
         override x.Dispose() = 
-            stream.Close()
+            logger.InfoF "Closing stream %A" target
+            stream.Dispose()
             disposed <- true
 
     [<CLIEvent>]
@@ -206,40 +207,6 @@ Fortunately, I had some code related to bloom filters in the wallet part that I 
 
 [1]: https://en.bitcoin.it/wiki/BIP_0037
 *)
-
-(**
-## Bloom Filter
-A [Bloom Filter][1] is a probabilistic filter that has a configurable probability of false positive and no
-false negative. Public keys that match the addresses that I own are inserted into the Bloom Filter and checked
-when I process transactions. It allows me to quickly reject transactions that do not belong to my wallets.
-
-[1]: https://en.wikipedia.org/wiki/Bloom_filter
-*)
-type BloomFilter(filter: byte[], cHashes: int, nTweak: int) =
-    let bits = new BitArray(filter)
-    let hashers = seq {
-        for i in 0..cHashes-1 do
-            yield MurmurHash.Create32(uint32(i*0xFBA4C795+nTweak)) } |> Seq.toArray
-
-    let add (v: byte[]) =
-        for hasher in hashers do
-            let hash = hasher.ComputeHash v
-            let bucket = BitConverter.ToUInt32(hash, 0) % (uint32 filter.Length*8u)
-            bits.Set(int bucket, true)
-
-    let check (v: byte[]) =
-        (hashers |> Seq.map (fun hasher ->
-            let hash = hasher.ComputeHash v
-            let h = BitConverter.ToUInt32(hash, 0)
-            let bucket = h % (uint32 filter.Length*8u)
-            bits.Get(int bucket)
-            )).All(fun b ->  b)
-
-    new(N: int, P: float, cHashes: int, nTweak: int) = 
-        let size = int(min (-1.0/log 2.0**2.0*(float N)*log P) 36000.0)
-        new BloomFilter(Array.zeroCreate size, cHashes, nTweak)
-    member x.Add v = add v
-    member x.Check v = check v
 
 // A node in the partial merkle tree
 type PartialMerkleTreeNode = 
@@ -361,7 +328,8 @@ type PeerData = {
 type Peer(id: int) as self = 
     let disposable = new CompositeDisposable()
     
-    let mutable target: IPEndPoint = null
+    let mutable target: IPEndPoint = null // For logging only
+    let mutable versionMessage: Version option = None // For logging only
     let mutable bloomFilterUpdateMode = BloomFilterUpdate.UpdateNone
     let mutable bloomFilter: BloomFilter option = None
     let mutable relay = 1uy
@@ -498,7 +466,7 @@ and routes it to the appropriate queue.
             elif inv.Invs.Length > 1 || inv.Invs.[0].Type <> blockInvType then // many invs or not a block inv
                 mempoolIncoming.OnNext(Inv(inv, self)) // send to mempool
             elif inv.Invs.Length = 1 && inv.Invs.[0].Type = blockInvType then // a block inv, send to blockchain
-                logger.DebugF "Catchup requested for %d %s" id (hashToHex inv.Invs.[0].Hash)
+                logger.DebugF "Catchup requested by %d %A %s" id self (hashToHex inv.Invs.[0].Hash)
                 blockchainIncoming.OnNext(Catchup(self, inv.Invs.[0].Hash))
         | "tx" ->
             let tx = message.ParsePayload() :?> Tx
@@ -557,7 +525,7 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             stream.WriteTimeout <- int(commandTimeout.Ticks / TimeSpan.TicksPerMillisecond)
             // Setup the queues and the network to bitcoin message parser
             // Observables are created but not subscribed to, so in fact nothing is consumed from the stream yet
-            let peerQueues = new PeerQueues(stream)
+            let peerQueues = new PeerQueues(stream, target)
             let parser = new BitcoinMessageParser(workLoop(stream))
             // Subscribe the outgoing queue, it's ready to send out messages
             // Subscriptions are not added to the disposable object unless they should be removed when the event loop finishes
@@ -577,6 +545,7 @@ Every handler needs to support `Closing` because it may happen at any time. The 
                     match m.Command with
                     | "version" -> 
                         let version = m.ParsePayload() :?> Version
+                        versionMessage <- Some(version)
                         relay <- version.Relay
                         (peerQueues :> IPeerSend).Send(new BitcoinMessage("verack", Array.empty))
                         (true, verackReceived)
@@ -602,7 +571,7 @@ Every handler needs to support `Closing` because it may happen at any time. The 
                 parser.BitcoinMessages.Subscribe(
                     onNext = (fun m -> processMessage peerQueues m), 
                     onError = (fun e -> 
-                        logger.ErrorF "Exception %A" e
+                        logger.DebugF "Exception %A" e
                         closePeer())))
             // But if it goes well, 
             { data with Queues = Some(peerQueues) }
@@ -709,7 +678,7 @@ result forever.
         member x.Bad() = badPeer()
         member x.Receive m = incoming.Trigger m
 
-    override x.ToString() = sprintf "Peer(%d, %A)" id target
+    override x.ToString() = sprintf "Peer(%d, %A, %A)" id target versionMessage
 
 (**
 ### Bootstrap from DNS

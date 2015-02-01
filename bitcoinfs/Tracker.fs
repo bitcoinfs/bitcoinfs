@@ -92,7 +92,9 @@ let checkTransition oldState newState =
         (_, Free) |
         (Ready, Busy) |
         (Busy, Ready) -> ignore()
-    | other -> raise (InvalidTransition other)
+    | other -> 
+        logger.ErrorF "Invalid transition from %A to %A" oldState newState
+        raise (InvalidTransition other)
 
 let changeState id newState =
     let oldState = peerSlots.[id].State
@@ -127,7 +129,7 @@ let forward (command: TrackerCommand) (message: PeerCommand) =
     match message with
         | PeerCommand.GetHeaders(_, ts, peer) -> 
             peerSlots |> Map.tryFind peer.Id
-            |> Option.map (fun ps -> assign message ps)
+            |> Option.bind (fun ps -> Option.conditional (ps.State = Ready) ps) |> Option.map (fun ps -> assign message ps)
             |> getOrElseF (fun () -> ts.SetResult(Observable.Throw(ArgumentException("Peer busy - cannot handle command"))))
         | _ -> 
             peerSlots |> Map.tryPick(fun _ ps -> if ps.State = Ready then Some(ps) else None)
@@ -157,11 +159,12 @@ let freePeer (id: int) =
         changeState id Free |> ignore
         let peer =  ps.Peer
         connectionCount <- connectionCount - 1
-        Db.updateState((peer :> IPeer).Target, -1) // blackball this peer
-        let newPeer = Db.getPeer() // find a new peer
-        newPeer |> Option.iter (fun p -> 
-            Db.updateState(p, 1)
-            trackerIncoming.OnNext(Connect p))
+        if connectionCount < maxSlots then
+            Db.updateState((peer :> IPeer).Target, -1) // blackball this peer
+            let newPeer = Db.getPeer() // find a new peer
+            newPeer |> Option.iter (fun p -> 
+                Db.updateState(p, 1)
+                trackerIncoming.OnNext(Connect p))
         peerSlots <- peerSlots.Remove id
         (peer :> IPeer).Receive Closed // tell the old peer to take a hike
     )
@@ -260,8 +263,7 @@ listener.Listen(int SocketOptionName.MaxConnections)
 let rec connectLoop() = 
     async {
       let! socket = Async.FromBeginEnd(listener.BeginAccept, listener.EndAccept)
-      // Setting ownsSocket to false allows us to later re-use a socket.
-      let stream = new NetworkStream(socket, false)
+      let stream = new NetworkStream(socket)
       trackerIncoming.OnNext(TrackerCommand.IncomingConnection(stream, socket.RemoteEndPoint :?> IPEndPoint))
       return! connectLoop()
     }

@@ -104,11 +104,10 @@ let maxScriptSize = 10000
 
 (*** hide ***)
 let scriptToHash (script: byte[]) =
-    if script.Length = 25 && script.[0] = OP_DUP && script.[1] = OP_HASH160 && script.[2] = OP_DATA_20 && script.[23] = OP_EQUALVERIFY
-        && script.[24] = OP_CHECKSIG then
-           Some(script.[3..22]) 
-    else
-        None
+    let p2pkh = Option.conditional (script.Length = 25 && script.[0] = OP_DUP && script.[1] = OP_HASH160 && script.[2] = OP_DATA_20 && script.[23] = OP_EQUALVERIFY
+        && script.[24] = OP_CHECKSIG) script.[3..22]
+    let p2sh = Option.conditional (script.Length = 23 && script.[0] = OP_HASH160 && script.[1] = OP_DATA_20 && script.[22] = OP_EQUAL) script.[2..21]
+    Option.coalesce p2pkh p2sh
 
 (** 
 ## P2SH 
@@ -498,12 +497,14 @@ In a multi sig, every pub key is checked against the signatures and then discard
 signatures must match a pub key. Because of this order of evaluation, signatures have to be provided in the same
 order as the pub keys.
 *)
+
+
     let checkmultisig script (pubs: byte[][]) (sigs: byte[] list) = 
         let pubScript = removeSignatures script (new HashSet<byte[]>(sigs, hashCompare))
 
         let checkOneSig (pubs: byte[] list) (signature: byte[]) = 
             pubs |> List.tryFindIndex (fun pub -> checksigInner pubScript pub signature)
-            |> Option.map (fun index -> pubs |> List.splitAt index |> snd |> List.tail)
+            |> Option.map (fun index -> pubs |> Seq.skip (index+1) |> Seq.toList)
                 
         sigs |> Option.foldM checkOneSig (pubs |> Array.toList) |> Option.isSome
 
