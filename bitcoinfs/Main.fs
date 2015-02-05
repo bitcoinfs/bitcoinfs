@@ -101,6 +101,7 @@ let readBootstrapFast (firstBlock: int) (stream: Stream) =
 let writeBootstrap (firstBlock: int) (lastBlock: int) (stream: Stream) =
     use writer = new BinaryWriter(stream)
     for i in firstBlock..lastBlock do
+        logger.InfoF "Writing block #%d" i
         let bh = Db.getHeaderByHeight i
         let block = Db.loadBlock bh
         writer.Write(magic)
@@ -143,11 +144,11 @@ let main argv =
     // RPC.startRPC()
 
     // Db.scanUTXO()
-(*
     // Write a bootstrap file from saved blocks
 
+(*
     use stream = new FileStream("D:/bootstrap-nnn.dat", FileMode.CreateNew, FileAccess.Write)
-    writeBootstrap 332703 341000 stream
+    writeBootstrap 341001 342000 stream
 *)
 
 (*

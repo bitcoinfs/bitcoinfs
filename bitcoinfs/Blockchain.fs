@@ -294,6 +294,7 @@ let catchup (peer: IPeer) =
                                 mempoolIncoming.OnNext(Revalidate (tip.Height, (undoTxs |> List.rev)))
                                 let invBlock = InvVector([InvEntry(blockInvType, tip.Hash)])
                                 broadcastToPeers.OnNext(new BitcoinMessage("inv", invBlock.ToByteArray()))
+                                trackerIncoming.OnNext(SetTip tip)
                                 catchupImpl()
                         )
                 )

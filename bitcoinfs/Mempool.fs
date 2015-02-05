@@ -196,9 +196,9 @@ let processCommand (command: MempoolCommand) =
     | Revalidate (currentHeight, undoTxs) ->
         mempoolHeight <- currentHeight
         for txBlock in undoTxs do
-        for tx in txBlock do
-            listTx.Add(tx.Hash)
-            mempool.Item(tx.Hash) <- tx
+            for tx in txBlock do
+                listTx.Add(tx.Hash)
+                mempool.Item(tx.Hash) <- tx
         revalidate()
     | Tx tx -> addTx tx
     | Inv (invVector, peer) -> 

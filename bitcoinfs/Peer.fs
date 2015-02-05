@@ -166,6 +166,7 @@ type TrackerCommand =
     | BitcoinMessage of message: BitcoinMessage
     | Command of command: PeerCommand
     | SetTip of tip: BlockHeader
+    | SetVersion of id: int * version: Version
 
 // Commands for Bob
 type BlockchainCommand =
@@ -500,9 +501,9 @@ Every handler needs to support `Closing` because it may happen at any time. The 
         | Open (t, tip) -> // Got a outgoing connection request
             target <- t
             logger.DebugF "Connect to %s" (target.ToString())
+            let client = new Sockets.TcpClient()
             let connect = 
                 async {
-                    let client = new Sockets.TcpClient()
                     do! Async.FromBeginEnd(
                             target, 
                             (fun (target, cb, state) -> client.BeginConnect(target.Address, target.Port, cb, state)),
@@ -516,12 +517,14 @@ Every handler needs to support `Closing` because it may happen at any time. The 
                 onNext = (fun c -> incoming.Trigger c), // If connected, grab the stream
                 onError = (fun ex -> 
                     logger.DebugF "Connect failed> %A %s" t (ex.ToString())
+                    (client :> IDisposable).Dispose()
                     closePeer())
             ) |> ignore
             data
         | OpenStream (stream, t, tip) -> // Got a stream from a successful connection (in or out)
             logger.DebugF "OpenStream %A" t
             target <- t
+            stream.ReadTimeout <- settings.ReadTimeout
             stream.WriteTimeout <- int(commandTimeout.Ticks / TimeSpan.TicksPerMillisecond)
             // Setup the queues and the network to bitcoin message parser
             // Observables are created but not subscribed to, so in fact nothing is consumed from the stream yet
@@ -578,6 +581,7 @@ Every handler needs to support `Closing` because it may happen at any time. The 
         | Handshaked ->
             // Got the handshake, the peer is ready
             trackerIncoming.OnNext (TrackerCommand.SetReady id)
+            trackerIncoming.OnNext (TrackerCommand.SetVersion (id, versionMessage.Value))
             { data with State = Connected; CommandHandler = processCommand }
         | PeerCommand.Close -> 
             logger.DebugF "Closing %A" target

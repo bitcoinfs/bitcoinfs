@@ -183,7 +183,9 @@ let mutable tip = Db.readHeader (Db.readTip())
 let processCommand(command: TrackerCommand) =
     logger.DebugF "TrackerCommand> %A" command
     match command with
-    | SetTip t -> tip <- t
+    | SetTip t -> 
+        tip <- t
+        Db.pruneBlocks (tip.Height-settings.PruneDepth)
     | GetPeers -> 
         let peers = Db.getPeers()
         let cFreeSlots = maxSlots - peerSlots.Count
@@ -202,8 +204,11 @@ let processCommand(command: TrackerCommand) =
             let oldState = changeState id Ready
             if oldState = Allocated then 
                 logger.InfoF "Connected to %A" peer
-                blockchainIncoming.OnNext(Catchup(peer, null)) // Disable if you want no catchup on connect
             dequeuePendingMessage()
+            )
+    | SetVersion (id, version) ->
+        peerSlots.TryFind id |> Option.iter(fun ps ->
+            if version.Height > tip.Height then blockchainIncoming.OnNext(Catchup(ps.Peer, null))
             )
     | Close id -> 
         freePeer id
@@ -252,23 +257,22 @@ let startTracker() =
 The server binds to the port configured in the app.config file and listens to incoming connection.
 On a connection, it sends a message to Tom. At this time, there is no limit to the number of incoming connections
 *)
-let port = defaultPort
-let ipAddress = IPAddress.Any
-let endpoint = IPEndPoint(ipAddress, port)
-let cts = new CancellationTokenSource()
-let listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
-listener.Bind(endpoint)
-listener.Listen(int SocketOptionName.MaxConnections)
-
-let rec connectLoop() = 
-    async {
-      let! socket = Async.FromBeginEnd(listener.BeginAccept, listener.EndAccept)
-      let stream = new NetworkStream(socket)
-      trackerIncoming.OnNext(TrackerCommand.IncomingConnection(stream, socket.RemoteEndPoint :?> IPEndPoint))
-      return! connectLoop()
-    }
 
 let startServer() = 
+    let port = defaultPort
+    let ipAddress = IPAddress.Any
+    let endpoint = IPEndPoint(ipAddress, port)
+    let tcpListener = new TcpListener(endpoint)
+    let listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+    tcpListener.Start()
     logger.InfoF "Started listening on port %d" port
-    Async.Start(connectLoop(), cts.Token)
+    let rec accept() = 
+        async {
+            let! socket = Async.FromBeginEnd(tcpListener.BeginAcceptSocket, tcpListener.EndAcceptSocket)
+            let stream = new NetworkStream(socket, true)
+            trackerIncoming.OnNext(TrackerCommand.IncomingConnection(stream, socket.RemoteEndPoint :?> IPEndPoint))
+            return! accept()
+            }
+
+    accept() |> Async.Start
 

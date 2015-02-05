@@ -26,6 +26,7 @@ open System.Collections.Generic
 open System.Linq
 open System.Net
 open System.Net.Sockets
+open System.Text.RegularExpressions
 open Murmur
 open Protocol
 open Org.BouncyCastle.Utilities.Encoders
@@ -685,3 +686,22 @@ let undoBlock (utxoAccessor: IUTXOAccessor) (bh: BlockHeader) =
     let block = loadBlock bh
     block.Txs
 
+let pruneBlocks (minHeight: int) = 
+    let blockRegex = "\d+/(\d+)$"
+    let rec pruneBlock (path: String) = 
+        if path.Replace ('\\', '/') |> Regex.tryMatch blockRegex |> Option.map (fun m ->
+            let height = int m.GroupValues.[0]
+            height < minHeight
+            ) |?| false
+        then 
+            logger.InfoF "Deleting %s" path
+            let dir = new DirectoryInfo(path)
+            dir.Delete true
+            if dir.Parent.GetDirectories() |> Array.isEmpty then dir.Parent.Delete()
+        else
+            let dirs = Directory.GetDirectories(path)
+            for dir in dirs do
+                pruneBlock dir
+
+    pruneBlock settings.BlocksDir
+            
