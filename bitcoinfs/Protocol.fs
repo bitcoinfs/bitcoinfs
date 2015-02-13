@@ -399,6 +399,7 @@ and BlockHeader(hash: byte[], version: int, prevBlockHash: byte[], merkleRoot: b
     member x.NextHash with get() = nextBlockHash and set value = nextBlockHash <- value
     member x.IsMain with get() = isMain and set value = isMain <- value
 
+[<AllowNullLiteral>]
 type Headers(headers: BlockHeader list) =
     member x.ToByteArray() = ToBinaryArray (fun os ->
         os.WriteVarInt(headers.Length)

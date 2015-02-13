@@ -352,20 +352,14 @@ to the Observable.
 *)
     let workLoop(stream: NetworkStream) = 
         let buffer: byte[] = Array.zeroCreate 1000000 // network buffer
-        let tf = new TaskFactory()
-        let task() = 
-            let t = 
-                tf.FromAsync<byte []>(
-                    (fun cb (state: obj) -> stream.BeginRead(buffer, 0, buffer.Length, cb, state)), 
-                    (fun res -> 
-                        let c = stream.EndRead(res)
-                        if c = 0 then // When the stream is closed, the read returns 0 byte
-                            raise (new SocketException())
-                        else buffer.[0..c-1]), 
-                    null)
-            t.ToObservable() // a task that grabs one read asynchronously
-        Observable.Repeat<byte[]>(Observable.Defer(task)) // Keep doing the same task until the stream closes
-
+        let task() = stream.AsyncRead(buffer) |> Async.AsObservable
+        let hasData = ref true
+        Observable
+            .While((fun () -> !hasData), Observable.Defer(task))
+            .Do(fun c -> hasData := c > 0)
+            .Where(fun c -> c > 0)
+            .Select(fun c -> buffer.[0..c-1]) // Keep doing the same task until the stream closes
+        
 (** Helper functions to change the state of the peer. These functions work asynchronously and can be called from
 any thread.
 *)
@@ -530,6 +524,16 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             // Observables are created but not subscribed to, so in fact nothing is consumed from the stream yet
             let peerQueues = new PeerQueues(stream, target)
             let parser = new BitcoinMessageParser(workLoop(stream))
+            // Finally subscribe and start consuming the responses from the remote side
+            // Any exception closes the peer
+            disposable.Add(
+                parser.BitcoinMessages.Subscribe(
+                    onNext = (fun m -> processMessage peerQueues m), 
+                    onCompleted = (fun () -> closePeer()),
+                    onError = (fun e -> 
+                        logger.DebugF "Exception %A" e
+                        closePeer())))
+
             // Subscribe the outgoing queue, it's ready to send out messages
             // Subscriptions are not added to the disposable object unless they should be removed when the event loop finishes
             peerQueues.To.SelectMany(fun m -> filterMessage m |> List.toSeq).Subscribe(onNext = (fun m -> sendMessage stream m), onError = (fun e -> closePeer())) |> ignore
@@ -568,15 +572,6 @@ Every handler needs to support `Closing` because it may happen at any time. The 
                     closePeer())
             ) |> ignore
 
-            // Finally subscribe and start consuming the responses from the remote side
-            // Any exception closes the peer
-            disposable.Add(
-                parser.BitcoinMessages.Subscribe(
-                    onNext = (fun m -> processMessage peerQueues m), 
-                    onError = (fun e -> 
-                        logger.DebugF "Exception %A" e
-                        closePeer())))
-            // But if it goes well, 
             { data with Queues = Some(peerQueues) }
         | Handshaked ->
             // Got the handshake, the peer is ready

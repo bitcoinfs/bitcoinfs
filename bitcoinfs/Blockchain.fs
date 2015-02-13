@@ -254,10 +254,10 @@ let catchup (peer: IPeer) =
     let rec catchupImpl() = 
         try
             let headersMessage = getHeaders() |> Async.RunSynchronously
-            let headers = headersMessage.Headers
             let currentHeight = tip.Height
 
-            if not headers.IsEmpty then
+            if headersMessage <> null && not headersMessage.Headers.IsEmpty then
+                let headers = headersMessage.Headers
                 let newBlockchainOpt = calculateChainHeights headers
                 newBlockchainOpt |> Option.filter (fun f -> f.Head.Height > currentHeight-10000) |> Option.iter (fun newBlockchainFrag -> // limit the size of a fork to 10000 blocks
                     newBlockchainFrag |> List.iter Db.writeHeaders
