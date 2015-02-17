@@ -420,7 +420,10 @@ Applies the bloom filter to the outgoing message
                         txMessages @ [new BitcoinMessage("merkleblock", merkleBlock.ToByteArray())]
                     ) |?| [message]
             | _ -> [message]
-        else []
+        else 
+            match message.Command with
+            | "tx" | "block" -> []
+            | _ -> [message]
 
 (**
 `processMessage` handles messages incoming from the remote node. Generally speaking, it parses the payload of the message
@@ -524,15 +527,6 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             // Observables are created but not subscribed to, so in fact nothing is consumed from the stream yet
             let peerQueues = new PeerQueues(stream, target)
             let parser = new BitcoinMessageParser(workLoop(stream))
-            // Finally subscribe and start consuming the responses from the remote side
-            // Any exception closes the peer
-            disposable.Add(
-                parser.BitcoinMessages.Subscribe(
-                    onNext = (fun m -> processMessage peerQueues m), 
-                    onCompleted = (fun () -> closePeer()),
-                    onError = (fun e -> 
-                        logger.DebugF "Exception %A" e
-                        closePeer())))
 
             // Subscribe the outgoing queue, it's ready to send out messages
             // Subscriptions are not added to the disposable object unless they should be removed when the event loop finishes
@@ -571,6 +565,25 @@ Every handler needs to support `Closing` because it may happen at any time. The 
                     logger.DebugF "Handshake failed> %A %s" target (ex.ToString())
                     closePeer())
             ) |> ignore
+
+            (** Subscription have to be made *after* the listeners are set up otherwise messages can be lost. 
+            For instance, I had a bug because the following `Subscribe` was made before `handshakeObs`.
+            In some cases an incoming connection would post a `version`. It would go to `processMessage` and 
+            be sent to the `peerQueues.From` observable. But since `handshakeObs` occurs later, there would
+            be nothing to handle this message and it would be lost.
+            *)
+
+            // Finally subscribe and start consuming the responses from the remote side
+            // Any exception closes the peer
+            logger.DebugF "Before Subscription"
+            disposable.Add(
+                parser.BitcoinMessages.Subscribe(
+                    onNext = (fun m -> processMessage peerQueues m), 
+                    onCompleted = (fun () -> closePeer()),
+                    onError = (fun e -> 
+                        logger.DebugF "Exception %A" e
+                        closePeer())))
+            logger.DebugF "Subscription made"
 
             { data with Queues = Some(peerQueues) }
         | Handshaked ->
