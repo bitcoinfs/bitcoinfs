@@ -407,7 +407,7 @@ Applies the bloom filter to the outgoing message
                     bloomFilter |> Option.map (fun bf ->
                         let tx = message.ParsePayload() :?> Tx 
                         let txMatch = checkTxAgainstBloomFilter bf bloomFilterUpdateMode tx
-                        if txMatch then logger.InfoF "Filtered TX %s" (hashToHex tx.Hash)
+                        if txMatch then logger.DebugF "Filtered TX %s" (hashToHex tx.Hash)
                         txMatch
                     ) |?| true
                 if emit then [message] else []
@@ -416,7 +416,7 @@ Applies the bloom filter to the outgoing message
                         let block = message.ParsePayload() :?> Block
                         let (txs, merkleBlock) = buildMerkleBlock bf bloomFilterUpdateMode block
                         let txMessages = txs |> List.map(fun tx -> new BitcoinMessage("tx", tx.ToByteArray()))
-                        txs |> Seq.iter (fun tx -> logger.InfoF "Filtered TX %s" (hashToHex tx.Hash))
+                        txs |> Seq.iter (fun tx -> logger.DebugF "Filtered TX %s" (hashToHex tx.Hash))
                         txMessages @ [new BitcoinMessage("merkleblock", merkleBlock.ToByteArray())]
                     ) |?| [message]
             | _ -> [message]
