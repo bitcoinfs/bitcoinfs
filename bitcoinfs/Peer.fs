@@ -501,11 +501,7 @@ Every handler needs to support `Closing` because it may happen at any time. The 
             let client = new Sockets.TcpClient()
             let connect = 
                 async {
-                    do! Async.FromBeginEnd(
-                            target, 
-                            (fun (target, cb, state) -> client.BeginConnect(target.Address, target.Port, cb, state)),
-                            client.EndConnect)
-                    let stream = client.GetStream()
+                    let! stream = Protocol.connect(target.Address) (target.Port)
                     return OpenStream (stream, target, tip)
                     }
 

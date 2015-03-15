@@ -236,9 +236,34 @@ some cases where the exact same code is reused. For instance when two messages h
 try to factorize but instead the code is duplicated. It's mainly to keep the code similar between messages and because
 the gains wouldn't be big anyway.
 *)
+
+(**
+## TOR
+TOR addresses are mapped to IPV6 addresses in order to allow the P2P network to relay them.
+Quoting from [email](https://lists.torproject.org/pipermail/tor-talk/2012-June/024591.html)
+
+> Additionally, such addresses are exchanged and relayed via the P2P network.
+    To do so, we reused the fd87:d87e:eb43::/48 IPv6 range. Each address in this
+    80-bit range is mapped to an onion address, and treated as belonging to a
+    separate network. This network range is the same as used by the OnionCat
+    application (though we do not use OnionCat in any way), and is part of the
+    RFC4193 Unique Local IPv6 range, which is normally not globally routable.
+*)
+let torPrefix = [|0xFDuy; 0x87uy; 0xD8uy; 0x7Euy; 0xEBuy; 0x43uy|]
+let encodeTorAsIpV6 (onionAddress: string) = 
+    let address = onionAddress.Replace(".onion", "")
+    let addressBytes = Base32.Base32Encoder.Decode address
+    let padding = 10-addressBytes.Length
+    let ipv6AddressBytes = Array.concat [torPrefix; Array.zeroCreate padding; addressBytes]
+    new IPAddress(ipv6AddressBytes)
+
+let decodeAddressString address =
+    let (success, myIP) = IPAddress.TryParse address
+    if success then myIP else encodeTorAsIpV6 address
+
 type NetworkAddr(ip: IPEndPoint) = 
     // the address put in the version message. The other side may want to connect back using this IP
-    static member MyAddress = NetworkAddr(new IPEndPoint(IPAddress.Parse(settings.MyExtIp), settings.ServerPort)) // TODO: Lookup external address
+    static member MyAddress = NetworkAddr(new IPEndPoint(decodeAddressString settings.MyExtIp, settings.ServerPort)) // TODO: Lookup external address
     member x.ToByteArray() =
         use ms = new MemoryStream()
         use os = new BinaryWriter(ms)
@@ -250,8 +275,8 @@ type NetworkAddr(ip: IPEndPoint) =
         ms.ToArray()
 
     static member Parse(reader: BinaryReader) = 
-        reader.ReadBytes(20) |> ignore
-        let ip = reader.ReadBytes(4)
+        reader.ReadBytes(8) |> ignore // skip services field
+        let ip = reader.ReadBytes(16)
         let ipAddress = new IPAddress(ip)
         let port = int(uint16(IPAddress.NetworkToHostOrder(reader.ReadInt16())))
         new NetworkAddr(new IPEndPoint(ipAddress, port))
@@ -827,3 +852,60 @@ type BitcoinMessageParser(networkData: IObservable<byte[]>) =
     member x.BitcoinMessages with get() = bitcoinMessages
 
 let hashCompare = new HashCompare() :> IEqualityComparer<byte[]>
+
+let awaitTask (t: Task) = t |> Async.AwaitIAsyncResult |> Async.Ignore
+
+let decodeAddress (address: IPAddress) = 
+    match address.AddressFamily with
+    | Sockets.AddressFamily.InterNetwork -> (1uy, address.GetAddressBytes())
+    | Sockets.AddressFamily.InterNetworkV6 ->
+        let addressBytes = address.GetAddressBytes()
+        if settings.UseTor && addressBytes.[0..5] = torPrefix
+        then
+            let onionAddress = addressBytes.[6..]
+            let onionUrl = sprintf "%s.onion" (Base32.Base32Encoder.Encode(onionAddress))
+            logger.DebugF "Onion address %s" onionUrl
+            let onionUrlBytes = ASCIIEncoding.ASCII.GetBytes(onionUrl)
+            (3uy, Array.concat [[|byte onionUrlBytes.Length|]; onionUrlBytes])
+        else (4uy, address.GetAddressBytes())
+
+let connect(address: IPAddress) (port: int) = 
+    let socksConnect() = 
+        async {
+            logger.DebugF "Connecting to %A" address
+            let client = new Sockets.TcpClient()
+            let host = IPAddress.Parse(settings.SocksHost)
+            let socksEndPoint = new IPEndPoint(host, settings.SocksPort)
+            do! awaitTask(client.ConnectAsync(host, settings.SocksPort))
+            let versionMessage = [|5uy; 1uy; 0uy|]
+            let stream = client.GetStream()
+            let buffer: byte[] = Array.zeroCreate 1024
+            do! stream.AsyncWrite(versionMessage, 0, versionMessage.Length)
+            do! stream.AsyncRead(buffer, 0, buffer.Length) |> Async.Ignore
+            let authMethod = buffer.[1]
+
+            let connectMessage = ToBinaryArray(fun os ->
+                os.Write(5uy)
+                os.Write(1uy) // connect
+                os.Write(0uy)
+                let (addressType, addressBytes) = decodeAddress address
+                os.Write(addressType)
+                os.Write(addressBytes, 0, addressBytes.Length)
+                os.Write(IPAddress.HostToNetworkOrder (int16 port))
+                )
+            do! stream.AsyncWrite(connectMessage, 0, connectMessage.Length)
+            do! stream.AsyncRead(buffer, 0, buffer.Length) |> Async.Ignore
+            if buffer.[1] <> 0uy then raise (IOException("SOCKS server returned error"))
+            return stream
+            }
+
+    let normalConnect() = 
+        async {
+            let client = new Sockets.TcpClient()
+            do! awaitTask(client.ConnectAsync(address, int port))
+            let stream = client.GetStream()
+            return stream
+            }
+    
+    if settings.UseSocks then socksConnect() else normalConnect()
+

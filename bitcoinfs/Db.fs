@@ -106,7 +106,7 @@ let getPeers() =
         [while reader.Read() do 
             let host = reader.GetString(0)
             let port = reader.GetInt32(1)
-            let ip = IPAddress.Parse(host)
+            let ip = decodeAddressString host
             let endpoint = new IPEndPoint(ip, port)
             yield endpoint
         ]
@@ -122,7 +122,7 @@ let getPeer() =
             [while reader.Read() do 
                 let host = reader.GetString(0)
                 let port = reader.GetInt32(1)
-                let ip = IPAddress.Parse(host)
+                let ip = decodeAddressString host
                 let endpoint = new IPEndPoint(ip, port)
                 yield endpoint
             ]

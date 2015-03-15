@@ -104,8 +104,7 @@ let maxScriptSize = 10000
 
 (*** hide ***)
 let scriptToHash (script: byte[]) =
-    let p2pkh = if (script.Length = 25 && script.[0] = OP_DUP && script.[1] = OP_HASH160 && script.[2] = OP_DATA_20 && script.[23] = OP_EQUALVERIFY
-        && script.[24] = OP_CHECKSIG) then Some script.[3..22] else None
+    let p2pkh = if (script.Length = 25 && script.[0] = OP_DUP && script.[1] = OP_HASH160 && script.[2] = OP_DATA_20 && script.[23] = OP_EQUALVERIFY && script.[24] = OP_CHECKSIG) then Some script.[3..22] else None
     let p2sh = if (script.Length = 23 && script.[0] = OP_HASH160 && script.[1] = OP_DATA_20 && script.[22] = OP_EQUAL) then Some script.[2..21] else None
     Option.coalesce p2pkh p2sh
 

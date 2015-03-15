@@ -135,23 +135,7 @@ let readBootstrap (firstBlock: int) (stream: Stream) =
         i <- i + 1
     logger.DebugF "Last block %d" i
 
-(**
-The main function initializes the application and waits forever
-*)
-[<EntryPoint>]
-let main argv = 
-    Config.BasicConfigurator.Configure() |> ignore
-    // RPC.startRPC()
-
-    // Db.scanUTXO()
-    // Write a bootstrap file from saved blocks
-
-(*
-    use stream = new FileStream("D:/bootstrap-nnn.dat", FileMode.CreateNew, FileAccess.Write)
-    writeBootstrap 341001 342000 stream
-*)
-
-(*
+let readBootstrapTest() =
     // Import a couple of bootstrap dat files
     use stream = new FileStream("J:/bootstrap-295000.dat", FileMode.Open, FileAccess.Read)
     readBootstrapFast 0 stream
@@ -159,22 +143,39 @@ let main argv =
     readBootstrapFast 295001 stream
     use stream = new FileStream("J:/bootstrap-341000.dat", FileMode.Open, FileAccess.Read)
     readBootstrapFast 332703 stream
-*)
 
+let writeBootstrapTest() =
+    // Write a bootstrap file from saved blocks
+
+    use stream = new FileStream("D:/bootstrap-nnn.dat", FileMode.CreateNew, FileAccess.Write)
+    writeBootstrap 344001 345000 stream
+
+let addLocalNode() =
+    let myNode = new IPEndPoint(IPAddress.Loopback, 8333)
+    trackerIncoming.OnNext(TrackerCommand.Connect myNode)
+
+let runNode() = 
     Peer.initPeers()
     
     Tracker.startTracker()
     Tracker.startServer()
     Mempool.startMempool()
     Blockchain.blockchainStart()
-(*
-*)
-    (* Manually import my own local node
-    let myNode = new IPEndPoint(IPAddress.Loopback, 8333)
-    trackerIncoming.OnNext(TrackerCommand.Connect myNode)
-    *)
-(*
-*)
+
+    addLocalNode() 
+
     trackerIncoming.OnNext(TrackerCommand.GetPeers)
     Thread.Sleep(-1)
+
+(**
+The main function initializes the application and waits forever
+*)
+[<EntryPoint>]
+let main argv = 
+    Config.BasicConfigurator.Configure() |> ignore
+
+    // Db.scanUTXO()
+    runNode()
+    // writeBootstrapTest()
+
     0 // return an integer exit code
