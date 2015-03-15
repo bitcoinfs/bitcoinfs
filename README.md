@@ -46,7 +46,7 @@ features are watch-only for BIP-32, Electrum and Armory wallets.
 Further documentation can be obtained at the [project github pages][3]
 
 License
-GPL v3
+MIT
 
 [1]: https://github.com/TheBlueMatt/test-scripts
 [2]: https://github.com/bitcoinfs/bitcoinfs
