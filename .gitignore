@@ -4,3 +4,7 @@ obj/
 *.suo
 /.vs/
 /paket-files/
+/.paket/paket.exe
+/x64/
+/x86/
+*.*sdf

@@ -42,3 +42,6 @@ GITHUB
   remote: hhanh00/leveldb-sharp
   specs:
     FULLPROJECT (a6ee95fe9637d948b88d09cc2d375c8658523901)
+  remote: joshlang/Secp256k1.NET
+  specs:
+    FULLPROJECT (2941aa0c170e6afb65c86375db4186958c7b4c84)
