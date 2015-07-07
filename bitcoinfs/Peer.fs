@@ -46,7 +46,7 @@ open System.Reactive.Concurrency
 open System.Reactive.Threading.Tasks
 open System.Threading
 open System.Threading.Tasks
-open FSharp.Control.Observable
+open FSharp.Control
 open Org.BouncyCastle.Utilities.Encoders
 open FSharpx.Choice
 open FSharpx.Validation

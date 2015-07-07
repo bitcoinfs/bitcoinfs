@@ -42,7 +42,7 @@ open System.Reactive
 open System.Reactive.Linq
 open System.Reactive.Disposables
 open System.Threading.Tasks
-open FSharp.Control.Observable
+open FSharp.Control
 open FSharpx
 open FSharpx.Collections
 open FSharpx.Choice

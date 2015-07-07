@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.22310.1
+VisualStudioVersion = 14.0.22823.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "leveldb", "..\..\experimental\leveldb\leveldb.vcxproj", "{D1A5570F-42C4-4DF1-B0D0-6F5AFE433F8F}"
 EndProject
