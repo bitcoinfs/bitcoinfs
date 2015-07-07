@@ -2,3 +2,5 @@ packages/
 bin/
 obj/
 *.suo
+/.vs/
+/paket-files/
