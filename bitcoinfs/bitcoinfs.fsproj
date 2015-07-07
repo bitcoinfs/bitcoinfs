@@ -102,6 +102,11 @@
       <Project>{8dd96596-38ac-46dd-80c1-75d9ebe585ea}</Project>
       <Private>True</Private>
     </ProjectReference>
+    <ProjectReference Include="..\paket-files\joshlang\Secp256k1.NET\Secp256k1.NET.vcxproj">
+      <Name>Secp256k1.NET</Name>
+      <Project>{fc8f0bd7-6066-4e47-aa84-e48dd0beb46d}</Project>
+      <Private>True</Private>
+    </ProjectReference>
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
