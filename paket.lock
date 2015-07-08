@@ -45,3 +45,10 @@ GITHUB
   remote: joshlang/Secp256k1.NET
   specs:
     FULLPROJECT (2941aa0c170e6afb65c86375db4186958c7b4c84)
+  remote: bitcoin/bitcoin
+  specs:
+    src/test/data/script_invalid.json (086cb336cd8ac0b2a7ad9ff0544c014569c7db38)
+    src/test/data/script_valid.json (086cb336cd8ac0b2a7ad9ff0544c014569c7db38)
+    src/test/data/sighash.json (086cb336cd8ac0b2a7ad9ff0544c014569c7db38)
+    src/test/data/tx_invalid.json (086cb336cd8ac0b2a7ad9ff0544c014569c7db38)
+    src/test/data/tx_valid.json (086cb336cd8ac0b2a7ad9ff0544c014569c7db38)

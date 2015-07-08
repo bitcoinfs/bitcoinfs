@@ -211,8 +211,8 @@ let parseScript (scriptString: string) =
 
 [<TestFixture>]
 type ``Given a ScriptRuntime`` ()=
-    let validJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/data/script_valid.json")
-    let invalidJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/data/script_invalid.json")
+    let validJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/../paket-files/bitcoin/bitcoin/src/test/data/script_valid.json")
+    let invalidJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/../paket-files/bitcoin/bitcoin/src/test/data/script_invalid.json")
 
     let evalScript (sigScript: string) (pubScript: string) = 
         let interpreter = new ScriptRuntime(fun a _ -> a)
@@ -243,7 +243,7 @@ type ``Given a ScriptRuntime`` ()=
 *)
 [<TestFixture>]
 type ``Given a Tx Hashing function`` ()=
-    let validJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/data/sighash.json")
+    let validJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/../paket-files/bitcoin/bitcoin/src/test/data/sighash.json")
 
     [<Test>] 
     member x.``when evaluating hashes from a valid json file, I should not fail.`` () =
@@ -268,8 +268,8 @@ type ``Given a Tx Hashing function`` ()=
 *)
 [<TestFixture>]
 type ``Given a Tx`` ()=
-    let validJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/data/tx_valid.json")
-    let invalidJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/data/tx_invalid.json")
+    let validJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/../paket-files/bitcoin/bitcoin/src/test/data/tx_valid.json")
+    let invalidJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/../paket-files/bitcoin/bitcoin/src/test/data/tx_invalid.json")
 
     [<Test>] 
     member x.``when verifying transactions from a valid json file, I should not fail.`` () =
@@ -326,7 +326,7 @@ type ``Given a Tx`` ()=
 *)
 [<TestFixture>]
 type ``Given a Signature file`` ()=
-    let validJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/data/sig_canonical.json")
+    let validJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/../paket-files/bitcoin/bitcoin/src/test/data/sig_canonical.json")
 
     [<Test>] 
     member x.``when verifying signatures from a valid json file, I should not fail.`` () =

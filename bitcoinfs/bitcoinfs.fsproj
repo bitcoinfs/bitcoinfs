@@ -55,15 +55,29 @@
   </Choose>
   <Import Project="$(FSharpTargetsPath)" />
   <ItemGroup>
+    <Content Include="..\paket-files\bitcoin\bitcoin\src\test\data\script_valid.json">
+      <Paket>True</Paket>
+      <Link>paket-files/script_valid.json</Link>
+    </Content>
+    <Content Include="..\paket-files\bitcoin\bitcoin\src\test\data\script_invalid.json">
+      <Paket>True</Paket>
+      <Link>paket-files/script_invalid.json</Link>
+    </Content>
+    <Content Include="..\paket-files\bitcoin\bitcoin\src\test\data\sighash.json">
+      <Paket>True</Paket>
+      <Link>paket-files/sighash.json</Link>
+    </Content>
+    <Content Include="..\paket-files\bitcoin\bitcoin\src\test\data\tx_valid.json">
+      <Paket>True</Paket>
+      <Link>paket-files/tx_valid.json</Link>
+    </Content>
+    <Content Include="..\paket-files\bitcoin\bitcoin\src\test\data\tx_invalid.json">
+      <Paket>True</Paket>
+      <Link>paket-files/tx_invalid.json</Link>
+    </Content>
     <Content Include="..\paket-files\hhanh00\leveldb-win-binaries\Release\leveldb.dll">
       <Paket>True</Paket>
       <Link>paket-files/leveldb.dll</Link>
-    </Content>
-    <Content Include="SqlServerTypes\x64\SqlServerSpatial110.dll">
-      <Paket>True</Paket>
-    </Content>
-    <Content Include="SqlServerTypes\x86\SqlServerSpatial110.dll">
-      <Paket>True</Paket>
     </Content>
     <None Include="App.config" />
     <Content Include="paket.references" />

@@ -8,7 +8,6 @@ FSharpx.TypeProviders.AppSettings
 FsPickler
 FsUnit
 log4net
-Microsoft.SqlServer.Types
 morelinq
 murmurhash
 NodaTime
@@ -23,3 +22,8 @@ System.Data.SQLite.Core
 System.Data.SQLite.Core.MSIL
 
 File:leveldb.dll
+File:script_valid.json
+File:script_invalid.json
+File:sighash.json
+File:tx_valid.json
+File:tx_invalid.json

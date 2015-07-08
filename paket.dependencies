@@ -27,3 +27,9 @@ nuget System.Data.SQLite.Core.MSIL 1.0.94.0 framework: >= net45
 github hhanh00/leveldb-win-binaries Release/leveldb.dll
 github hhanh00/leveldb-sharp
 github joshlang/Secp256k1.NET
+
+github bitcoin/bitcoin src/test/data/script_valid.json
+github bitcoin/bitcoin src/test/data/script_invalid.json
+github bitcoin/bitcoin src/test/data/sighash.json
+github bitcoin/bitcoin src/test/data/tx_valid.json
+github bitcoin/bitcoin src/test/data/tx_invalid.json
