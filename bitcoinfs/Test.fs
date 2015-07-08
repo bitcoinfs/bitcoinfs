@@ -326,7 +326,7 @@ type ``Given a Tx`` ()=
 *)
 [<TestFixture>]
 type ``Given a Signature file`` ()=
-    let validJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/../paket-files/bitcoin/bitcoin/src/test/data/sig_canonical.json")
+    let validJson = JsonValue.Load(__SOURCE_DIRECTORY__ + "/../paket-files/NicolasDorier/NBitcoin/NBitcoin.Tests/data/sig_canonical.json")
 
     [<Test>] 
     member x.``when verifying signatures from a valid json file, I should not fail.`` () =

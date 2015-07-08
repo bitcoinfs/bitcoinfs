@@ -47,8 +47,11 @@ GITHUB
     FULLPROJECT (2941aa0c170e6afb65c86375db4186958c7b4c84)
   remote: bitcoin/bitcoin
   specs:
-    src/test/data/script_invalid.json (086cb336cd8ac0b2a7ad9ff0544c014569c7db38)
-    src/test/data/script_valid.json (086cb336cd8ac0b2a7ad9ff0544c014569c7db38)
-    src/test/data/sighash.json (086cb336cd8ac0b2a7ad9ff0544c014569c7db38)
-    src/test/data/tx_invalid.json (086cb336cd8ac0b2a7ad9ff0544c014569c7db38)
-    src/test/data/tx_valid.json (086cb336cd8ac0b2a7ad9ff0544c014569c7db38)
+    src/test/data/script_invalid.json (11576a57d2ee37aa421e0fce69e70751b5af9a61)
+    src/test/data/script_valid.json (11576a57d2ee37aa421e0fce69e70751b5af9a61)
+    src/test/data/sighash.json (11576a57d2ee37aa421e0fce69e70751b5af9a61)
+    src/test/data/tx_invalid.json (11576a57d2ee37aa421e0fce69e70751b5af9a61)
+    src/test/data/tx_valid.json (11576a57d2ee37aa421e0fce69e70751b5af9a61)
+  remote: NicolasDorier/NBitcoin
+  specs:
+    NBitcoin.Tests/data/sig_canonical.json (0277f1c077a113fcdfb56434af2ce2cfaca3f20d)

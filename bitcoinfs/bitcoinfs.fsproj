@@ -55,6 +55,16 @@
   </Choose>
   <Import Project="$(FSharpTargetsPath)" />
   <ItemGroup>
+    <Content Include="SqlServerTypes\x64\SqlServerSpatial110.dll">
+      <Paket>True</Paket>
+    </Content>
+    <Content Include="SqlServerTypes\x86\SqlServerSpatial110.dll">
+      <Paket>True</Paket>
+    </Content>
+    <Content Include="..\paket-files\NicolasDorier\NBitcoin\NBitcoin.Tests\data\sig_canonical.json">
+      <Paket>True</Paket>
+      <Link>paket-files/sig_canonical.json</Link>
+    </Content>
     <Content Include="..\paket-files\bitcoin\bitcoin\src\test\data\script_valid.json">
       <Paket>True</Paket>
       <Link>paket-files/script_valid.json</Link>

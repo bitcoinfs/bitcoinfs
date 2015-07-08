@@ -27,3 +27,4 @@ File:script_invalid.json
 File:sighash.json
 File:tx_valid.json
 File:tx_invalid.json
+File:sig_canonical.json
