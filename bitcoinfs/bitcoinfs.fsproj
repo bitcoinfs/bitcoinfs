@@ -85,10 +85,10 @@
       <Paket>True</Paket>
       <Link>paket-files/tx_invalid.json</Link>
     </Content>
-    <Content Include="..\paket-files\hhanh00\leveldb-win-binaries\Release\leveldb.dll">
+    <None Include="..\paket-files\hhanh00\leveldb-win-binaries\Release\leveldb.dll">
       <Paket>True</Paket>
       <Link>paket-files/leveldb.dll</Link>
-    </Content>
+    </None>
     <None Include="App.config" />
     <Content Include="paket.references" />
     <Compile Include="AssemblyInfo.fs" />
@@ -139,6 +139,11 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+  <PropertyGroup>
+    <PostBuildEvent>
+      Copy "$(SolutionDir)\paket-files\hhanh00\leveldb-win-binaries\Release\leveldb.dll" "$(ProjectDir)$(OutDir)leveldb.dll"
+    </PostBuildEvent>
+  </PropertyGroup>
   <Choose>
     <When Condition="($(TargetFrameworkIdentifier) == '.NETCore') Or ($(TargetFrameworkIdentifier) == '.NETFramework' And ($(TargetFrameworkVersion) == 'v4.5' Or $(TargetFrameworkVersion) == 'v4.5.1' Or $(TargetFrameworkVersion) == 'v4.5.2' Or $(TargetFrameworkVersion) == 'v4.5.3' Or $(TargetFrameworkVersion) == 'v4.6')) Or ($(TargetFrameworkIdentifier) == 'Silverlight' And ($(TargetFrameworkVersion) == 'v4.0' Or $(TargetFrameworkVersion) == 'v5.0')) Or ($(TargetFrameworkIdentifier) == 'WindowsPhone' And ($(TargetFrameworkVersion) == 'v8.0' Or $(TargetFrameworkVersion) == 'v8.1')) Or ($(TargetFrameworkIdentifier) == 'MonoAndroid') Or ($(TargetFrameworkIdentifier) == 'MonoTouch')">
       <ItemGroup>
