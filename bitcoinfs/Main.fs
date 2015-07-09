@@ -159,7 +159,7 @@ let runNode() =
     
     Tracker.startTracker()
     Tracker.startServer()
-    Mempool.startMempool()
+    //Mempool.startMempool()
     Blockchain.blockchainStart()
 
     addLocalNode() 
